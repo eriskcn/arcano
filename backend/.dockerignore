@@ -1,0 +1,23 @@
+# Ignore build output
+**/bin/
+**/obj/
+**/out/
+
+# Ignore IDE settings
+.vs/
+.vscode/
+.idea/
+
+# Ignore local storage data
+postgres_data/
+seaweedfs_data/
+
+# Docker files
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+
+# Git metadata
+.git
+.gitignore
+.dockerignore
