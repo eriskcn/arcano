@@ -1,5 +1,6 @@
 CLAUDE.md
-/wbs/
+/wbs/reports
+s3.json
 
 # .NET / C#
 [Dd]ebug/
