@@ -7,10 +7,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
-// Stub Authentication setup
-builder.Services.AddAuthentication("StubBearer")
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ArcanoCore.API.Authentication.StubAuthenticationHandler>("StubBearer", null);
-
 // Clean Architecture Layers Dependency Injection
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

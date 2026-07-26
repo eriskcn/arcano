@@ -1,11 +1,17 @@
+using System;
+using System.Text;
 using Amazon.S3;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Infrastructure.Data;
 using ArcanoCore.Infrastructure.Data.Repositories;
+using ArcanoCore.Infrastructure.Security;
 using ArcanoCore.Infrastructure.Storage;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 
 namespace ArcanoCore.Infrastructure;
 
@@ -39,7 +45,48 @@ public static class DependencyInjection
         services.AddSingleton<IAmazonS3>(new AmazonS3Client(accessKey, secretKey, s3Config));
         services.AddScoped<IStorageService, SeaweedStorageService>();
 
-        // Authentication & Current User stub
+        // Identity Configuration
+        services.AddIdentityCore<IdentityUser<Guid>>(options =>
+        {
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequiredLength = 6;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddRoles<IdentityRole<Guid>>()
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
+
+        services.AddSingleton<ILookupNormalizer, CustomLookupNormalizer>();
+        services.AddSingleton<IBloomFilter<string>, EmailBloomFilter>();
+
+        // JWT Authentication Configuration
+        var jwtSettings = configuration.GetSection("Jwt");
+        var secret = jwtSettings["Secret"] ?? "SuperSecretKeyForArcanoCoreAPIAuthenticationMustBe32BytesLong!";
+        var key = Encoding.UTF8.GetBytes(secret);
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwtSettings["Issuer"] ?? "ArcanoCore",
+                ValidAudience = jwtSettings["Audience"] ?? "ArcanoCoreUsers",
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ClockSkew = TimeSpan.Zero
+            };
+        });
+
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
 
