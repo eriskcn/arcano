@@ -15,6 +15,10 @@ public static class EmailNormalizer
         try
         {
             var trimmed = email.Trim();
+            if (trimmed.Contains(' '))
+            {
+                return Result<string>.Failure(new Error("Email.Invalid", "Email format is invalid."));
+            }
             var parsed = new MailAddress(trimmed);
             var domain = parsed.Host.ToLowerInvariant();
             var local = parsed.User;
