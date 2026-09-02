@@ -17,6 +17,9 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
     }
 
     public DbSet<FileMetadata> FileMetadatas => Set<FileMetadata>();
+    public DbSet<Folder> Folders => Set<Folder>();
+    public DbSet<FileTag> FileTags => Set<FileTag>();
+    public DbSet<SharedLink> SharedLinks => Set<SharedLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

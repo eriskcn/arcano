@@ -13,13 +13,14 @@ public class EmailBloomFilterTests : IDisposable
 {
     private readonly ServiceProvider _serviceProvider;
     private readonly ApplicationDbContext _dbContext;
+    private readonly string _databaseName = $"TestDb_{Guid.NewGuid()}";
 
     public EmailBloomFilterTests()
     {
         var services = new ServiceCollection();
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase($"TestDb_{Guid.NewGuid()}"));
+            options.UseInMemoryDatabase(_databaseName));
 
         _serviceProvider = services.BuildServiceProvider();
         _dbContext = _serviceProvider.GetRequiredService<ApplicationDbContext>();
@@ -33,6 +34,7 @@ public class EmailBloomFilterTests : IDisposable
     }
 
     [Fact]
+    // TODO: test failed
     public async Task MightContainAsync_ShouldReturnTrue_ForEmailsLoadedFromDatabase()
     {
         // Arrange
@@ -50,6 +52,7 @@ public class EmailBloomFilterTests : IDisposable
     }
 
     [Fact]
+    // TODO: test failed
     public async Task MightContainAsync_ShouldReturnTrue_ForAddedEmails()
     {
         // Arrange
@@ -64,6 +67,7 @@ public class EmailBloomFilterTests : IDisposable
     }
 
     [Fact]
+    // TODO: test failed
     public async Task MightContainAsync_ShouldBeCaseInsensitive()
     {
         // Arrange

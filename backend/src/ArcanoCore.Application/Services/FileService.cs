@@ -11,16 +11,16 @@ namespace ArcanoCore.Application.Services;
 
 public class FileService : IFileService
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IApplicationDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly IBloomFilter<Guid> _bloomFilter;
 
     public FileService(
-        IUnitOfWork unitOfWork,
+        IApplicationDbContext dbContext,
         IStorageService storageService,
         IBloomFilter<Guid> bloomFilter)
     {
-        _unitOfWork = unitOfWork;
+        _dbContext = dbContext;
         _storageService = storageService;
         _bloomFilter = bloomFilter;
     }
@@ -45,8 +45,8 @@ public class FileService : IFileService
                 StorageKey = storageKey
             };
 
-            await _unitOfWork.Repository<FileMetadata>().AddAsync(fileMetadata, cancellationToken);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _dbContext.FileMetadatas.AddAsync(fileMetadata, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             await _bloomFilter.AddAsync(fileMetadata.Id, cancellationToken);
 
@@ -73,7 +73,7 @@ public class FileService : IFileService
             return Result<(Stream, string, string)>.Failure(new Error("File.NotFound", "File metadata not found."));
         }
 
-        var fileMetadata = await _unitOfWork.Repository<FileMetadata>().GetByIdAsync(id, cancellationToken);
+        var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
             return Result<(Stream, string, string)>.Failure(new Error("File.NotFound", "File metadata not found."));
@@ -97,7 +97,7 @@ public class FileService : IFileService
             return Result.Failure(new Error("File.NotFound", "File metadata not found."));
         }
 
-        var fileMetadata = await _unitOfWork.Repository<FileMetadata>().GetByIdAsync(id, cancellationToken);
+        var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
             return Result.Failure(new Error("File.NotFound", "File metadata not found."));
@@ -110,8 +110,7 @@ public class FileService : IFileService
             fileMetadata.IsDeleted = true;
             fileMetadata.LastModifiedAtUtc = DateTime.UtcNow;
 
-            _unitOfWork.Repository<FileMetadata>().Update(fileMetadata);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             return Result.Success();
         }

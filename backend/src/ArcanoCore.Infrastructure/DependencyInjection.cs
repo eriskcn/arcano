@@ -3,7 +3,6 @@ using System.Text;
 using Amazon.S3;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Infrastructure.Data;
-using ArcanoCore.Infrastructure.Data.Repositories;
 using ArcanoCore.Infrastructure.Security;
 using ArcanoCore.Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -26,8 +25,6 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
         services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
-        services.AddScoped<IUnitOfWork, UnitOfWork>();
-        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
         // SeaweedFS S3 Storage Configuration
         var storageSettings = configuration.GetSection("Storage");
