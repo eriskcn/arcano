@@ -4,17 +4,22 @@ using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Domain.Common;
 using ArcanoCore.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArcanoCore.Infrastructure.Data;
 
-public class ApplicationDbContext : DbContext, IApplicationDbContext
+public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, IdentityRole<Guid>, Guid>, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
     {
     }
 
     public DbSet<FileMetadata> FileMetadatas => Set<FileMetadata>();
+    public DbSet<Folder> Folders => Set<Folder>();
+    public DbSet<FileTag> FileTags => Set<FileTag>();
+    public DbSet<SharedLink> SharedLinks => Set<SharedLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
