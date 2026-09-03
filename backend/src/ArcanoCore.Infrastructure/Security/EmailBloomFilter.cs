@@ -51,18 +51,7 @@ public class EmailBloomFilter : IBloomFilter<string>
     public async Task<bool> MightContainAsync(string item, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);
-
-        var query = item.ToUpperInvariant();
-        ulong q1 = GetFnv1aHash(query, 14695981039346656037UL);
-        ulong q2 = GetFnv1aHash(query, 5683262657731236573UL);
-
-        using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var dbEmail = dbContext.Users.First().NormalizedEmail!;
-        ulong db1 = GetFnv1aHash(dbEmail, 14695981039346656037UL);
-        ulong db2 = GetFnv1aHash(dbEmail, 5683262657731236573UL);
-
-        throw new Exception($"DEBUG: query='{query}' (h1={q1}, h2={q2}), db='{dbEmail}' (h1={db1}, h2={db2}). Equals: {query.Equals(dbEmail)}");
+        return _filter.MightContain(item.ToUpperInvariant());
     }
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)

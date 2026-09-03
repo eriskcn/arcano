@@ -9,23 +9,23 @@ Build codebase for personal cloud storage application including Backend API (ASP
 
 ## Work Breakdown Structure (Task Hierarchy)
 - **1. Backend API Development (ASP.NET Core - Clean Architecture)**
-  - [ ] 1.1 **Domain Layer**
-    - [ ] 1.1.1 Define `FileMetadata` entity to store file metadata.
-    - [ ] 1.1.2 Set up foundation entities: `BaseEntity`, `IAuditableEntity`.
-    - [ ] 1.1.3 Implement `Result` structure to handle return values.
-  - [ ] 1.2 **Application Layer**
-    - [ ] 1.2.1 Create interfaces: `IStorageService`, `IApplicationDbContext`, `IUnitOfWork`.
-    - [ ] 1.2.2 Design DTOs: `FileUploadDto`, `FileResponseDto`.
-    - [ ] 1.2.3 Build storage coordination logic in `FileService`.
-  - [ ] 1.3 **Infrastructure Layer**
-    - [ ] 1.3.1 Implement `SeaweedStorageService` calling SeaweedFS via AWS SDK S3.
-    - [ ] 1.3.2 Set up EF Core `ApplicationDbContext` for database connection.
-    - [ ] 1.3.3 Implement Unit of Work & Repository patterns.
-    - [ ] 1.3.4 Build stub to retrieve current user info `CurrentUser`.
-  - [ ] 1.4 **API Layer**
-    - [ ] 1.4.1 Write `FilesController` providing file upload, download, and delete APIs.
-    - [ ] 1.4.2 Set up `ExceptionHandlingMiddleware` for centralized error handling.
-    - [ ] 1.4.3 Configure JWT Authentication, DI container setup in `Program.cs`.
+  - [x] 1.1 **Domain Layer**
+    - [x] 1.1.1 Define `FileMetadata`, `Folder`, `FileTag`, and `SharedLink` entities.
+    - [x] 1.1.2 Set up foundation entities: `BaseEntity`, `IAuditableEntity`.
+    - [x] 1.1.3 Implement `Result` structure to handle return values.
+  - [x] 1.2 **Application Layer**
+    - [x] 1.2.1 Create interfaces: `IStorageService`, `IApplicationDbContext`.
+    - [x] 1.2.2 Design DTOs: `FileUploadDto`, `FileResponseDto`.
+    - [x] 1.2.3 Build storage coordination logic in `FileService`.
+  - [x] 1.3 **Infrastructure Layer**
+    - [x] 1.3.1 Implement `SeaweedStorageService` calling SeaweedFS via AWS SDK S3.
+    - [x] 1.3.2 Set up EF Core `ApplicationDbContext` for database connection + migrations.
+    - [x] 1.3.3 Direct EF Core context usage (Repository & UoW removed for simplicity).
+    - [x] 1.3.4 Build `CurrentUser` to retrieve logged-in user info from claims.
+  - [x] 1.4 **API Layer**
+    - [x] 1.4.1 Write `FilesController` providing file upload, download, and delete APIs.
+    - [x] 1.4.2 Set up `ExceptionHandlingMiddleware` for centralized error handling.
+    - [x] 1.4.3 Configure JWT Authentication, DI container setup in `Program.cs`.
 - **2. Frontend Client Dashboard Development**
   - [ ] 2.1 **Initialization and App Scaffolding**
     - [ ] 2.1.1 Initialize project (React/Vue/Blazor) and configure Routing.
@@ -58,5 +58,5 @@ Build codebase for personal cloud storage application including Backend API (ASP
 - Users require no complex environment setup other than Docker Compose to run entire codebase.
 
 ## Task Status
-- **1. Backend API Development**: In Progress (Scaffolding and core files initialized)
+- **1. Backend API Development**: Completed (Core entities, migrations, services, tests passing)
 - **2. Frontend Client Dashboard Development**: Not Started
