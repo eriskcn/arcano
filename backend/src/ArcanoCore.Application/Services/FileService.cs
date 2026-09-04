@@ -14,15 +14,18 @@ public class FileService : IFileService
     private readonly IApplicationDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly IBloomFilter<Guid> _bloomFilter;
+    private readonly ICurrentUser _currentUser;
 
     public FileService(
         IApplicationDbContext dbContext,
         IStorageService storageService,
-        IBloomFilter<Guid> bloomFilter)
+        IBloomFilter<Guid> bloomFilter,
+        ICurrentUser currentUser)
     {
         _dbContext = dbContext;
         _storageService = storageService;
         _bloomFilter = bloomFilter;
+        _currentUser = currentUser;
     }
 
     public async Task<Result<FileResponseDto>> UploadFileAsync(FileUploadDto dto, CancellationToken cancellationToken = default)
@@ -36,13 +39,16 @@ public class FileService : IFileService
         {
             string storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
 
+            Guid ownerId = Guid.TryParse(_currentUser.UserId, out var parsedId) ? parsedId : Guid.Empty;
+
             var fileMetadata = new FileMetadata
             {
                 Id = Guid.NewGuid(),
                 FileName = dto.FileName,
                 ContentType = dto.ContentType,
                 FileSize = dto.FileSize,
-                StorageKey = storageKey
+                StorageKey = storageKey,
+                OwnerId = ownerId
             };
 
             await _dbContext.FileMetadatas.AddAsync(fileMetadata, cancellationToken);
