@@ -11,13 +11,13 @@
       <div class="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md mb-3">
         <span class="material-symbols-rounded text-white" style="font-size: 26px">cloud</span>
       </div>
-      <span class="text-xl font-bold text-gray-900 tracking-tight">ArcanoDrive</span>
+      <span class="text-xl font-bold text-gray-900 tracking-tight">{{ appName }}</span>
       <span class="text-xs text-gray-500 mt-0.5">Your personal cloud storage</span>
     </div>
 
     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
       <h1 class="text-xl font-bold text-gray-900 mb-1">Welcome back</h1>
-      <p class="text-sm text-gray-500 mb-6">Sign in to your ArcanoDrive account</p>
+      <p class="text-sm text-gray-500 mb-6">Sign in to your {{ appName }} account</p>
 
       <form (submit)="onSignInSubmit($event)" class="space-y-4">
         <div>
@@ -96,7 +96,7 @@
       <div class="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-md mb-3">
         <span class="material-symbols-rounded text-white" style="font-size: 26px">cloud</span>
       </div>
-      <span class="text-xl font-bold text-gray-900 tracking-tight">ArcanoDrive</span>
+      <span class="text-xl font-bold text-gray-900 tracking-tight">{{ appName }}</span>
       <span class="text-xs text-gray-500 mt-0.5">Your personal cloud storage</span>
     </div>
 
@@ -292,7 +292,7 @@
           <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
             <span class="material-symbols-rounded text-white" style="font-size: 18px">cloud</span>
           </div>
-          <span *ngIf="!sidebarCollapsed()" class="font-semibold text-gray-900 text-sm tracking-tight">ArcanoDrive</span>
+          <span *ngIf="!sidebarCollapsed()" class="font-semibold text-gray-900 text-sm tracking-tight">{{ appName }}</span>
         </div>
 
         <!-- Nav -->
@@ -949,7 +949,7 @@
         <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
           <span class="material-symbols-rounded text-white" style="font-size: 18px">cloud</span>
         </div>
-        <span class="font-semibold text-gray-900 text-sm tracking-tight">ArcanoDrive</span>
+        <span class="font-semibold text-gray-900 text-sm tracking-tight">{{ appName }}</span>
         <button (click)="mobileSidebarOpen.set(false)" class="ml-auto p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer">
           <span class="material-symbols-rounded" style="font-size: 20px">close</span>
         </button>

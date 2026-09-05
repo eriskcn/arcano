@@ -1,6 +1,7 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { environment } from '../environments/environment';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -26,6 +27,8 @@ export interface FileItem {
   styleUrl: './app.css',
 })
 export class App {
+  readonly appName = environment.appName;
+
   // Navigation & View State
   readonly page = signal<Page>('signin');
   readonly activeNav = signal<NavItem>('my-files');
@@ -74,7 +77,7 @@ export class App {
 
   readonly linkScopeOptions: { key: LinkScope; label: string; sub?: string; icon: string; color: string }[] = [
     { key: 'anyone', label: 'Anyone', icon: 'public', color: 'text-green-600' },
-    { key: 'org', label: 'People in ArcanoDrive Org', sub: 'Share within your organization, account required.', icon: 'corporate_fare', color: 'text-blue-600' },
+    { key: 'org', label: `People in ${this.appName} Org`, sub: 'Share within your organization, account required.', icon: 'corporate_fare', color: 'text-blue-600' },
     { key: 'existing', label: 'Only people with existing access', icon: 'person', color: 'text-orange-500' },
     { key: 'chosen', label: 'People you choose', icon: 'group', color: 'text-purple-600' },
   ];
@@ -143,7 +146,7 @@ export class App {
 
   readonly breadcrumb = computed(() => {
     const nav = this.activeNav();
-    return nav === 'my-files' ? ['ArcanoDrive', 'My Files'] : ['ArcanoDrive', this.navLabels[nav]];
+    return nav === 'my-files' ? [this.appName, 'My Files'] : [this.appName, this.navLabels[nav]];
   });
 
   fileIcon(type: FileItem['type']): string {
