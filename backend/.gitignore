@@ -1,0 +1,42 @@
+CLAUDE.md
+/wbs/reports
+s3.json
+
+# .NET / C#
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleasePublic/
+x64/
+x86/
+build/
+bld/
+Bin/
+Obj/
+bin/
+obj/
+Generated%20Files/
+[Oo]bj/
+[Bb]in/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# User Secrets
+secrets.json
+
+# Docker & OS
+# .dockerignore
+Thumbs.db
+.DS_Store
+
+# Infrastructure local storage
+postgres_data/
+seaweedfs_data/

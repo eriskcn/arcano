@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: arcanocore_postgres
+    environment:
+      POSTGRES_DB: arcanocore
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d arcanocore"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: arcanocore_seaweedfs
+    command: 'server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json'
+    ports:
+      - "9333:9333" # Master
+      - "8080:8080" # Volume
+      - "8333:8333" # S3 gateway
+    volumes:
+      - seaweedfs_data:/data
+      - ./wbs/s3.json:/etc/seaweedfs/s3.json
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8333 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: arcanocore_api:latest
+    build:
+      context: .
+      dockerfile: src/ArcanoCore.API/Dockerfile
+    container_name: arcanocore_api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=arcanocore;Username=postgres;Password=postgrespassword
+      - Storage__ServiceUrl=http://seaweedfs:8333
+      - Storage__AccessKey=any_key
+      - Storage__SecretKey=any_secret
+      - Storage__BucketName=arcanocore-bucket
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  seaweedfs_data:

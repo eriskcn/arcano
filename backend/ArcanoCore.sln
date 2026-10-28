@@ -1,0 +1,46 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.Domain", "src\ArcanoCore.Domain\ArcanoCore.Domain.csproj", "{D9893B8B-F6CD-4F60-9118-CCBEA3D11E06}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.Application", "src\ArcanoCore.Application\ArcanoCore.Application.csproj", "{4743C555-520F-44FA-BBA3-A4EA2AEFB710}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.Infrastructure", "src\ArcanoCore.Infrastructure\ArcanoCore.Infrastructure.csproj", "{FA42784A-95D9-4DA3-BD0B-E2E10972624F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.API", "src\ArcanoCore.API\ArcanoCore.API.csproj", "{05C61DF0-3498-4FE2-9C80-87F799B77402}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.Domain.UnitTests", "test\ArcanoCore.Domain.UnitTests\ArcanoCore.Domain.UnitTests.csproj", "{E8BEA5CE-981F-43DE-801B-FFD799B77402}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D9893B8B-F6CD-4F60-9118-CCBEA3D11E06}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9893B8B-F6CD-4F60-9118-CCBEA3D11E06}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9893B8B-F6CD-4F60-9118-CCBEA3D11E06}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9893B8B-F6CD-4F60-9118-CCBEA3D11E06}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4743C555-520F-44FA-BBA3-A4EA2AEFB710}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4743C555-520F-44FA-BBA3-A4EA2AEFB710}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4743C555-520F-44FA-BBA3-A4EA2AEFB710}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4743C555-520F-44FA-BBA3-A4EA2AEFB710}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA42784A-95D9-4DA3-BD0B-E2E10972624F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA42784A-95D9-4DA3-BD0B-E2E10972624F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA42784A-95D9-4DA3-BD0B-E2E10972624F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA42784A-95D9-4DA3-BD0B-E2E10972624F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{05C61DF0-3498-4FE2-9C80-87F799B77402}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{05C61DF0-3498-4FE2-9C80-87F799B77402}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{05C61DF0-3498-4FE2-9C80-87F799B77402}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{05C61DF0-3498-4FE2-9C80-87F799B77402}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
