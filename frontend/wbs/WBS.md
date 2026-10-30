@@ -40,6 +40,11 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [ ] **4.3 Drag and drop — Not Started**
   - Upload external files and move internal items when the corresponding API operations are available.
 
+- [ ] **4.4 Folder navigation — Not Started (depends on backend 1.7)**
+  - Backend tasks are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.7.
+  - Folder tree and breadcrumb navigation, create and rename folders, upload into the current folder, and move files between folders.
+  - Wire the existing "Folders" filter chip to real folder data instead of the mock; the chip is not implemented against the API yet.
+
 ### 5. File Sharing (Planned)
 - [ ] **5.1 Share-link management — Not Started**
   - Generate and manage links with supported access, password, and expiration options.

@@ -58,9 +58,18 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
       - [x] Item 18: the backend README describes the SeaweedFS identity file correctly.
       - [x] Item 19: the JWT secret is checked once, at startup.
     - **Open question:** the frontend requests only the first page of files. Users with more than 50 files will not see the rest until the client supports paging.
+  - **1.7 Folders (Planned) — Not Started**
+    - Scope: nested folders per user, with files placed in folders. The frontend side is tracked in [frontend/wbs/WBS.md](../../frontend/wbs/WBS.md) section 4.4.
+    - [x] **1.7.1 Data model — Completed.** `Folder` entity (owner, parent, name), EF configuration with unique `(OwnerId, ParentId, Name)` index, and `FileMetadata.FolderId` are in the initial migration.
+    - [ ] **1.7.2 Folder API — Not Started.** Create, list children, and rename a folder for the signed-in user. Reject a name that already exists under the same parent.
+    - [ ] **1.7.3 Folder placement — Not Started.** Upload with an optional `folderId`; list files by folder (root when omitted); move a file to another folder.
+    - [ ] **1.7.4 Folder ownership and safety — Not Started.** Every folder operation checks that the folder and any target parent belong to the caller. Moving a folder into its own descendant is rejected.
+    - [ ] **1.7.5 Folder delete — Not Started (decision needed).** Choose whether deleting a non-empty folder is rejected or cascades to its files and subfolders. Storage objects must be removed for cascaded files, so the choice affects the failure handling in item 1.4.
+    - [ ] **1.7.6 Folder tests — Not Started.** Tests for duplicate names, cross-owner access, cycle rejection, and paging within a folder.
 
 ## Dependencies
 - 1.2 depends on 1.1.
+- 1.7.2 depends on 1.7.1. 1.7.3 and 1.7.4 depend on 1.7.2. 1.7.5 depends on the decision in 1.7.5 and on item 1.4 failure handling.
 - 1.3 depends on 1.2.
 - 1.4 depends on 1.3.
 - 1.5 depends on the API and infrastructure tasks it verifies.
