@@ -296,6 +296,22 @@ describe('App', () => {
     http.verify();
   });
 
+  it('should show folders instead of the empty state when only folders exist', async () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    app.page.set('app');
+    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: '—', modified: 'Oct 31, 2026', starred: false, shared: false }]);
+    app.files.set([]);
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).not.toContain('No files yet');
+    expect(text).toContain('Images');
+    http.verify();
+  });
+
   it('should open a folder, load its contents, and return to root from the breadcrumb', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
