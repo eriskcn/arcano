@@ -72,9 +72,9 @@ public class FileService : IFileService
                 url
             ));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return Result<FileResponseDto>.Failure(new Error("File.UploadFailed", ex.Message));
+            return Result<FileResponseDto>.Failure(new Error("File.UploadFailed", "Upload failed. Please try again."));
         }
     }
 
@@ -113,9 +113,9 @@ public class FileService : IFileService
             var content = await _storageService.DownloadAsync(fileMetadata.StorageKey, cancellationToken);
             return Result<(Stream, string, string)>.Success((content, fileMetadata.ContentType, fileMetadata.FileName));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return Result<(Stream, string, string)>.Failure(new Error("File.DownloadFailed", ex.Message));
+            return Result<(Stream, string, string)>.Failure(new Error("File.DownloadFailed", "Download failed. Please try again."));
         }
     }
 
@@ -134,18 +134,17 @@ public class FileService : IFileService
 
         try
         {
-            await _storageService.DeleteAsync(fileMetadata.StorageKey, cancellationToken);
-
             fileMetadata.IsDeleted = true;
             fileMetadata.LastModifiedAtUtc = DateTime.UtcNow;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await _storageService.DeleteAsync(fileMetadata.StorageKey, cancellationToken);
 
             return Result.Success();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return Result.Failure(new Error("File.DeleteFailed", ex.Message));
+            return Result.Failure(new Error("File.DeleteFailed", "Delete failed. Please try again."));
         }
     }
 

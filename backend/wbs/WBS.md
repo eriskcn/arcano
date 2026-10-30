@@ -27,7 +27,7 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
     - [x] Configure dependency injection and JWT authentication.
     - [x] Require authentication on file endpoints.
     - [x] Restrict upload, download, and delete to the authenticated file owner; reject missing/invalid user IDs.
-    - [ ] Require a configured JWT secret of at least 32 UTF-8 bytes; remove committed JWT secret values and fallbacks. Reopened by the 2026-10-30 audit: `appsettings.Development.json` is still tracked and holds a key (see 1.6.1).
+    - [ ] Require a configured JWT secret of at least 32 UTF-8 bytes; remove committed JWT secret values and fallbacks. Reopened by the 2026-10-30 audit: `appsettings.Development.json` is still tracked, and its working copy holds an uncommitted key (see 1.6.1, item 1).
     - [ ] Apply explicit upload-size and validation limits; `[DisableRequestSizeLimit]` remains on the upload endpoint and no approved maximum is defined.
     - [ ] Define and verify failure handling for database/object-storage operations.
   - **1.5 Verification and readiness — Not Started**
@@ -36,11 +36,11 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
   - **1.6 Audit remediation — Not Started**
     - Source: [2026-10-30 ponytail audit](reports/2026-10-30-2323-ponytail-audit.md). Item numbers below match the report.
     - **1.6.1 Must fix — Not Started**
-      - [ ] Item 1: untrack `appsettings.Development.json` (`git rm --cached`), move `Jwt:Secret` to user secrets or env, rotate the key.
-      - [ ] Item 2: add `seaweedfs/security.toml` to `backend/.gitignore`.
-      - [ ] Item 3: in `FileService.DeleteFileAsync`, save `IsDeleted` before calling `DeleteAsync`.
+      - [ ] Item 1: untrack `appsettings.Development.json` (`git rm --cached`), move `Jwt:Secret` to user secrets or env, rotate the key. Open: HEAD no longer holds the secret, but the working copy has an uncommitted 64-character `Secret` in this tracked file. Needs an owner decision before committing; the old key stays in history until rotated.
+      - [x] Item 2: `seaweedfs/security.toml` is in the root `.gitignore` (line 13), added in commit 919cac3.
+      - [x] Item 3: `FileService.DeleteFileAsync` saves `IsDeleted` before calling `DeleteAsync`.
       - [ ] Item 4: replace `[DisableRequestSizeLimit]` with `[RequestSizeLimit(n)]`; the value of `n` needs a product decision.
-      - [ ] Item 5: return fixed error messages instead of `ex.Message` (middleware and `FileService`).
+      - [x] Item 5: fixed error messages in `FileService` (upload, download, delete) and in `ExceptionHandlingMiddleware`.
     - **1.6.2 Should fix — Not Started**
       - [ ] Item 6: delete the stored object when an upload's database save fails.
       - [ ] Item 7: rewrite the delete-failure test so the save path runs (after item 3).

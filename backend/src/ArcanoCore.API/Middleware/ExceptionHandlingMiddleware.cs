@@ -40,7 +40,7 @@ public class ExceptionHandlingMiddleware
         {
             Status = StatusCodes.Status500InternalServerError,
             Title = "An error occurred while processing your request.",
-            Detail = exception.Message,
+            Detail = "An unexpected error occurred.",
             Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1"
         };
 
