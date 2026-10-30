@@ -19,9 +19,10 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Pointer-drag marquee selection in list and grid views.
 
 ### 2. Authentication and User Access
-- [ ] **2.1 Authentication and session — Not Started**
+- [x] **2.1 Authentication and session — Complete**
   - Login/register UI, token/session handling, and protected routes.
-  - Align role-based UI with backend authorization; UI permissions do not replace API enforcement.
+  - Login and registration use the verified backend contracts; protected and anonymous routes are guarded.
+  - No role-specific UI is exposed because the current token has no role claims; API authorization remains authoritative.
 - [ ] **2.2 User profile and quota — Not Started**
   - Display user storage usage and warn/prevent uploads according to backend quota contracts.
 

@@ -1,7 +1,12 @@
-import { Component, HostListener, computed, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, DestroyRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter } from 'rxjs';
 import { environment } from '../environments/environment';
+import { AuthService } from './auth.service';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -26,8 +31,12 @@ export interface FileItem {
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {
+export class App implements OnInit {
   readonly appName = environment.appName;
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+  readonly userEmail = this.auth.email;
 
   // Navigation & View State
   readonly page = signal<Page>('signin');
@@ -51,9 +60,11 @@ export class App {
   readonly signInEmail = signal<string>('');
   readonly signInPassword = signal<string>('');
   readonly signInError = signal<string>('');
+  readonly signUpError = signal<string>('');
+  readonly signUpSuccess = signal<string>('');
+  readonly authBusy = signal<boolean>(false);
   readonly showSignInPassword = signal<boolean>(false);
 
-  readonly signUpFullName = signal<string>('');
   readonly signUpEmail = signal<string>('');
   readonly signUpPassword = signal<string>('');
   readonly showSignUpPassword = signal<boolean>(false);
@@ -69,6 +80,14 @@ export class App {
   readonly linkScope = signal<LinkScope>('org');
   readonly sharePermission = signal<string>('Can view');
   readonly shareExpiration = signal<string>('');
+
+  ngOnInit(): void {
+    this.syncPageWithRoute();
+    this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.syncPageWithRoute());
+  }
 
   // Static options
   readonly navItems: { key: NavItem; label: string; icon: string }[] = [
@@ -209,19 +228,61 @@ export class App {
   }
 
   // Actions
+  navigateToPage(page: Exclude<Page, 'app'>): void {
+    void this.router.navigateByUrl(`/${page}`);
+  }
+
+  signOut(): void {
+    this.auth.logout();
+    void this.router.navigateByUrl('/signin');
+  }
+
   onSignInSubmit(e: Event): void {
     e.preventDefault();
-    if (this.signInEmail() === 'admin' && this.signInPassword() === 'password') {
-      this.signInError.set('');
-      this.page.set('app');
-    } else {
-      this.signInError.set('Invalid email or password.');
+    if (this.authBusy()) {
+      return;
     }
+    this.authBusy.set(true);
+    this.signInError.set('');
+
+    this.auth.login(this.signInEmail().trim(), this.signInPassword()).subscribe({
+      next: () => {
+        this.authBusy.set(false);
+        this.signInPassword.set('');
+        const returnUrl = this.router.parseUrl(this.router.url).queryParams['returnUrl'];
+        const destination = typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')
+          ? returnUrl
+          : '/app';
+        void this.router.navigateByUrl(destination);
+      },
+      error: error => {
+        this.authBusy.set(false);
+        this.signInError.set(this.authErrorMessage(error, 'Unable to sign in. Please try again.'));
+      },
+    });
   }
 
   onSignUpSubmit(e: Event): void {
     e.preventDefault();
-    this.page.set('app');
+    if (this.authBusy()) {
+      return;
+    }
+    this.authBusy.set(true);
+    this.signUpError.set('');
+    this.signUpSuccess.set('');
+
+    this.auth.register(this.signUpEmail().trim(), this.signUpPassword()).subscribe({
+      next: () => {
+        this.authBusy.set(false);
+        this.signUpPassword.set('');
+        this.signUpSuccess.set('Account created. Sign in to continue.');
+        void this.router.navigateByUrl('/signin');
+      },
+      error: error => {
+        this.authBusy.set(false);
+        this.signUpError.set(this.authErrorMessage(error, 'Unable to create your account. Please try again.'));
+      },
+    });
   }
 
   selectFile(id: string, event?: MouseEvent): void {
@@ -338,6 +399,29 @@ export class App {
   private setSelection(ids: Set<string>, primaryId: string | null): void {
     this.selectedIds.set(ids);
     this.selectedId.set(primaryId);
+  }
+
+  private syncPageWithRoute(): void {
+    const path = this.router.url.split('?')[0];
+    this.page.set(path === '/signup' ? 'signup' : path === '/app' ? 'app' : 'signin');
+  }
+
+  private authErrorMessage(error: unknown, fallback: string): string {
+    if (!(error instanceof HttpErrorResponse)) {
+      return fallback;
+    }
+    if (error.status === 0) {
+      return 'Unable to connect to the server. Check your connection and try again.';
+    }
+    if (error.status === 401) {
+      return 'Invalid email or password.';
+    }
+
+    const body: unknown = error.error;
+    if (typeof body === 'object' && body !== null && 'description' in body && typeof body.description === 'string') {
+      return body.description;
+    }
+    return fallback;
   }
 
   private updateMarquee(clientX: number, clientY: number): void {

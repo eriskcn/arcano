@@ -1,10 +1,13 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
 import { App } from './app';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
+      providers: [provideHttpClient(), provideRouter([])],
     }).compileComponents();
   });
 
@@ -25,6 +28,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     const file = app.files()[0];
+    fixture.detectChanges();
     const event = new MouseEvent('contextmenu', {
       clientX: window.innerWidth,
       clientY: window.innerHeight,

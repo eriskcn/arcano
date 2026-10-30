@@ -12,6 +12,8 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+The client uses `http://localhost:5000/api` by default, matching the backend's local HTTP launch profile. Set `apiBaseUrl` in `src/environments/environment.ts` to the API base URL before building for another environment. Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The backend currently provides no role claims, so the client does not infer or display role-based permissions.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
