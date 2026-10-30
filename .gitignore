@@ -8,3 +8,6 @@ frontend/.angular/
 run-dev.log
 .DS_Store
 .env
+appsettings.Development.json
+.claude/
+backend/seaweedfs/security.toml
