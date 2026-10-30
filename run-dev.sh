@@ -46,7 +46,7 @@ for command in docker dotnet npm openssl; do
 done
 
 if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
-  (cd "$FRONTEND_DIR" && npm ci)
+  (cd "$FRONTEND_DIR" && npm install)
 fi
 
 JWT_SECRET="$JWT_SECRET" docker compose -f "$BACKEND_DIR/docker-compose.yml" up -d postgres seaweedfs
