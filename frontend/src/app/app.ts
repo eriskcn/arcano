@@ -9,6 +9,8 @@ import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { FileDto, FilesService } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
+import { FilePreviewComponent } from './preview/file-preview.component';
+import { ModalComponent } from './shared/components/modal.component';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -24,6 +26,8 @@ export interface FileItem {
   modified: string;
   starred: boolean;
   shared: boolean;
+  contentType?: string;
+  fileSize?: number;
 }
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
@@ -60,6 +64,8 @@ const toFileItem = (file: FileDto): FileItem => ({
   modified: formatDate(file.createdAtUtc),
   starred: false,
   shared: false,
+  contentType: file.contentType,
+  fileSize: file.fileSize,
 });
 
 const toFolderItem = (folder: FolderDto): FileItem => ({
@@ -75,7 +81,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FilePreviewComponent, ModalComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -101,6 +107,7 @@ export class App implements OnInit {
   readonly searchQuery = signal<string>('');
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
+  readonly previewModalOpen = signal<boolean>(false);
   readonly contextMenu = signal<{ file: FileItem; left: number; top: number } | null>(null);
   readonly selectionRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
   private marqueeStart: { x: number; y: number } | null = null;
@@ -634,6 +641,14 @@ export class App implements OnInit {
         this.filesError.set('Unable to load your files. Please try again.');
       },
     });
+  }
+
+  openPreview(): void {
+    this.previewModalOpen.set(true);
+  }
+
+  closePreview(): void {
+    this.previewModalOpen.set(false);
   }
 
   downloadFile(file: FileItem): void {

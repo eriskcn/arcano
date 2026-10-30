@@ -55,12 +55,12 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - Current state: the preview panel shell exists (desktop, toggled from the toolbar) and shows the selected item's details. It does not render file content yet.
 - Approach: fetch the file bytes through the authenticated download endpoint, then show them with a local object URL. No backend change is needed.
 - Constraint: never render uploaded HTML or SVG inline. Uploads come from other users, so inline rendering would run their script in the app's origin. Only images, PDF, text, audio, and video are previewed; everything else shows the download action.
-- [ ] **6.1 Preview host — In Progress.** The panel shell exists. Add the content area, loading and error states, and the type check that picks a viewer.
-- [ ] **6.2 Image viewer — Not Started.** Render common image types (PNG, JPEG, GIF, WebP) from an object URL.
-- [ ] **6.3 Audio/video player — Not Started.** Use native `audio` and `video` elements from an object URL. Large files load fully into memory, so cap the preview size and offer download above it.
+- [x] **6.1 Preview host — Completed (unit-tested, not verified in a browser).** A Preview button in the details panel opens `app-file-preview` in a popup (`app-modal`) for one selected file. The side panel shows details only. The preview has loading, error, and ready states, cancels stale requests, and revokes object URLs.
+- [x] **6.2 Image viewer — Completed.** PNG, JPEG, GIF, WebP, and BMP render from an object URL.
+- [x] **6.3 Audio/video player — Completed.** Native `audio` and `video` elements. Files over 25 MB show "Preview unavailable" with the download action.
 - [ ] **6.4 PDF viewer — Deferred (not supported now; revisit later).** PDFs show the download action only. Revisit the library or browser-native approach when this is prioritized.
-- [ ] **6.5 Text/code viewer — Not Started.** Show plain text and common code types, truncated above a set size.
-- [ ] **6.6 Preview tests — Not Started.** Tests for the type check, the blocked types (HTML, SVG), the size cap, and object URL cleanup.
+- [x] **6.5 Text/code viewer — Completed for plain text.** Text, Markdown, CSV, and JSON show the first 100 KB with a truncation note. Code-specific highlighting is not included.
+- [x] **6.6 Preview tests — Completed.** Covers the type rules, blocked HTML and SVG, the size cap, PDF (no request), request cancellation, the error state, and object URL revocation.
 
 ## Dependencies
 - The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.

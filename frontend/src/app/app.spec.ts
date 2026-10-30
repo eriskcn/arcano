@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
 import { App, FileItem } from './app';
+import { FilePreviewComponent } from './preview/file-preview.component';
 import { environment } from '../environments/environment';
 
 const sampleFiles: FileItem[] = ['1', '2', '3', '4', '5', '6'].map(id => ({
@@ -231,6 +233,29 @@ describe('App', () => {
     expect(create).toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
     expect(revoke).toHaveBeenCalledWith('blob:test');
+    http.verify();
+  });
+
+  it('should render the file preview for one selected file and download it on its output', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    fixture.detectChanges();
+    app.page.set('app');
+    app.files.set([{ ...sampleFiles[0], contentType: 'application/pdf', fileSize: 1024 }]);
+    app.selectFile('1');
+    app.openPreview();
+    fixture.detectChanges();
+
+    const preview = fixture.debugElement.query(By.directive(FilePreviewComponent));
+    expect(preview.componentInstance.fileId()).toBe('1');
+    preview.componentInstance.download.emit();
+    http.expectOne(`${environment.apiBaseUrl}/Files/1`).flush(new Blob(['x']));
+
+    expect(click).toHaveBeenCalled();
     http.verify();
   });
 
