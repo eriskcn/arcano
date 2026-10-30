@@ -16,10 +16,12 @@ export class FilesService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiBaseUrl}/Files`;
 
-  list(): Observable<FileDto[]> {
+  list(folderId?: string | null): Observable<FileDto[]> {
     const pageSize = 100;
     const fetchPage = (skip: number): Observable<FileDto[]> =>
-      this.http.get<FileDto[]>(this.baseUrl, { params: { skip, take: pageSize } });
+      this.http.get<FileDto[]>(this.baseUrl, {
+        params: { skip, take: pageSize, ...(folderId ? { folderId } : {}) },
+      });
     // expand's index counts pages fetched so far, so the next skip is (index + 1) * pageSize.
     return fetchPage(0).pipe(
       expand((page, index) => (page.length < pageSize ? EMPTY : fetchPage((index + 1) * pageSize))),
@@ -27,10 +29,19 @@ export class FilesService {
     );
   }
 
-  upload(file: File): Observable<void> {
+  upload(file: File, folderId?: string | null): Observable<void> {
     const body = new FormData();
     body.append('file', file, file.name);
+    if (folderId) {
+      body.append('folderId', folderId);
+    }
     return this.http.post<unknown>(`${this.baseUrl}/upload`, body).pipe(map(() => undefined));
+  }
+
+  moveFile(id: string, folderId: string | null): Observable<void> {
+    return this.http
+      .put<void>(`${this.baseUrl}/${encodeURIComponent(id)}/folder`, { folderId })
+      .pipe(map(() => undefined));
   }
 
   download(id: string): Observable<Blob> {

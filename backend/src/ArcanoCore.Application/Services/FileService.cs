@@ -44,6 +44,11 @@ public class FileService : IFileService
             return Result<FileResponseDto>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
 
+        if (dto.FolderId != null && !await IsOwnedActiveFolderAsync(dto.FolderId.Value, ownerId, cancellationToken))
+        {
+            return Result<FileResponseDto>.Failure(new Error("Folder.NotFound", "Folder not found."));
+        }
+
         string? storageKey = null;
         try
         {
@@ -56,7 +61,8 @@ public class FileService : IFileService
                 ContentType = dto.ContentType,
                 FileSize = dto.FileSize,
                 StorageKey = storageKey,
-                OwnerId = ownerId
+                OwnerId = ownerId,
+                FolderId = dto.FolderId
             };
 
             await _dbContext.FileMetadatas.AddAsync(fileMetadata, cancellationToken);
@@ -87,7 +93,7 @@ public class FileService : IFileService
         }
     }
 
-    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(int skip, int take, CancellationToken cancellationToken = default)
+    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(int skip, int take, Guid? folderId = null, CancellationToken cancellationToken = default)
     {
         var ownerId = CurrentOwnerId;
         if (ownerId == Guid.Empty)
@@ -95,9 +101,10 @@ public class FileService : IFileService
             return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
 
+        // A null folderId lists the root (FolderId is null).
         var files = await _dbContext.FileMetadatas
             .AsNoTracking()
-            .Where(f => f.OwnerId == ownerId && !f.IsDeleted)
+            .Where(f => f.OwnerId == ownerId && !f.IsDeleted && f.FolderId == folderId)
             .OrderByDescending(f => f.CreatedAtUtc)
             .ThenBy(f => f.Id)
             .Skip(skip)
@@ -150,6 +157,28 @@ public class FileService : IFileService
             return Result.Failure(new Error("File.DeleteFailed", "Delete failed. Please try again."));
         }
     }
+
+    public async Task<Result> MoveFileAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default)
+    {
+        var fileMetadata = await FindOwnedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
+        {
+            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        if (folderId != null && !await IsOwnedActiveFolderAsync(folderId.Value, CurrentOwnerId, cancellationToken))
+        {
+            return Result.Failure(new Error("Folder.NotFound", "Folder not found."));
+        }
+
+        fileMetadata.FolderId = folderId;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
+    }
+
+    private Task<bool> IsOwnedActiveFolderAsync(Guid folderId, Guid ownerId, CancellationToken cancellationToken) =>
+        _dbContext.Folders.AnyAsync(f => f.Id == folderId && f.OwnerId == ownerId && !f.IsDeleted, cancellationToken);
 
     private async Task<FileMetadata?> FindOwnedFileAsync(Guid id, CancellationToken cancellationToken)
     {

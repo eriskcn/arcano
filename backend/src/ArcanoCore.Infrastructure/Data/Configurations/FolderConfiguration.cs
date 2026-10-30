@@ -35,7 +35,9 @@ public class FolderConfiguration : IEntityTypeConfiguration<Folder>
             .HasForeignKey(x => x.ParentId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Composite unique: same owner cannot have two folders with the same name under the same parent
-        builder.HasIndex(x => new { x.OwnerId, x.ParentId, x.Name }).IsUnique();
+        // Composite unique: same owner cannot have two live folders with the same name under the same parent
+        builder.HasIndex(x => new { x.OwnerId, x.ParentId, x.Name })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
     }
 }

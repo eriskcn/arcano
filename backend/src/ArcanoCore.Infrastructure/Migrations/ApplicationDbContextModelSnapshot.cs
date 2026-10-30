@@ -139,7 +139,8 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.HasIndex("ParentId");
 
                     b.HasIndex("OwnerId", "ParentId", "Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Folder", (string)null);
                 });

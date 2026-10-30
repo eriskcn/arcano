@@ -4,10 +4,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router } from '@angular/router';
-import { EMPTY, catchError, concatMap, filter, from } from 'rxjs';
+import { EMPTY, Observable, Subscription, catchError, concatMap, filter, forkJoin, from } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { FileDto, FilesService } from './files.service';
+import { FolderDto, FoldersService } from './folders.service';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -48,12 +49,25 @@ const fileTypeFromContentType = (contentType: string): FileItem['type'] => {
   return 'document';
 };
 
+const formatDate = (isoDate: string): string =>
+  new Date(isoDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
 const toFileItem = (file: FileDto): FileItem => ({
   id: file.id,
   name: file.fileName,
   type: fileTypeFromContentType(file.contentType),
   size: formatFileSize(file.fileSize),
-  modified: new Date(file.createdAtUtc).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+  modified: formatDate(file.createdAtUtc),
+  starred: false,
+  shared: false,
+});
+
+const toFolderItem = (folder: FolderDto): FileItem => ({
+  id: folder.id,
+  name: folder.name,
+  type: 'folder',
+  size: null,
+  modified: formatDate(folder.createdAtUtc),
   starred: false,
   shared: false,
 });
@@ -69,6 +83,7 @@ export class App implements OnInit {
   readonly appName = environment.appName;
   private readonly auth = inject(AuthService);
   private readonly filesApi = inject(FilesService);
+  private readonly foldersApi = inject(FoldersService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly userEmail = this.auth.email;
@@ -168,6 +183,21 @@ export class App implements OnInit {
   readonly actionError = signal<string>('');
   readonly actionBusy = signal<boolean>(false);
 
+  // Folder navigation: folders of the current folder, the path to it, and the create/rename editor.
+  readonly folders = signal<FileItem[]>([]);
+  readonly folderPath = signal<{ id: string; name: string }[]>([]);
+  readonly folderEditor = signal<{ mode: 'create' } | { mode: 'rename'; folder: FileItem } | null>(null);
+  readonly folderName = signal<string>('');
+  readonly contextMenuView = signal<'actions' | 'move'>('actions');
+  private loadSubscription: Subscription | null = null;
+
+  readonly currentFolderId = computed(() => this.folderPath().at(-1)?.id ?? null);
+  readonly items = computed<FileItem[]>(() => [...this.folders(), ...this.files()]);
+  readonly moveTargets = computed<{ id: string | null; name: string }[]>(() => [
+    ...(this.currentFolderId() ? [{ id: null, name: 'My Files' }] : []),
+    ...this.folders().map(folder => ({ id: folder.id, name: folder.name })),
+  ]);
+
   readonly showFiles = computed(() => {
     const nav = this.activeNav();
     return nav === 'my-files' || nav === 'home' || nav === 'recent' || nav === 'favorites' || nav === 'shared';
@@ -178,7 +208,7 @@ export class App implements OnInit {
     const nav = this.activeNav();
     const filter = this.activeFilter();
 
-    return this.files().filter(f => {
+    return this.items().filter(f => {
       const matchSearch = f.name.toLowerCase().includes(q);
       if (!matchSearch) return false;
       if (nav === 'favorites') return f.starred;
@@ -194,12 +224,13 @@ export class App implements OnInit {
 
   readonly selectedFile = computed(() => {
     const id = this.selectedId();
-    return this.files().find(f => f.id === id) ?? null;
+    return this.items().find(f => f.id === id) ?? null;
   });
 
   readonly breadcrumb = computed(() => {
     const nav = this.activeNav();
-    return nav === 'my-files' ? [this.appName, 'My Files'] : [this.appName, this.navLabels[nav]];
+    const base = nav === 'my-files' ? [this.appName, 'My Files'] : [this.appName, this.navLabels[nav]];
+    return [...base, ...this.folderPath().map(folder => folder.name)];
   });
 
   fileIcon(type: FileItem['type']): string {
@@ -259,9 +290,119 @@ export class App implements OnInit {
     void this.router.navigateByUrl(`/${page}`);
   }
 
+  selectNav(key: NavItem): void {
+    const changed = key !== this.activeNav();
+    this.activeNav.set(key);
+    if (changed && this.folderPath().length > 0) {
+      this.goToFolder(0);
+    }
+  }
+
+  openFolder(folder: FileItem): void {
+    this.folderPath.update(path => [...path, { id: folder.id, name: folder.name }]);
+    this.loadFiles();
+  }
+
+  // depth 0 is the root; depth n keeps the first n folders of the path.
+  goToFolder(depth: number): void {
+    this.folderPath.update(path => path.slice(0, depth));
+    this.loadFiles();
+  }
+
+  navigateCrumb(index: number): void {
+    // Crumbs 0 and 1 are the app name and the section; folder crumbs start at index 2.
+    if (index === 0 || index >= this.breadcrumb().length - 1) {
+      return;
+    }
+    this.goToFolder(index - 1);
+  }
+
+  startCreateFolder(): void {
+    this.folderEditor.set({ mode: 'create' });
+    this.folderName.set('');
+  }
+
+  startRenameFolder(folder: FileItem): void {
+    this.folderEditor.set({ mode: 'rename', folder });
+    this.folderName.set(folder.name);
+    this.contextMenu.set(null);
+  }
+
+  cancelFolderEditor(): void {
+    this.folderEditor.set(null);
+  }
+
+  submitFolderEditor(): void {
+    const editor = this.folderEditor();
+    const name = this.folderName().trim();
+    if (!editor || !name || this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    const request: Observable<unknown> = editor.mode === 'rename'
+      ? this.foldersApi.update(editor.folder.id, name, this.currentFolderId())
+      : this.foldersApi.create(name, this.currentFolderId());
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.actionBusy.set(false);
+        this.folderEditor.set(null);
+        this.loadFiles();
+      },
+      error: error => {
+        this.actionBusy.set(false);
+        this.actionError.set(this.folderErrorMessage(error, editor.mode === 'rename'
+          ? `Unable to rename ${editor.folder.name}. Please try again.`
+          : 'Unable to create the folder. Please try again.'));
+      },
+    });
+  }
+
+  deleteFolder(folder: FileItem): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+    this.contextMenu.set(null);
+
+    this.foldersApi.delete(folder.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.actionBusy.set(false);
+        this.loadFiles();
+      },
+      error: error => {
+        this.actionBusy.set(false);
+        this.actionError.set(this.folderErrorMessage(error, `Unable to delete ${folder.name}. Please try again.`));
+      },
+    });
+  }
+
+  moveFile(file: FileItem, folderId: string | null): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+    this.contextMenu.set(null);
+
+    this.filesApi.moveFile(file.id, folderId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.actionBusy.set(false);
+        this.loadFiles();
+      },
+      error: () => {
+        this.actionBusy.set(false);
+        this.actionError.set(`Unable to move ${file.name}. Please try again.`);
+      },
+    });
+  }
+
   signOut(): void {
     this.auth.logout();
     this.files.set([]);
+    this.folderPath.set([]);
     this.clearSelection();
     void this.router.navigateByUrl('/signin');
   }
@@ -366,6 +507,18 @@ export class App implements OnInit {
     this.clearSelection();
   }
 
+  @HostListener('document:keydown.enter', ['$event'])
+  onEnter(event: Event): void {
+    // Ignore Enter typed into inputs and buttons; only act when nothing else has focus.
+    if (event.target instanceof HTMLElement && event.target !== document.body) {
+      return;
+    }
+    const selected = this.selectedFile();
+    if (this.selectedIds().size === 1 && selected?.type === 'folder') {
+      this.openFolder(selected);
+    }
+  }
+
   beginMarquee(event: PointerEvent): void {
     if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
       return;
@@ -412,6 +565,7 @@ export class App implements OnInit {
 
     const menuWidth = 192;
     const menuHeight = 80;
+    this.contextMenuView.set('actions');
     this.contextMenu.set({
       file,
       left: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
@@ -420,9 +574,10 @@ export class App implements OnInit {
   }
 
   toggleFileStar(id: string): void {
-    this.files.update(files =>
-      files.map(file => file.id === id ? { ...file, starred: !file.starred } : file),
-    );
+    const star = (items: FileItem[]): FileItem[] =>
+      items.map(file => file.id === id ? { ...file, starred: !file.starred } : file);
+    this.files.update(star);
+    this.folders.update(star);
   }
 
   onUploadSelected(event: Event): void {
@@ -437,7 +592,7 @@ export class App implements OnInit {
 
     from(selected)
       .pipe(
-        concatMap(file => this.filesApi.upload(file).pipe(
+        concatMap(file => this.filesApi.upload(file, this.currentFolderId()).pipe(
           catchError(() => {
             this.actionError.set(`Unable to upload ${file.name}. Please try again.`);
             return EMPTY;
@@ -457,13 +612,20 @@ export class App implements OnInit {
 
   loadFiles(): void {
     this.files.set([]);
+    this.folders.set([]);
     this.clearSelection();
     this.filesLoading.set(true);
     this.filesError.set('');
     this.actionError.set('');
 
-    this.filesApi.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: files => {
+    const parentId = this.currentFolderId();
+    this.loadSubscription?.unsubscribe();
+    this.loadSubscription = forkJoin({
+      files: this.filesApi.list(parentId),
+      folders: this.foldersApi.list(parentId),
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: ({ files, folders }) => {
+        this.folders.set(folders.map(toFolderItem));
         this.files.set(files.map(toFileItem));
         this.filesLoading.set(false);
       },
@@ -499,6 +661,10 @@ export class App implements OnInit {
   }
 
   deleteFile(file: FileItem): void {
+    if (file.type === 'folder') {
+      this.deleteFolder(file);
+      return;
+    }
     if (this.actionBusy()) {
       return;
     }
@@ -538,6 +704,23 @@ export class App implements OnInit {
     this.page.set(next);
     if (next === 'app' && previous !== 'app') {
       this.loadFiles();
+    }
+  }
+
+  private folderErrorMessage(error: unknown, fallback: string): string {
+    const body: unknown = error instanceof HttpErrorResponse ? error.error : null;
+    const code = typeof body === 'object' && body !== null && 'code' in body ? body.code : null;
+    switch (code) {
+      case 'Folder.NameTaken':
+        return 'A folder with this name already exists here.';
+      case 'Folder.InvalidName':
+        return 'Enter a valid folder name.';
+      case 'Folder.Cycle':
+        return 'A folder cannot be moved into itself or one of its subfolders.';
+      case 'Folder.NotEmpty':
+        return 'Only empty folders can be deleted. Move or delete their contents first.';
+      default:
+        return fallback;
     }
   }
 

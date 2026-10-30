@@ -153,6 +153,116 @@ public class FileServiceTests
         Assert.Equal("File.Unauthorized", result.Error.Code);
     }
 
+    [Fact]
+    public async Task UploadFileAsync_StoresFolderId_WhenFolderIsOwnedByCaller()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        dbContext.Folders.Add(folder);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage)
+            .UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "file.txt", "text/plain", 1, folder.Id));
+
+        Assert.True(result.IsSuccess);
+        var saved = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
+        Assert.Equal(folder.Id, saved.FolderId);
+        Assert.Equal(1, storage.UploadCalls);
+    }
+
+    [Fact]
+    public async Task UploadFileAsync_ReturnsFolderNotFound_WhenFolderBelongsToAnotherUser()
+    {
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(Guid.NewGuid());
+        dbContext.Folders.Add(folder);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString(), storage)
+            .UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "file.txt", "text/plain", 1, folder.Id));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Folder.NotFound", result.Error.Code);
+        Assert.Equal(0, storage.UploadCalls);
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_ReturnsOnlyFilesInRequestedFolder()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folderA = NewFolder(userId);
+        var folderB = NewFolder(userId);
+        var inA = NewFile(userId, "a.txt", folderId: folderA.Id);
+        dbContext.Folders.AddRange(folderA, folderB);
+        dbContext.FileMetadatas.AddRange(inA, NewFile(userId, "b.txt", folderId: folderB.Id), NewFile(userId, "root.txt"));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(0, 50, folderA.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { inA.Id }, result.Value.Select(f => f.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_ReturnsOnlyRootFiles_WhenFolderIdIsOmitted()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var root = NewFile(userId, "root.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.AddRange(root, NewFile(userId, "inFolder.txt", folderId: folder.Id));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(0, 50);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { root.Id }, result.Value.Select(f => f.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task MoveFileAsync_MovesFileToFolderAndBackToRoot()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var file = NewFile(userId, "file.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var service = CreateListService(dbContext, userId.ToString());
+
+        var toFolder = await service.MoveFileAsync(file.Id, folder.Id);
+        Assert.True(toFolder.IsSuccess);
+        Assert.Equal(folder.Id, file.FolderId);
+
+        var toRoot = await service.MoveFileAsync(file.Id, null);
+        Assert.True(toRoot.IsSuccess);
+        Assert.Null(file.FolderId);
+    }
+
+    [Fact]
+    public async Task MoveFileAsync_ReturnsFolderNotFound_WhenFolderBelongsToAnotherUser()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var foreignFolder = NewFolder(Guid.NewGuid());
+        var file = NewFile(userId, "file.txt");
+        dbContext.Folders.Add(foreignFolder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).MoveFileAsync(file.Id, foreignFolder.Id);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Folder.NotFound", result.Error.Code);
+        Assert.Null(file.FolderId);
+    }
+
     private static ApplicationDbContext CreateListDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -161,10 +271,10 @@ public class FileServiceTests
         return new ApplicationDbContext(options);
     }
 
-    private static FileService CreateListService(ApplicationDbContext dbContext, string? userId) =>
-        new(dbContext, new ListUnusedStorageService(), new ListCurrentUser(userId));
+    private static FileService CreateListService(ApplicationDbContext dbContext, string? userId, IStorageService? storage = null) =>
+        new(dbContext, storage ?? new ListUnusedStorageService(), new ListCurrentUser(userId));
 
-    private static FileMetadata NewFile(Guid ownerId, string name, bool isDeleted = false) => new()
+    private static FileMetadata NewFile(Guid ownerId, string name, bool isDeleted = false, Guid? folderId = null) => new()
     {
         Id = Guid.NewGuid(),
         FileName = name,
@@ -172,7 +282,15 @@ public class FileServiceTests
         FileSize = 10,
         StorageKey = name,
         OwnerId = ownerId,
-        IsDeleted = isDeleted
+        IsDeleted = isDeleted,
+        FolderId = folderId
+    };
+
+    private static Folder NewFolder(Guid ownerId) => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = "folder",
+        OwnerId = ownerId
     };
 
     private sealed class ListCurrentUser(string? userId) : ICurrentUser

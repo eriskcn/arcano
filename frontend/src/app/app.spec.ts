@@ -147,6 +147,7 @@ describe('App', () => {
       { id: 'a', fileName: 'photo.png', contentType: 'image/png', fileSize: 1258291, createdAtUtc: '2026-07-22T10:00:00Z' },
       { id: 'b', fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 512, createdAtUtc: '2026-07-22T10:00:00Z' },
     ]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
 
     expect(app.filesLoading()).toBe(false);
     expect(app.files().map(file => [file.id, file.name, file.type, file.size])).toEqual([
@@ -166,6 +167,7 @@ describe('App', () => {
 
     app.loadFiles();
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No files yet');
@@ -180,6 +182,7 @@ describe('App', () => {
     app.page.set('app');
 
     app.loadFiles();
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush(null, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();
 
@@ -244,6 +247,7 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
 
     expect(app.actionBusy()).toBe(false);
     expect(app.actionError()).toBe('');
@@ -261,7 +265,56 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('no', { status: 400, statusText: 'Bad Request' });
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
 
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+
     expect(app.actionError()).toContain('Unable to upload a.txt');
+    http.verify();
+  });
+
+  it('should open a folder, load its contents, and return to root from the breadcrumb', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const folder = { id: 'f1', name: 'Projects', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' };
+
+    app.loadFiles();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([folder]);
+    expect(app.items().map(item => item.name)).toEqual(['Projects']);
+
+    app.openFolder(app.items()[0]);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=f1`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders?parentId=f1`).flush([]);
+    expect(app.breadcrumb()).toEqual([environment.appName, 'My Files', 'Projects']);
+
+    app.navigateCrumb(1);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([folder]);
+    expect(app.breadcrumb()).toEqual([environment.appName, 'My Files']);
+    http.verify();
+  });
+
+  it('should create a folder in the current folder and reload the listing', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+
+    app.loadFiles();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+
+    app.startCreateFolder();
+    app.folderName.set('  Reports ');
+    app.submitFolderEditor();
+    const create = http.expectOne(`${environment.apiBaseUrl}/Folders`);
+    expect(create.request.method).toBe('POST');
+    expect(create.request.body).toEqual({ name: 'Reports', parentId: null });
+    create.flush({ id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' });
+
+    expect(app.folderEditor()).toBeNull();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([
+      { id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' },
+    ]);
+    expect(app.items().map(item => item.name)).toEqual(['Reports']);
     http.verify();
   });
 });

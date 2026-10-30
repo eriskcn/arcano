@@ -58,14 +58,15 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
       - [x] Item 18: the backend README describes the SeaweedFS identity file correctly.
       - [x] Item 19: the JWT secret is checked once, at startup.
     - **Open question:** the frontend requests only the first page of files. Users with more than 50 files will not see the rest until the client supports paging.
-  - **1.7 Folders (Planned) — Not Started**
+  - **1.7 Folders — In Progress** (API, placement, and tests done; verified against the local API on port 5002, not in a browser)
     - Scope: nested folders per user, with files placed in folders. The frontend side is tracked in [frontend/wbs/WBS.md](../../frontend/wbs/WBS.md) section 4.4.
     - [x] **1.7.1 Data model — Completed.** `Folder` entity (owner, parent, name), EF configuration with unique `(OwnerId, ParentId, Name)` index, and `FileMetadata.FolderId` are in the initial migration.
-    - [ ] **1.7.2 Folder API — Not Started.** Create, list children, and rename a folder for the signed-in user. Reject a name that already exists under the same parent.
-    - [ ] **1.7.3 Folder placement — Not Started.** Upload with an optional `folderId`; list files by folder (root when omitted); move a file to another folder.
-    - [ ] **1.7.4 Folder ownership and safety — Not Started.** Every folder operation checks that the folder and any target parent belong to the caller. Moving a folder into its own descendant is rejected.
-    - [ ] **1.7.5 Folder delete — Not Started (decision needed).** Choose whether deleting a non-empty folder is rejected or cascades to its files and subfolders. Storage objects must be removed for cascaded files, so the choice affects the failure handling in item 1.4.
-    - [ ] **1.7.6 Folder tests — Not Started.** Tests for duplicate names, cross-owner access, cycle rejection, and paging within a folder.
+    - [x] **1.7.2 Folder API — Completed.** `POST/GET/PUT/DELETE /api/Folders`. Create, list children, rename or move (PUT). Duplicate names under the same parent are rejected (`Folder.NameTaken`), including root.
+    - [x] **1.7.3 Folder placement — Completed.** Upload takes an optional `folderId`; `GET /api/Files?folderId=` lists one folder (no `folderId` means root files only); `PUT /api/Files/{id}/folder` moves a file.
+    - [x] **1.7.4 Folder ownership and safety — Completed.** Every folder operation checks the caller owns the folder and any target parent. Moving a folder into itself or a descendant returns `Folder.Cycle`.
+    - [x] **1.7.5 Folder delete — Completed (decision: reject non-empty).** Deleting a folder that has child folders or files returns `Folder.NotEmpty`. No cascade, so no storage cleanup is needed here. Empty folders are soft-deleted.
+    - [x] **1.7.6 Folder tests — Completed.** Unit tests cover duplicate names, cross-owner access, cycle rejection, delete rules, and folder-scoped listing and move.
+    - [x] **1.7.7 Folder name index — Completed.** The unique `(OwnerId, ParentId, Name)` index is filtered to live rows (`IsDeleted = false`) by migration `FolderUniqueLiveName`, so a deleted name can be reused under the same parent.
 
 ## Dependencies
 - 1.2 depends on 1.1.

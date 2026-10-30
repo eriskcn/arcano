@@ -66,6 +66,17 @@ describe('FilesService', () => {
     expect(result?.[102].id).toBe('102');
   });
 
+  it('should list files of a folder with the folderId parameter', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    let result: FileDto[] | undefined;
+
+    service.list(id).subscribe(response => (result = response));
+
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=${id}`).flush([]);
+    expect(result).toEqual([]);
+  });
+
   it('should download a file as a blob', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);
@@ -94,6 +105,36 @@ describe('FilesService', () => {
     expect((request.request.body as FormData).get('file')).toBeInstanceOf(File);
     request.flush({ id });
     expect(completed).toBe(true);
+  });
+
+  it('should upload a file into a folder', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+
+    service.upload(new File(['hello'], 'hello.txt'), id).subscribe();
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect((request.request.body as FormData).get('folderId')).toBe(id);
+    request.flush({ id });
+  });
+
+  it('should move a file to a folder, or to the root with a null folderId', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    let completed = 0;
+
+    service.moveFile(id, id).subscribe({ complete: () => completed++ });
+    const toFolder = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/folder`);
+    expect(toFolder.request.method).toBe('PUT');
+    expect(toFolder.request.body).toEqual({ folderId: id });
+    toFolder.flush(null, { status: 204, statusText: 'No Content' });
+
+    service.moveFile(id, null).subscribe({ complete: () => completed++ });
+    const toRoot = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/folder`);
+    expect(toRoot.request.body).toEqual({ folderId: null });
+    toRoot.flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(completed).toBe(2);
   });
 
   it('should delete a file by id', () => {

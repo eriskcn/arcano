@@ -40,7 +40,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [ ] **4.3 Drag and drop — Not Started**
   - Upload external files and move internal items when the corresponding API operations are available.
 
-- [ ] **4.4 Folder navigation — Not Started (depends on backend 1.7)**
+- [~] **4.4 Folder navigation — Built, not verified in a browser (backend 1.7 complete)**
   - Backend tasks are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.7.
   - Folder tree and breadcrumb navigation, create and rename folders, upload into the current folder, and move files between folders.
   - Wire the existing "Folders" filter chip to real folder data instead of the mock; the chip is not implemented against the API yet.
@@ -52,11 +52,15 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Recipient view depends on backend public-share and access-control contracts.
 
 ### 6. Media and Document Previews (Planned)
-- [ ] **6.1 Preview host — Not Started**
-- [ ] **6.2 Image viewer — Not Started**
-- [ ] **6.3 Audio/video player — Not Started**
-- [ ] **6.4 PDF viewer — Not Started**
-- [ ] **6.5 Text/code viewer — Not Started**
+- Current state: the preview panel shell exists (desktop, toggled from the toolbar) and shows the selected item's details. It does not render file content yet.
+- Approach: fetch the file bytes through the authenticated download endpoint, then show them with a local object URL. No backend change is needed.
+- Constraint: never render uploaded HTML or SVG inline. Uploads come from other users, so inline rendering would run their script in the app's origin. Only images, PDF, text, audio, and video are previewed; everything else shows the download action.
+- [ ] **6.1 Preview host — In Progress.** The panel shell exists. Add the content area, loading and error states, and the type check that picks a viewer.
+- [ ] **6.2 Image viewer — Not Started.** Render common image types (PNG, JPEG, GIF, WebP) from an object URL.
+- [ ] **6.3 Audio/video player — Not Started.** Use native `audio` and `video` elements from an object URL. Large files load fully into memory, so cap the preview size and offer download above it.
+- [ ] **6.4 PDF viewer — Deferred (not supported now; revisit later).** PDFs show the download action only. Revisit the library or browser-native approach when this is prioritized.
+- [ ] **6.5 Text/code viewer — Not Started.** Show plain text and common code types, truncated above a set size.
+- [ ] **6.6 Preview tests — Not Started.** Tests for the type check, the blocked types (HTML, SVG), the size cap, and object URL cleanup.
 
 ## Dependencies
 - The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.
