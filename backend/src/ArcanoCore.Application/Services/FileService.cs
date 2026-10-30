@@ -99,6 +99,7 @@ public class FileService : IFileService
             .AsNoTracking()
             .Where(f => f.OwnerId == ownerId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAtUtc)
+            .ThenBy(f => f.Id)
             .Skip(skip)
             .Take(take)
             .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc))

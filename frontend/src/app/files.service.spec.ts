@@ -38,11 +38,32 @@ describe('FilesService', () => {
 
     service.list().subscribe(response => (result = response));
 
-    const request = http.expectOne(`${environment.apiBaseUrl}/Files`);
+    const request = http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`);
     expect(request.request.method).toBe('GET');
     expect(request.request.headers.get('Authorization')).toMatch(/^Bearer /);
     request.flush(files);
     expect(result).toEqual(files);
+  });
+
+  it('should request the next page until a short page is returned', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    const pageOf = (start: number, count: number): FileDto[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: String(start + i),
+        fileName: `file-${start + i}.txt`,
+        contentType: 'text/plain',
+        fileSize: 1,
+        createdAtUtc: '2026-07-22T10:00:00Z',
+      }));
+    let result: FileDto[] | undefined;
+
+    service.list().subscribe(response => (result = response));
+
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush(pageOf(0, 100));
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=100&take=100`).flush(pageOf(100, 3));
+    expect(result?.length).toBe(103);
+    expect(result?.[102].id).toBe('102');
   });
 
   it('should download a file as a blob', () => {

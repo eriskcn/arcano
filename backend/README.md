@@ -48,12 +48,12 @@ dotnet ef database update --project src/ArcanoCore.Infrastructure/ArcanoCore.Inf
 
 The file endpoints below require `Authorization: Bearer <token>` and only act on files owned by the signed-in user:
 
-- **List Files:** `GET http://localhost:5000/api/Files`
+- **List Files:** `GET http://localhost:5000/api/Files` (optional query: `skip` (default 0), `take` (default 50, max 100))
 - **Upload File:** `POST http://localhost:5000/api/Files/upload` (Form-data: `file` field containing your file)
 - **Download File:** `GET http://localhost:5000/api/Files/{id}`
 - **Delete File:** `DELETE http://localhost:5000/api/Files/{id}`
 
-Upload has no request size limit yet (`[DisableRequestSizeLimit]`); a maximum size has not been defined.
+Uploads are limited to 100 MB (`[RequestSizeLimit(104857600)]`); larger requests are rejected.
 
 ### 4. Configuration
 - `Jwt:Secret` (env `Jwt__Secret`) is required and must be at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`.

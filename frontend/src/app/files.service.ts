@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { EMPTY, Observable, expand, map, reduce } from 'rxjs';
 import { environment } from '../environments/environment';
 
 export interface FileDto {
@@ -17,7 +17,14 @@ export class FilesService {
   private readonly baseUrl = `${environment.apiBaseUrl}/Files`;
 
   list(): Observable<FileDto[]> {
-    return this.http.get<FileDto[]>(this.baseUrl);
+    const pageSize = 100;
+    const fetchPage = (skip: number): Observable<FileDto[]> =>
+      this.http.get<FileDto[]>(this.baseUrl, { params: { skip, take: pageSize } });
+    // expand's index counts pages fetched so far, so the next skip is (index + 1) * pageSize.
+    return fetchPage(0).pipe(
+      expand((page, index) => (page.length < pageSize ? EMPTY : fetchPage((index + 1) * pageSize))),
+      reduce((all, page) => [...all, ...page], [] as FileDto[]),
+    );
   }
 
   upload(file: File): Observable<void> {

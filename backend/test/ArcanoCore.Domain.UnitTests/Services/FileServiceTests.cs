@@ -55,6 +55,7 @@ public class FileServiceTests
         Assert.True(result.IsFailure);
         Assert.Equal("File.UploadFailed", result.Error.Code);
         Assert.Equal(1, storage.UploadCalls);
+        Assert.Equal(1, storage.DeleteCalls);
     }
 
     [Fact]
@@ -98,6 +99,30 @@ public class FileServiceTests
         Assert.Equal("text/plain", result.Value[0].ContentType);
         Assert.Equal(10, result.Value[0].FileSize);
         Assert.Equal(newer.CreatedAtUtc, result.Value[0].CreatedAtUtc);
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_ReturnsOnlyRequestedPage()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var oldest = NewFile(userId, "oldest.txt");
+        var middle = NewFile(userId, "middle.txt");
+        var newest = NewFile(userId, "newest.txt");
+        dbContext.FileMetadatas.AddRange(oldest, middle, newest);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        // SaveChangesAsync stamps CreatedAtUtc on insert, so set explicit values afterwards.
+        oldest.CreatedAtUtc = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        middle.CreatedAtUtc = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        newest.CreatedAtUtc = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(1, 1);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value);
+        Assert.Equal(middle.Id, item.Id);
     }
 
     [Fact]

@@ -143,7 +143,7 @@ describe('App', () => {
 
     app.loadFiles();
     expect(app.filesLoading()).toBe(true);
-    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([
       { id: 'a', fileName: 'photo.png', contentType: 'image/png', fileSize: 1258291, createdAtUtc: '2026-07-22T10:00:00Z' },
       { id: 'b', fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 512, createdAtUtc: '2026-07-22T10:00:00Z' },
     ]);
@@ -165,7 +165,7 @@ describe('App', () => {
     app.page.set('app');
 
     app.loadFiles();
-    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No files yet');
@@ -180,7 +180,7 @@ describe('App', () => {
     app.page.set('app');
 
     app.loadFiles();
-    http.expectOne(`${environment.apiBaseUrl}/Files`).flush(null, { status: 500, statusText: 'Server Error' });
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush(null, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Unable to load your files');
@@ -243,7 +243,7 @@ describe('App', () => {
     app.onUploadSelected({ target: input } as unknown as Event);
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
-    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
 
     expect(app.actionBusy()).toBe(false);
     expect(app.actionError()).toBe('');
@@ -259,7 +259,7 @@ describe('App', () => {
 
     app.onUploadSelected({ target: input } as unknown as Event);
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('no', { status: 400, statusText: 'Bad Request' });
-    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
 
     expect(app.actionError()).toContain('Unable to upload a.txt');
     http.verify();
