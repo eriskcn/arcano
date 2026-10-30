@@ -24,6 +24,15 @@ describe('App', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Welcome back');
   });
 
+  it('should derive the profile initial from the signed-in email', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+
+    expect(app.userInitial()).toBe('?');
+    app.userEmail.set('person@arcano.test');
+    expect(app.userInitial()).toBe('P');
+  });
+
   it('should show a file context menu within the viewport', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;

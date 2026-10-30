@@ -37,6 +37,7 @@ export class App implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly userEmail = this.auth.email;
+  readonly userInitial = computed(() => this.userEmail()?.trim().charAt(0).toUpperCase() || '?');
 
   // Navigation & View State
   readonly page = signal<Page>('signin');

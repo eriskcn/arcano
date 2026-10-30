@@ -23,8 +23,8 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Login/register UI, token/session handling, and protected routes.
   - Login and registration use the verified backend contracts; protected and anonymous routes are guarded.
   - No role-specific UI is exposed because the current token has no role claims; API authorization remains authoritative.
-- [ ] **2.2 User profile and quota — Not Started**
-  - Display user storage usage and warn/prevent uploads according to backend quota contracts.
+- [ ] **2.2 User profile and quota — Blocked on backend quota contract**
+  - The signed-in email is displayed from the authenticated token. Usage display and upload quota enforcement require a backend endpoint and defined quota contract, which are not currently available.
 
 ### 3. Admin Storage and User Management (Planned)
 - [ ] **3.1 System storage overview — Not Started**
@@ -69,7 +69,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 
 ## Status
 - Angular scaffold and desktop UI shell are present; backend-connected workflows have not been verified as complete.
-- **Frontend workflow status: In Progress.** The desktop-style UI shell (1.1) is implemented; remaining workflows are not started.
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota work (2.2) is blocked on a backend contract; remaining workflows are not started.
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
