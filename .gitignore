@@ -7,3 +7,4 @@ frontend/dist/
 frontend/.angular/
 run-dev.log
 .DS_Store
+.env
