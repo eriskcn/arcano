@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Domain.Common;
 using ArcanoCore.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace ArcanoCore.Application.Services;
 
@@ -73,6 +76,23 @@ public class FileService : IFileService
         {
             return Result<FileResponseDto>.Failure(new Error("File.UploadFailed", ex.Message));
         }
+    }
+
+    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(_currentUser.UserId, out var ownerId) || ownerId == Guid.Empty)
+        {
+            return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
+        }
+
+        var files = await _dbContext.FileMetadatas
+            .AsNoTracking()
+            .Where(f => f.OwnerId == ownerId && !f.IsDeleted)
+            .OrderByDescending(f => f.CreatedAtUtc)
+            .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+        return Result<IReadOnlyList<FileListItemDto>>.Success(files);
     }
 
     public async Task<Result<(Stream Content, string ContentType, string FileName)>> DownloadFileAsync(Guid id, CancellationToken cancellationToken = default)

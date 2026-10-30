@@ -7,6 +7,7 @@ import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
+import { FileDto, FilesService } from './files.service';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -24,6 +25,39 @@ export interface FileItem {
   shared: boolean;
 }
 
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB'];
+
+const formatFileSize = (bytes: number): string => {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  const text = unit === 0 || value >= 10 ? Math.round(value) : Number(value.toFixed(1));
+  return `${text} ${BYTE_UNITS[unit]}`;
+};
+
+const fileTypeFromContentType = (contentType: string): FileItem['type'] => {
+  const type = contentType.toLowerCase();
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/')) return 'video';
+  if (type === 'application/pdf') return 'pdf';
+  if (type.includes('spreadsheet') || type.includes('excel')) return 'spreadsheet';
+  if (/zip|x-tar|x-rar|x-7z|compressed|archive/.test(type)) return 'archive';
+  return 'document';
+};
+
+const toFileItem = (file: FileDto): FileItem => ({
+  id: file.id,
+  name: file.fileName,
+  type: fileTypeFromContentType(file.contentType),
+  size: formatFileSize(file.fileSize),
+  modified: new Date(file.createdAtUtc).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+  starred: false,
+  shared: false,
+});
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -34,6 +68,7 @@ export interface FileItem {
 export class App implements OnInit {
   readonly appName = environment.appName;
   private readonly auth = inject(AuthService);
+  private readonly filesApi = inject(FilesService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly userEmail = this.auth.email;
@@ -45,9 +80,9 @@ export class App implements OnInit {
   readonly sidebarCollapsed = signal<boolean>(false);
   readonly mobileSidebarOpen = signal<boolean>(false);
   readonly viewMode = signal<ViewMode>('list');
-  readonly selectedIds = signal<ReadonlySet<string>>(new Set(['1']));
-  readonly selectedId = signal<string | null>('1');
-  readonly selectionAnchorId = signal<string | null>('1');
+  readonly selectedIds = signal<ReadonlySet<string>>(new Set());
+  readonly selectedId = signal<string | null>(null);
+  readonly selectionAnchorId = signal<string | null>(null);
   readonly searchQuery = signal<string>('');
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
@@ -127,20 +162,11 @@ export class App implements OnInit {
     trash: { icon: 'delete', title: 'Trash is empty', sub: 'Deleted files will appear here for 30 days.' },
   };
 
-  readonly files = signal<FileItem[]>([
-    { id: '1', name: 'Design Assets', type: 'folder', size: null, modified: 'Jul 22, 2026', starred: true, shared: true },
-    { id: '2', name: 'Q3 Marketing Campaign', type: 'folder', size: null, modified: 'Jul 20, 2026', starred: false, shared: true },
-    { id: '3', name: 'Engineering Docs', type: 'folder', size: null, modified: 'Jul 18, 2026', starred: true, shared: false },
-    { id: '4', name: 'Brand Guidelines v4.pdf', type: 'pdf', size: '8.4 MB', modified: 'Jul 21, 2026', starred: true, shared: false },
-    { id: '5', name: 'Product Roadmap 2026.xlsx', type: 'spreadsheet', size: '1.2 MB', modified: 'Jul 19, 2026', starred: false, shared: true },
-    { id: '6', name: 'Homepage Hero.png', type: 'image', size: '3.7 MB', modified: 'Jul 17, 2026', starred: false, shared: false },
-    { id: '7', name: 'Demo Recording.mp4', type: 'video', size: '124 MB', modified: 'Jul 15, 2026', starred: false, shared: true },
-    { id: '8', name: 'API Reference.docx', type: 'document', size: '512 KB', modified: 'Jul 14, 2026', starred: false, shared: false },
-    { id: '9', name: 'Project Archive.zip', type: 'archive', size: '56 MB', modified: 'Jul 12, 2026', starred: false, shared: false },
-    { id: '10', name: 'Meeting Notes July.docx', type: 'document', size: '84 KB', modified: 'Jul 10, 2026', starred: false, shared: true },
-    { id: '11', name: 'User Research Photos', type: 'folder', size: null, modified: 'Jul 8, 2026', starred: false, shared: false },
-    { id: '12', name: 'Sprint Retrospective.pdf', type: 'pdf', size: '2.1 MB', modified: 'Jul 5, 2026', starred: false, shared: false },
-  ]);
+  readonly files = signal<FileItem[]>([]);
+  readonly filesLoading = signal<boolean>(false);
+  readonly filesError = signal<string>('');
+  readonly actionError = signal<string>('');
+  readonly actionBusy = signal<boolean>(false);
 
   readonly showFiles = computed(() => {
     const nav = this.activeNav();
@@ -235,6 +261,8 @@ export class App implements OnInit {
 
   signOut(): void {
     this.auth.logout();
+    this.files.set([]);
+    this.clearSelection();
     void this.router.navigateByUrl('/signin');
   }
 
@@ -397,6 +425,77 @@ export class App implements OnInit {
     );
   }
 
+  loadFiles(): void {
+    this.files.set([]);
+    this.clearSelection();
+    this.filesLoading.set(true);
+    this.filesError.set('');
+    this.actionError.set('');
+
+    this.filesApi.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: files => {
+        this.files.set(files.map(toFileItem));
+        this.filesLoading.set(false);
+      },
+      error: () => {
+        this.filesLoading.set(false);
+        this.filesError.set('Unable to load your files. Please try again.');
+      },
+    });
+  }
+
+  downloadFile(file: FileItem): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    this.filesApi.download(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = file.name;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        this.actionBusy.set(false);
+      },
+      error: () => {
+        this.actionBusy.set(false);
+        this.actionError.set(`Unable to download ${file.name}. Please try again.`);
+      },
+    });
+  }
+
+  deleteFile(file: FileItem): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    this.filesApi.delete(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.files.update(files => files.filter(item => item.id !== file.id));
+        const nextSelection = new Set(this.selectedIds());
+        nextSelection.delete(file.id);
+        this.setSelection(nextSelection, this.selectedId() === file.id ? [...nextSelection].at(-1) ?? null : this.selectedId());
+        if (this.selectionAnchorId() === file.id) {
+          this.selectionAnchorId.set(this.selectedId());
+        }
+        if (this.contextMenu()?.file.id === file.id) {
+          this.contextMenu.set(null);
+        }
+        this.actionBusy.set(false);
+      },
+      error: () => {
+        this.actionBusy.set(false);
+        this.actionError.set(`Unable to delete ${file.name}. Please try again.`);
+      },
+    });
+  }
+
   private setSelection(ids: Set<string>, primaryId: string | null): void {
     this.selectedIds.set(ids);
     this.selectedId.set(primaryId);
@@ -404,7 +503,12 @@ export class App implements OnInit {
 
   private syncPageWithRoute(): void {
     const path = this.router.url.split('?')[0];
-    this.page.set(path === '/signup' ? 'signup' : path === '/app' ? 'app' : 'signin');
+    const previous = this.page();
+    const next = path === '/signup' ? 'signup' : path === '/app' ? 'app' : 'signin';
+    this.page.set(next);
+    if (next === 'app' && previous !== 'app') {
+      this.loadFiles();
+    }
   }
 
   private authErrorMessage(error: unknown, fallback: string): string {

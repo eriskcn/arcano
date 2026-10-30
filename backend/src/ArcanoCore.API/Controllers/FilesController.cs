@@ -40,6 +40,18 @@ public class FilesController : ApiControllerBase
         return Ok(result.Value);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    {
+        var result = await _fileService.ListFilesAsync(cancellationToken);
+        if (result.IsFailure)
+        {
+            return BadRequest(result.Error);
+        }
+
+        return Ok(result.Value);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
