@@ -1,17 +1,15 @@
 import { isPlatformBrowser } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 
 interface LoginResponse {
   token: string;
 }
 
-interface TokenPayload {
-  exp?: unknown;
+interface SessionResponse {
   email?: unknown;
-  'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'?: unknown;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -19,15 +17,16 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly storageKey = 'arcano.auth.token';
+  private verifiedToken: string | null = null;
   readonly token = signal<string | null>(this.readStoredToken());
-  readonly email = signal<string | null>(this.readEmail(this.token()));
+  readonly email = signal<string | null>(null);
 
   login(email: string, password: string): Observable<void> {
     return this.http
       .post<LoginResponse>(`${environment.apiBaseUrl}/Auth/login`, { email, password })
       .pipe(
         map(response => {
-          if (!response || typeof response.token !== 'string' || !this.tokenPayload(response.token)) {
+          if (!response || typeof response.token !== 'string' || !this.hasValidExpiry(response.token)) {
             throw new Error('The server returned an invalid sign-in response.');
           }
           return response.token;
@@ -45,39 +44,61 @@ export class AuthService {
 
   logout(): void {
     this.storage()?.removeItem(this.storageKey);
+    this.verifiedToken = null;
     this.token.set(null);
     this.email.set(null);
   }
 
-  isAuthenticated(): boolean {
+  validateSession(): Observable<boolean> {
     const token = this.token();
-    if (!token) {
-      return false;
+    if (!token || !this.tokenForRequest()) {
+      return of(false);
+    }
+    if (this.verifiedToken === token) {
+      return of(true);
     }
 
-    if (!this.tokenPayload(token)) {
-      this.logout();
-      return false;
-    }
-    return true;
+    return this.http.get<SessionResponse>(`${environment.apiBaseUrl}/Auth/session`).pipe(
+      map(session => {
+        this.verifiedToken = token;
+        this.email.set(typeof session?.email === 'string' ? session.email : null);
+        return true;
+      }),
+      catchError(error => {
+        if (error instanceof HttpErrorResponse && error.status === 401) {
+          this.logout();
+          return of(false);
+        }
+        throw error;
+      }),
+    );
   }
 
   tokenForRequest(): string | null {
-    return this.isAuthenticated() ? this.token() : null;
+    const token = this.token();
+    if (!token) {
+      return null;
+    }
+    if (!this.hasValidExpiry(token)) {
+      this.logout();
+      return null;
+    }
+    return token;
   }
 
   private storeToken(token: string): void {
-    if (!this.tokenPayload(token)) {
+    if (!this.hasValidExpiry(token)) {
       throw new Error('The server returned an expired or invalid sign-in token.');
     }
     this.storage()?.setItem(this.storageKey, token);
+    this.verifiedToken = null;
     this.token.set(token);
-    this.email.set(this.readEmail(token));
+    this.email.set(null);
   }
 
   private readStoredToken(): string | null {
     const token = this.storage()?.getItem(this.storageKey) ?? null;
-    if (!token || this.tokenPayload(token)) {
+    if (!token || this.hasValidExpiry(token)) {
       return token;
     }
     this.storage()?.removeItem(this.storageKey);
@@ -88,10 +109,10 @@ export class AuthService {
     return isPlatformBrowser(this.platformId) ? window.sessionStorage : null;
   }
 
-  private tokenPayload(token: string): TokenPayload | null {
+  private hasValidExpiry(token: string): boolean {
     const payload = token.split('.')[1];
     if (!payload) {
-      return null;
+      return false;
     }
     try {
       const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
@@ -105,20 +126,11 @@ export class AuthService {
         typeof claims.exp !== 'number' ||
         claims.exp * 1000 <= Date.now()
       ) {
-        return null;
+        return false;
       }
-      return claims as TokenPayload;
+      return true;
     } catch {
-      return null;
+      return false;
     }
-  }
-
-  private readEmail(token: string | null): string | null {
-    if (!token) {
-      return null;
-    }
-    const claims = this.tokenPayload(token);
-    const email = claims?.email ?? claims?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'];
-    return typeof email === 'string' ? email : null;
   }
 }

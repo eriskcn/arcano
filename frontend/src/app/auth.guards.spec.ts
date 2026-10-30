@@ -1,4 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { environment } from '../environments/environment';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
@@ -25,6 +27,7 @@ describe('authentication route guards', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
+        provideHttpClientTesting(),
         provideRouter([
           { path: 'app', component: ProtectedPage, canActivate: [authenticatedGuard] },
           { path: 'signin', component: SignInPage, canActivate: [anonymousOnlyGuard] },
@@ -43,6 +46,7 @@ describe('authentication route guards', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
+        provideHttpClientTesting(),
         provideRouter([
           { path: 'app', component: ProtectedPage, canActivate: [authenticatedGuard] },
           { path: 'signin', component: SignInPage, canActivate: [anonymousOnlyGuard] },
@@ -51,8 +55,40 @@ describe('authentication route guards', () => {
     });
 
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/signin');
+    const navigation = harness.navigateByUrl('/signin');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      `${environment.apiBaseUrl}/Auth/session`,
+    );
+    request.flush({ email: 'person@arcano.test' });
+    await navigation;
 
     expect(TestBed.inject(Router).url).toBe('/app');
+  });
+
+  it('should redirect a forged token to sign in after server validation fails', async () => {
+    sessionStorage.setItem('arcano.auth.token', createToken());
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'app', component: ProtectedPage, canActivate: [authenticatedGuard] },
+          { path: 'signin', component: SignInPage, canActivate: [anonymousOnlyGuard] },
+        ]),
+      ],
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const navigation = harness.navigateByUrl('/app');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      `${environment.apiBaseUrl}/Auth/session`,
+    );
+    request.flush({}, { status: 401, statusText: 'Unauthorized' });
+    await navigation;
+
+    expect(TestBed.inject(Router).url).toBe('/signin?returnUrl=%2Fapp');
+    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
   });
 });

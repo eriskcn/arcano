@@ -41,9 +41,17 @@ describe('AuthService', () => {
     expect(request.request.body).toEqual({ email: 'person@arcano.test', password: 'secret123' });
     request.flush({ token });
 
-    expect(auth.isAuthenticated()).toBe(true);
-    expect(auth.email()).toBe('person@arcano.test');
+    expect(auth.email()).toBeNull();
     expect(sessionStorage.getItem('arcano.auth.token')).toBe(token);
+
+    let authenticated = false;
+    auth.validateSession().subscribe(result => authenticated = result);
+    const sessionRequest = http.expectOne(`${environment.apiBaseUrl}/Auth/session`);
+    expect(sessionRequest.request.method).toBe('GET');
+    sessionRequest.flush({ email: 'person@arcano.test' });
+
+    expect(authenticated).toBe(true);
+    expect(auth.email()).toBe('person@arcano.test');
   });
 
   it('should register using the backend email and password contract', () => {
@@ -56,7 +64,7 @@ describe('AuthService', () => {
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({ email: 'person@arcano.test', password: 'secret123' });
     request.flush({ message: 'User registered successfully.' });
-    expect(auth.isAuthenticated()).toBe(false);
+    expect(auth.token()).toBeNull();
   });
 
   it('should discard expired stored tokens', () => {
@@ -67,7 +75,24 @@ describe('AuthService', () => {
 
     const auth = TestBed.inject(AuthService);
 
-    expect(auth.isAuthenticated()).toBe(false);
+    expect(auth.token()).toBeNull();
+    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+  });
+
+  it('should reject a forged token when the server cannot validate its signature', () => {
+    const token = createToken();
+    sessionStorage.setItem('arcano.auth.token', token);
+    const auth = TestBed.inject(AuthService);
+    const http = TestBed.inject(HttpTestingController);
+
+    let authenticated: boolean | undefined;
+    auth.validateSession().subscribe(result => authenticated = result);
+    const request = http.expectOne(`${environment.apiBaseUrl}/Auth/session`);
+    expect(request.request.headers.has('Authorization')).toBe(true);
+    request.flush({}, { status: 401, statusText: 'Unauthorized' });
+
+    expect(authenticated).toBe(false);
+    expect(auth.token()).toBeNull();
     expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
   });
 

@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Domain.Common;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -118,6 +119,13 @@ public class AuthController : ApiControllerBase
         var token = GenerateJwtToken(user);
 
         return Ok(new { Token = token });
+    }
+
+    [Authorize]
+    [HttpGet("session")]
+    public IActionResult Session()
+    {
+        return Ok(new { Email = User.FindFirstValue(ClaimTypes.Email) });
     }
 
     private string GenerateJwtToken(IdentityUser<Guid> user)
