@@ -39,6 +39,7 @@ export class App {
   readonly searchQuery = signal<string>('');
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
+  readonly contextMenu = signal<{ file: FileItem; left: number; top: number } | null>(null);
 
   // Auth Form State
   readonly signInEmail = signal<string>('');
@@ -220,6 +221,24 @@ export class App {
   selectFile(id: string): void {
     this.selectedId.set(id);
     this.previewOpen.set(true);
+  }
+
+  showContextMenu(file: FileItem, event: MouseEvent): void {
+    event.preventDefault();
+
+    const menuWidth = 192;
+    const menuHeight = 80;
+    this.contextMenu.set({
+      file,
+      left: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+      top: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)),
+    });
+  }
+
+  toggleFileStar(id: string): void {
+    this.files.update(files =>
+      files.map(file => file.id === id ? { ...file, starred: !file.starred } : file),
+    );
   }
 
   handleCopyLink(): void {

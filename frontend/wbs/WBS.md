@@ -10,9 +10,10 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 
 ## Task Hierarchy
 ### 1. Foundation and Layout
-- [ ] **1.1 Desktop-style UI shell — Not Started**
+- [x] **1.1 Desktop-style UI shell — Complete**
   - Sidebar, breadcrumbs, toolbar, file grid/list, and details panel.
-  - Responsive layout, context menus, and quota display when supported by backend contracts.
+  - Responsive sidebar and navigation; file context menus support details and favorite actions.
+  - Quota usage is not displayed because no backend quota contract is available.
 - [ ] **1.2 Selection management — Not Started**
   - Single, Ctrl-toggle, Shift-range, and Escape-to-clear selection.
   - Marquee selection.
@@ -66,8 +67,8 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 6. Responsive layout remains usable on desktop and smaller screens.
 
 ## Status
-- Angular scaffold exists, but functional workflows have not been verified as complete.
-- **Frontend workflow status: Not Started.**
+- Angular scaffold and desktop UI shell are present; backend-connected workflows have not been verified as complete.
+- **Frontend workflow status: In Progress.** The desktop-style UI shell (1.1) is implemented; remaining workflows are not started.
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
