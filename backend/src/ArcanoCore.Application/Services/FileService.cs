@@ -35,11 +35,14 @@ public class FileService : IFileService
             return Result<FileResponseDto>.Failure(new Error("File.Empty", "File content cannot be empty."));
         }
 
+        if (!Guid.TryParse(_currentUser.UserId, out var ownerId) || ownerId == Guid.Empty)
+        {
+            return Result<FileResponseDto>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
+        }
+
         try
         {
             string storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
-
-            Guid ownerId = Guid.TryParse(_currentUser.UserId, out var parsedId) ? parsedId : Guid.Empty;
 
             var fileMetadata = new FileMetadata
             {
@@ -80,7 +83,7 @@ public class FileService : IFileService
         }
 
         var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
-        if (fileMetadata == null || fileMetadata.IsDeleted)
+        if (fileMetadata == null || fileMetadata.IsDeleted || !IsOwner(fileMetadata))
         {
             return Result<(Stream, string, string)>.Failure(new Error("File.NotFound", "File metadata not found."));
         }
@@ -104,7 +107,7 @@ public class FileService : IFileService
         }
 
         var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
-        if (fileMetadata == null || fileMetadata.IsDeleted)
+        if (fileMetadata == null || fileMetadata.IsDeleted || !IsOwner(fileMetadata))
         {
             return Result.Failure(new Error("File.NotFound", "File metadata not found."));
         }
@@ -125,4 +128,7 @@ public class FileService : IFileService
             return Result.Failure(new Error("File.DeleteFailed", ex.Message));
         }
     }
+
+    private bool IsOwner(FileMetadata fileMetadata) =>
+        Guid.TryParse(_currentUser.UserId, out var userId) && userId != Guid.Empty && fileMetadata.OwnerId == userId;
 }

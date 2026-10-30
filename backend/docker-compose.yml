@@ -28,7 +28,6 @@ services:
       - "8333:8333" # S3 gateway
     volumes:
       - seaweedfs_data:/data
-      - ./wbs/s3.json:/etc/seaweedfs/s3.json
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8333 || exit 1"]
       interval: 5s
@@ -45,6 +44,7 @@ services:
       - "5000:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - Jwt__Secret=${JWT_SECRET:?Set JWT_SECRET to a secret of at least 32 UTF-8 bytes}
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=arcanocore;Username=postgres;Password=postgrespassword
       - Storage__ServiceUrl=http://seaweedfs:8333
       - Storage__AccessKey=any_key

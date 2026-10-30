@@ -3,11 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ArcanoCore.API.Controllers;
 
+[Authorize]
 public class FilesController : ApiControllerBase
 {
     private readonly IFileService _fileService;

@@ -25,13 +25,14 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
     - [x] Add file upload, download, and delete endpoints.
     - [x] Add centralized exception handling.
     - [x] Configure dependency injection and JWT authentication.
-    - [ ] Enforce authentication and file ownership for every file operation.
-    - [ ] Require production JWT secrets from configuration; remove fallback secrets.
-    - [ ] Apply explicit upload-size and validation limits.
+    - [x] Require authentication on file endpoints.
+    - [x] Restrict upload, download, and delete to the authenticated file owner; reject missing/invalid user IDs.
+    - [x] Require a configured JWT secret of at least 32 UTF-8 bytes; remove committed JWT secret values and fallbacks.
+    - [ ] Apply explicit upload-size and validation limits; `[DisableRequestSizeLimit]` remains on the upload endpoint and no approved maximum is defined.
     - [ ] Define and verify failure handling for database/object-storage operations.
   - **1.5 Verification and readiness — Not Started**
     - [ ] Build and run available tests; record actual results.
-    - [ ] Verify the Docker Compose stack and documented local quickstart.
+    - [ ] Verify the Docker Compose stack and documented local quickstart; Compose syntax validates, but runtime startup has not been exercised.
 
 ## Dependencies
 - 1.2 depends on 1.1.
@@ -48,4 +49,4 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
 - The documented Docker Compose setup starts the stack and supports the basic API workflow.
 
 ## Overall Status
-**In Progress.** Backend foundations exist, but authorization, operational safeguards, integration verification, and readiness remain incomplete. Status reflects the repository review dated 2026-10-30; update it as implementation and verification progress.
+**In Progress.** File endpoint authentication and owner checks plus JWT secret validation are implemented. Upload size limits, storage/metadata failure consistency, integration/security tests, and Compose runtime verification remain incomplete. Status reflects the repository review dated 2026-10-30; update it as implementation and verification progress.

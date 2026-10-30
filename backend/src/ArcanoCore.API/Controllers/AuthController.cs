@@ -130,7 +130,9 @@ public class AuthController : ApiControllerBase
         };
 
         var jwtSettings = _configuration.GetSection("Jwt");
-        var secret = jwtSettings["Secret"] ?? "SuperSecretKeyForArcanoCoreAPIAuthenticationMustBe32BytesLong!";
+        var secret = jwtSettings["Secret"];
+        if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
+            throw new InvalidOperationException("Jwt:Secret must be configured and contain at least 32 UTF-8 bytes.");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
