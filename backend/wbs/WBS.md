@@ -1,62 +1,51 @@
 # Work Breakdown Structure (WBS) - Arcano Core
 
-## Project Objectives
-Build codebase for personal cloud storage application including Backend API (ASP.NET Core using Clean Architecture) and Frontend Dashboard for file management.
+## Objective
+Provide the backend API and storage services for Arcano, a personal cloud-storage application. Frontend tasks are tracked in [frontend/wbs/WBS.md](../../frontend/wbs/WBS.md).
 
-## Key Deliverables
-1. **API Backend**: Full layers following Clean Architecture, integrating SeaweedFS storage via S3 API, managing file metadata via database, and handling JWT security.
-2. **Frontend Dashboard**: Web application displaying file list, managing folders, supporting drag-and-drop upload, and sharing files.
+## Deliverables
+1. ASP.NET Core API using the existing Domain, Application, Infrastructure, and API projects.
+2. PostgreSQL metadata persistence and SeaweedFS object-storage integration.
+3. File-management endpoints consumed by the frontend.
 
-## Work Breakdown Structure (Task Hierarchy)
-- **1. Backend API Development (ASP.NET Core - Clean Architecture)**
-  - [x] 1.1 **Domain Layer**
-    - [x] 1.1.1 Define `FileMetadata`, `Folder`, `FileTag`, and `SharedLink` entities.
-    - [x] 1.1.2 Set up foundation entities: `BaseEntity`, `IAuditableEntity`.
-    - [x] 1.1.3 Implement `Result` structure to handle return values.
-  - [x] 1.2 **Application Layer**
-    - [x] 1.2.1 Create interfaces: `IStorageService`, `IApplicationDbContext`.
-    - [x] 1.2.2 Design DTOs: `FileUploadDto`, `FileResponseDto`.
-    - [x] 1.2.3 Build storage coordination logic in `FileService`.
-  - [x] 1.3 **Infrastructure Layer**
-    - [x] 1.3.1 Implement `SeaweedStorageService` calling SeaweedFS via AWS SDK S3.
-    - [x] 1.3.2 Set up EF Core `ApplicationDbContext` for database connection + migrations.
-    - [x] 1.3.3 Direct EF Core context usage (Repository & UoW removed for simplicity).
-    - [x] 1.3.4 Build `CurrentUser` to retrieve logged-in user info from claims.
-  - [x] 1.4 **API Layer**
-    - [x] 1.4.1 Write `FilesController` providing file upload, download, and delete APIs.
-    - [x] 1.4.2 Set up `ExceptionHandlingMiddleware` for centralized error handling.
-    - [x] 1.4.3 Configure JWT Authentication, DI container setup in `Program.cs`.
-- **2. Frontend Client Dashboard Development**
-  - [ ] 2.1 **Initialization and App Scaffolding**
-    - [ ] 2.1.1 Initialize project (React/Vue/Blazor) and configure Routing.
-    - [ ] 2.1.2 Build HTTP Client for Backend API communication.
-  - [ ] 2.2 **Authentication**
-    - [ ] 2.2.1 Build Login and Register user interfaces.
-    - [ ] 2.2.2 Store JWT Token and protect private routes.
-  - [ ] 2.3 **File Explorer Interface**
-    - [ ] 2.3.1 Display file and folder list in grid or list view.
-    - [ ] 2.3.2 Build functionality for creating folders, deleting files/folders, renaming.
-    - [ ] 2.3.3 Preview common file formats (images, text, pdf).
-  - [ ] 2.4 **File Upload & Download**
-    - [ ] 2.4.1 Support drag-and-drop file upload.
-    - [ ] 2.4.2 Display progress bar during upload.
-    - [ ] 2.4.3 Implement file downloading.
-  - [ ] 2.5 **File Sharing**
-    - [ ] 2.5.1 Generate public file sharing links.
-    - [ ] 2.5.2 Configure expiration limits for shared links.
+## Task Hierarchy
+- **1. Backend API (ASP.NET Core)**
+  - **1.1 Domain layer — Completed**
+    - [x] Define file metadata, folder, tag, shared-link, base, and audit entities.
+    - [x] Provide the `Result` type.
+  - **1.2 Application layer — Completed (foundation)**
+    - [x] Define storage and database-context interfaces and file DTOs.
+    - [x] Implement file-storage coordination in `FileService`.
+  - **1.3 Infrastructure layer — In Progress**
+    - [x] Implement SeaweedFS S3 integration.
+    - [x] Configure EF Core context and migrations.
+    - [x] Read current-user identity from claims.
+    - [ ] Verify persistence and storage behavior with integration tests.
+  - **1.4 API layer — In Progress**
+    - [x] Add file upload, download, and delete endpoints.
+    - [x] Add centralized exception handling.
+    - [x] Configure dependency injection and JWT authentication.
+    - [ ] Enforce authentication and file ownership for every file operation.
+    - [ ] Require production JWT secrets from configuration; remove fallback secrets.
+    - [ ] Apply explicit upload-size and validation limits.
+    - [ ] Define and verify failure handling for database/object-storage operations.
+  - **1.5 Verification and readiness — Not Started**
+    - [ ] Build and run available tests; record actual results.
+    - [ ] Verify the Docker Compose stack and documented local quickstart.
 
 ## Dependencies
-- **1.2 (Application Layer)** depends on **1.1 (Domain Layer)**.
-- **1.3 (Infrastructure Layer)** depends on **1.2 (Application Layer)**.
-- **1.4 (API Layer)** depends on **1.3 (Infrastructure Layer)**.
-- **2. (Frontend Client)** operates based on API specifications from **1.4 (API Layer)**.
+- 1.2 depends on 1.1.
+- 1.3 depends on 1.2.
+- 1.4 depends on 1.3.
+- 1.5 depends on the API and infrastructure tasks it verifies.
+- Frontend integration depends on stable API contracts and authorization behavior.
 
 ## Success Criteria
-- Backend API builds successfully without errors, passing all unit tests.
-- File upload to SeaweedFS succeeds via API, metadata saved to database correctly.
-- Web interface correctly displays folders/files of currently logged-in user.
-- Users require no complex environment setup other than Docker Compose to run entire codebase.
+- Backend builds and available automated tests pass.
+- Authenticated users can upload, retrieve, and delete only their own files.
+- Metadata and stored objects remain consistent through successful operations and handled failures.
+- Upload constraints and production authentication secrets are explicitly configured.
+- The documented Docker Compose setup starts the stack and supports the basic API workflow.
 
-## Task Status
-- **1. Backend API Development**: Completed (Core entities, migrations, services, tests passing)
-- **2. Frontend Client Dashboard Development**: Not Started
+## Overall Status
+**In Progress.** Backend foundations exist, but authorization, operational safeguards, integration verification, and readiness remain incomplete. Status reflects the repository review dated 2026-10-30; update it as implementation and verification progress.

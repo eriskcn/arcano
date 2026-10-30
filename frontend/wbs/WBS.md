@@ -1,98 +1,77 @@
 # Work Breakdown Structure (WBS) - Arcano Personal Cloud Client
 
 ## Objective
-Build web client for personal cloud storage. Desktop-grade UX: keyboard shortcuts, multi-select, drag-and-drop, link sharing, role-based access control (Admin/User), storage quota management, and multi-format media previewers.
+Build the Angular web client for Arcano personal cloud storage. Backend implementation and readiness tasks are tracked in [backend/wbs/WBS.md](../../backend/wbs/WBS.md). The feature list below records planned scope; it does not imply that each feature is required for the first usable release.
 
----
+## Deliverables
+- Desktop-oriented file-management client with authentication and core file workflows.
+- User and administrative storage-management capabilities.
+- Sharing and common media/document preview workflows.
 
 ## Task Hierarchy
+### 1. Foundation and Layout
+- [ ] **1.1 Desktop-style UI shell — Not Started**
+  - Sidebar, breadcrumbs, toolbar, file grid/list, and details panel.
+  - Responsive layout, context menus, and quota display when supported by backend contracts.
+- [ ] **1.2 Selection management — Not Started**
+  - Single, Ctrl-toggle, Shift-range, and Escape-to-clear selection.
+  - Marquee selection.
 
-### 1. Foundation & Layout Shell
-- [ ] **1.1 Desktop-Style UI Shell** `Status: Not Started`
-  - Split view: sidebar navigation, path breadcrumbs, action toolbar, main grid/list view, inspector/details panel.
-  - User quota display widget on sidebar (used / total limit progress bar).
-  - Responsive layout, context menus, right-click override on file grid.
-- [ ] **1.2 Selection Management System** `Status: Not Started`
-  - Single click select.
-  - `Ctrl + Click` toggle individual items.
-  - `Shift + Click` range selection.
-  - Marquee (rubber band / box) drag-select.
-  - `Esc` clear selection.
+### 2. Authentication and User Access
+- [ ] **2.1 Authentication and session — Not Started**
+  - Login/register UI, token/session handling, and protected routes.
+  - Align role-based UI with backend authorization; UI permissions do not replace API enforcement.
+- [ ] **2.2 User profile and quota — Not Started**
+  - Display user storage usage and warn/prevent uploads according to backend quota contracts.
 
-### 2. Authentication & Role-Based Access Control (RBAC)
-- [ ] **2.1 Role & Session Management** `Status: Not Started`
-  - Roles: `Admin`, `User`.
-  - Route guards & UI permission directives based on active role.
-- [ ] **2.2 User Profile & Quota Meter** `Status: Not Started`
-  - Current user view: storage usage breakdown (by file type: images, video, docs, other).
-  - Upload prevention / warning alerts when approaching/exceeding quota.
+### 3. Admin Storage and User Management (Planned)
+- [ ] **3.1 System storage overview — Not Started**
+- [ ] **3.2 User quota management — Not Started**
+- [ ] **3.3 User lifecycle and role controls — Not Started**
 
-### 3. Admin Storage & User Management Dashboard
-- [ ] **3.1 System-Wide Storage Overview** `Status: Not Started`
-  - Total system disk usage, aggregate user usage graphs, top storage consumers list.
-- [ ] **3.2 User Quota Management** `Status: Not Started`
-  - User listing table with columns: Name, Email, Role, Used Storage, Quota Limit, Status.
-  - Set default global quota (default: 5 GB).
-  - Override custom quota limit per individual user (GB/TB scale or unlimited).
-- [ ] **3.3 User Lifecycle Controls** `Status: Not Started`
-  - Promote/demote role (`Admin` <-> `User`), suspend user, force storage purge/cleanup.
+### 4. File Explorer Workflows
+- [ ] **4.1 Core file listing and actions — Not Started**
+  - List the current user's files; support download and delete using secured backend APIs.
+  - Add folder navigation, create/rename/move, and trash only when matching backend contracts exist.
+- [ ] **4.2 Keyboard actions — Not Started**
+  - Shortcuts for selection, rename, copy/move, undo, and delete, limited to supported operations.
+- [ ] **4.3 Drag and drop — Not Started**
+  - Upload external files and move internal items when the corresponding API operations are available.
 
-### 4. File Explorer & Keyboard Engine
-- [ ] **4.1 Shortcut & Action Dispatcher Engine** `Status: Not Started`
-  - Global listener scoping (disable inside input fields/dialogs).
-  - `Ctrl + C`: Copy items to virtual clipboard.
-  - `Ctrl + X`: Cut items (visual dim state).
-  - `Ctrl + V`: Paste items (execute copy/move API).
-  - `Ctrl + Z`: Undo last file operation (move/rename/delete).
-  - `F2`: Inline rename active item.
-  - `Del`: Move item(s) to Trash.
-  - `Shift + Del`: Permanent delete prompt & execution.
-- [ ] **4.2 Drag and Drop (DnD) Engine** `Status: Not Started`
-  - OS-to-Browser DnD: upload files/folders via drop onto current folder/subfolders.
-  - Internal DnD: drag selected items into folders or breadcrumb nodes (move/copy).
-  - Visual drop target cues and drag ghost image.
+### 5. File Sharing (Planned)
+- [ ] **5.1 Share-link management — Not Started**
+  - Generate and manage links with supported access, password, and expiration options.
+- [ ] **5.2 Public share view — Not Started**
+  - Recipient view depends on backend public-share and access-control contracts.
 
-### 5. Sharing Engine (OneDrive / Google Drive Style)
-- [ ] **5.1 Share Link Generation & Management** `Status: Not Started`
-  - Public / password-protected / expiration-date links.
-  - Permission scopes: View Only vs Edit/Upload.
-  - Quick copy link to clipboard with toast notification.
-- [ ] **5.2 Public Share View Portal** `Status: Not Started`
-  - Lightweight recipient view for shared files/folders without full login requirement.
-  - Direct download and preview.
-
-### 6. Media & Document Previewers
-- [ ] **6.1 Preview Modal Host** `Status: Not Started`
-  - Modal overlay with next/previous item navigation, zoom, rotate, fullscreen, and download.
-- [ ] **6.2 Image Viewer** `Status: Not Started`
-  - Formats: PNG, JPG, WEBP, SVG, GIF, RAW thumbnails.
-  - Zoom, pan, slideshow mode.
-- [ ] **6.3 Video & Audio Player** `Status: Not Started`
-  - Formats: MP4, WebM, MP3, WAV, FLAC.
-  - Custom stream player controls, playback speed, subtitle support.
-- [ ] **6.4 PDF Viewer** `Status: Not Started`
-  - Native PDF rendering (pdf.js or canvas-based viewer), page navigation, text search.
-- [ ] **6.5 Text & Code Viewer/Editor** `Status: Not Started`
-  - Plain text, Markdown (rendered preview), source code syntax highlighting (JSON, YAML, JS/TS, Python, etc.).
-
----
+### 6. Media and Document Previews (Planned)
+- [ ] **6.1 Preview host — Not Started**
+- [ ] **6.2 Image viewer — Not Started**
+- [ ] **6.3 Audio/video player — Not Started**
+- [ ] **6.4 PDF viewer — Not Started**
+- [ ] **6.5 Text/code viewer — Not Started**
 
 ## Dependencies
-- **1.2** depends on **1.1**
-- **2.2** depends on **2.1**
-- **3.1, 3.2, 3.3** depend on **2.1**
-- **4.1, 4.2** depend on **1.2**
-- **5.2** depends on **5.1**
-- **6.2 - 6.5** depend on **6.1**
-
----
+- The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.
+- Core file workflows depend on backend authorization and ownership enforcement.
+- Folders, quota, roles, sharing, trash, moves, and previews depend on corresponding backend contracts and permissions.
+- Public share views depend on backend share-link lifecycle and public-access contracts.
 
 ## Success Criteria
-1. Role-based access control enforces `Admin` vs `User` views and API access.
-2. Default storage quota (5GB) auto-assigned on user creation.
-3. Admin dashboard accurately displays system usage and modifies per-user quotas.
-4. Full keyboard workflow operable without mouse (`F2`, `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Del`, `Shift+Del`, `Ctrl+Z`, `Esc`).
-5. Range (`Shift`) and toggle (`Ctrl`) multi-select match desktop OS file manager behavior.
-6. Drag-and-drop handles internal file movement and external file uploads.
-7. Share dialog creates parameterized links (expiry/password/view-only).
-8. Previews load seamlessly for image, audio/video, PDF, and code/text formats.
+1. Signed-in users can list and manage only their own files through the secured API.
+2. Authentication and role-dependent UI match backend authorization; security is enforced server-side.
+3. Keyboard selection and actions behave consistently with the supported file operations.
+4. Drag-and-drop uploads and internal moves work against verified backend endpoints.
+5. Sharing and previews work for formats and access policies supported by the backend.
+6. Responsive layout remains usable on desktop and smaller screens.
+
+## Status
+- Angular scaffold exists, but functional workflows have not been verified as complete.
+- **Frontend workflow status: Not Started.**
+- **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
+
+## Scope and Prioritization
+The listed admin dashboard, advanced keyboard operations, password-protected sharing, and broad media support are planned backlog, not first-release blockers unless explicitly prioritized. No scope reduction or new product requirements are approved by this WBS review.
+
+## Review Record
+Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment pass; implementation and verification were not performed. Keep statuses evidence-based and update them after code changes and relevant checks.
