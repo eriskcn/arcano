@@ -13,7 +13,7 @@ A personal cloud-storage application monorepo with an ASP.NET Core backend and A
 
 ### Backend
 
-Prerequisites: .NET 10 SDK and Docker with Compose.
+Prerequisites: .NET 10 SDK and Docker with Compose. The API requires `Jwt:Secret` (environment variable `Jwt__Secret`) with at least 32 UTF-8 bytes; export `JWT_SECRET` before using the full-stack Compose setup.
 
 Start PostgreSQL and SeaweedFS, then run the API locally:
 
