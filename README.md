@@ -37,6 +37,16 @@ npm start
 
 The development server runs at `http://localhost:4200/`. See [frontend/README.md](frontend/README.md) for Angular CLI commands.
 
+### Full-stack development
+
+Run `./run-dev.sh` from the repository root to start the API, frontend, PostgreSQL, and SeaweedFS. Add `--log-to-file` to also save the script output to `run-dev.log` while continuing to display it in the terminal:
+
+```bash
+./run-dev.sh --log-to-file
+```
+
+Set `RUN_DEV_LOG_FILE` to change the log file path.
+
 ## Current status
 
 - Backend foundation and file upload/download/delete API work are marked complete in the backend WBS; build, tests, and runtime behavior still need independent verification.

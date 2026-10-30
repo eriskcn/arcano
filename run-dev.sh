@@ -6,6 +6,26 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 BACKEND_DIR="$ROOT_DIR/backend"
 API_PROJECT="$BACKEND_DIR/src/ArcanoCore.API/ArcanoCore.API.csproj"
 JWT_SECRET="${JWT_SECRET:-$(openssl rand -hex 32)}"
+LOG_TO_FILE=false
+LOG_FILE="${RUN_DEV_LOG_FILE:-$ROOT_DIR/run-dev.log}"
+
+for argument in "$@"; do
+  case "$argument" in
+    --log-to-file)
+      LOG_TO_FILE=true
+      ;;
+    *)
+      printf 'Unknown option: %s\nUsage: %s [--log-to-file]\n' "$argument" "$0" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ "$LOG_TO_FILE" == true ]]; then
+  mkdir -p "$(dirname -- "$LOG_FILE")"
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  printf 'Logging output to %s\n' "$LOG_FILE"
+fi
 
 api_pid=''
 frontend_pid=''
