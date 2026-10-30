@@ -40,8 +40,22 @@ Apply migration:
 dotnet ef database update --project src/ArcanoCore.Infrastructure/ArcanoCore.Infrastructure.csproj --startup-project src/ArcanoCore.API/ArcanoCore.API.csproj
 ```
 
-### 3. API Verification Endpoints
-- **Health Check:** `GET http://localhost:5000/health`
-- **Upload File:** `POST http://localhost:5000/api/files/upload` (Form-data: `file` field containing your file)
-- **Download File:** `GET http://localhost:5000/api/files/{id}`
-- **Delete File:** `DELETE http://localhost:5000/api/files/{id}`
+### 3. API Endpoints
+- **Health Check:** `GET http://localhost:5000/health` (anonymous)
+- **Register:** `POST http://localhost:5000/api/Auth/register` (JSON: `email`, `password`)
+- **Login:** `POST http://localhost:5000/api/Auth/login` (JSON: `email`, `password`; returns `token`)
+- **Session:** `GET http://localhost:5000/api/Auth/session` (Bearer token)
+
+The file endpoints below require `Authorization: Bearer <token>` and only act on files owned by the signed-in user:
+
+- **List Files:** `GET http://localhost:5000/api/Files`
+- **Upload File:** `POST http://localhost:5000/api/Files/upload` (Form-data: `file` field containing your file)
+- **Download File:** `GET http://localhost:5000/api/Files/{id}`
+- **Delete File:** `DELETE http://localhost:5000/api/Files/{id}`
+
+Upload has no request size limit yet (`[DisableRequestSizeLimit]`); a maximum size has not been defined.
+
+### 4. Configuration
+- `Jwt:Secret` (env `Jwt__Secret`) is required and must be at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`.
+- `Storage:*` points the API at SeaweedFS's S3 gateway. The Compose SeaweedFS service runs without an S3 identity config file, so the placeholder access keys are accepted.
+- Set `Logging` levels in `appsettings.Development.json`; EF Core logging is set to `Warning`.

@@ -49,8 +49,8 @@ Set `RUN_DEV_LOG_FILE` to change the log file path.
 
 ## Current status
 
-- Backend foundation and file upload/download/delete API work are marked complete in the backend WBS; build, tests, and runtime behavior still need independent verification.
-- Frontend tasks are marked not started in the frontend WBS.
+- Backend file API covers list, upload, download, and delete, scoped to the signed-in user. Upload size limits and storage/database failure handling are still open in the backend WBS.
+- Frontend file explorer lists, uploads, downloads, and deletes the user's files through the API. Drag-and-drop, folders, sharing, and previews are not yet implemented.
 - The repository includes backend unit-test and frontend spec projects. Run the backend tests with `dotnet test backend/ArcanoCore.sln` and the frontend tests from `frontend/` with `npm test`.
 
 ## Before deployment
