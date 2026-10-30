@@ -4,7 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router } from '@angular/router';
-import { filter } from 'rxjs';
+import { EMPTY, catchError, concatMap, filter, from } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AuthService } from './auth.service';
 import { FileDto, FilesService } from './files.service';
@@ -423,6 +423,36 @@ export class App implements OnInit {
     this.files.update(files =>
       files.map(file => file.id === id ? { ...file, starred: !file.starred } : file),
     );
+  }
+
+  onUploadSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const selected = Array.from(input.files ?? []);
+    input.value = '';
+    if (selected.length === 0 || this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    from(selected)
+      .pipe(
+        concatMap(file => this.filesApi.upload(file).pipe(
+          catchError(() => {
+            this.actionError.set(`Unable to upload ${file.name}. Please try again.`);
+            return EMPTY;
+          }),
+        )),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        complete: () => {
+          this.actionBusy.set(false);
+          const error = this.actionError();
+          this.loadFiles();
+          this.actionError.set(error);
+        },
+      });
   }
 
   loadFiles(): void {

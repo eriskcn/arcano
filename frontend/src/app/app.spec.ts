@@ -230,4 +230,38 @@ describe('App', () => {
     expect(revoke).toHaveBeenCalledWith('blob:test');
     http.verify();
   });
+
+  it('should upload selected files then reload the list', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', {
+      value: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')],
+    });
+
+    app.onUploadSelected({ target: input } as unknown as Event);
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
+    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([]);
+
+    expect(app.actionBusy()).toBe(false);
+    expect(app.actionError()).toBe('');
+    http.verify();
+  });
+
+  it('should report a failed upload and continue', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
+
+    app.onUploadSelected({ target: input } as unknown as Event);
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('no', { status: 400, statusText: 'Bad Request' });
+    http.expectOne(`${environment.apiBaseUrl}/Files`).flush([]);
+
+    expect(app.actionError()).toContain('Unable to upload a.txt');
+    http.verify();
+  });
 });

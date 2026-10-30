@@ -60,6 +60,21 @@ describe('FilesService', () => {
     expect(result).toBe(blob);
   });
 
+  it('should upload a file as multipart form data', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
+    let completed = false;
+
+    service.upload(file).subscribe({ complete: () => (completed = true) });
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect(request.request.method).toBe('POST');
+    expect((request.request.body as FormData).get('file')).toBeInstanceOf(File);
+    request.flush({ id });
+    expect(completed).toBe(true);
+  });
+
   it('should delete a file by id', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);

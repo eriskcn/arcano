@@ -20,6 +20,12 @@ export class FilesService {
     return this.http.get<FileDto[]>(this.baseUrl);
   }
 
+  upload(file: File): Observable<void> {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    return this.http.post<unknown>(`${this.baseUrl}/upload`, body).pipe(map(() => undefined));
+  }
+
   download(id: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${encodeURIComponent(id)}`, { responseType: 'blob' });
   }
