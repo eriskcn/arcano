@@ -57,5 +57,5 @@ Upload has no request size limit yet (`[DisableRequestSizeLimit]`); a maximum si
 
 ### 4. Configuration
 - `Jwt:Secret` (env `Jwt__Secret`) is required and must be at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`.
-- `Storage:*` points the API at SeaweedFS's S3 gateway. The Compose SeaweedFS service runs without an S3 identity config file, so the placeholder access keys are accepted.
+- `Storage:*` points the API at SeaweedFS's S3 gateway. The Compose SeaweedFS service loads its S3 identity from `backend/seaweedfs/s3.json`; the placeholder keys are for local development only.
 - Set `Logging` levels in `appsettings.Development.json`; EF Core logging is set to `Warning`.

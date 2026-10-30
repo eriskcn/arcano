@@ -57,7 +57,6 @@ public static class DependencyInjection
         .AddDefaultTokenProviders();
 
         services.AddSingleton<ILookupNormalizer, CustomLookupNormalizer>();
-        services.AddSingleton<IBloomFilter<string>, EmailBloomFilter>();
 
         // JWT Authentication Configuration
         var jwtSettings = configuration.GetSection("Jwt");

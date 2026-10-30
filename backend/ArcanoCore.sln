@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.API", "src\Arcan
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.Domain.UnitTests", "test\ArcanoCore.Domain.UnitTests\ArcanoCore.Domain.UnitTests.csproj", "{E8BEA5CE-981F-43DE-801B-FFD799B77402}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ArcanoCore.API.UnitTests", "test\ArcanoCore.API.UnitTests\ArcanoCore.API.UnitTests.csproj", "{3F6A9C21-7B4D-4E8A-A1F5-6D2C0B9E4A17}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E8BEA5CE-981F-43DE-801B-FFD799B77402}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3F6A9C21-7B4D-4E8A-A1F5-6D2C0B9E4A17}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3F6A9C21-7B4D-4E8A-A1F5-6D2C0B9E4A17}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3F6A9C21-7B4D-4E8A-A1F5-6D2C0B9E4A17}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3F6A9C21-7B4D-4E8A-A1F5-6D2C0B9E4A17}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

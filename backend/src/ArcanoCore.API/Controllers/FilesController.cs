@@ -20,7 +20,7 @@ public class FilesController : ApiControllerBase
     }
 
     [HttpPost("upload")]
-    [DisableRequestSizeLimit]
+    [RequestSizeLimit(104857600)] // 100 MB
     public async Task<IActionResult> Upload(IFormFile file, CancellationToken cancellationToken)
     {
         if (file == null || file.Length == 0)
@@ -41,9 +41,12 @@ public class FilesController : ApiControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    public async Task<IActionResult> List([FromQuery] int skip = 0, [FromQuery] int take = 50, CancellationToken cancellationToken = default)
     {
-        var result = await _fileService.ListFilesAsync(cancellationToken);
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+
+        var result = await _fileService.ListFilesAsync(skip, take, cancellationToken);
         if (result.IsFailure)
         {
             return BadRequest(result.Error);

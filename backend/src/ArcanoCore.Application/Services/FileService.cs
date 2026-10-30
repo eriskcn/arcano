@@ -16,20 +16,20 @@ public class FileService : IFileService
 {
     private readonly IApplicationDbContext _dbContext;
     private readonly IStorageService _storageService;
-    private readonly IBloomFilter<Guid> _bloomFilter;
     private readonly ICurrentUser _currentUser;
 
     public FileService(
         IApplicationDbContext dbContext,
         IStorageService storageService,
-        IBloomFilter<Guid> bloomFilter,
         ICurrentUser currentUser)
     {
         _dbContext = dbContext;
         _storageService = storageService;
-        _bloomFilter = bloomFilter;
         _currentUser = currentUser;
     }
+
+    // Guid.Empty when the current user ID is missing or not a valid GUID.
+    private Guid CurrentOwnerId => Guid.TryParse(_currentUser.UserId, out var ownerId) ? ownerId : Guid.Empty;
 
     public async Task<Result<FileResponseDto>> UploadFileAsync(FileUploadDto dto, CancellationToken cancellationToken = default)
     {
@@ -38,14 +38,16 @@ public class FileService : IFileService
             return Result<FileResponseDto>.Failure(new Error("File.Empty", "File content cannot be empty."));
         }
 
-        if (!Guid.TryParse(_currentUser.UserId, out var ownerId) || ownerId == Guid.Empty)
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
         {
             return Result<FileResponseDto>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
 
+        string? storageKey = null;
         try
         {
-            string storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
+            storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
 
             var fileMetadata = new FileMetadata
             {
@@ -60,27 +62,35 @@ public class FileService : IFileService
             await _dbContext.FileMetadatas.AddAsync(fileMetadata, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            await _bloomFilter.AddAsync(fileMetadata.Id, cancellationToken);
-
-            string url = await _storageService.GetUrlAsync(storageKey, 24, cancellationToken);
-
             return Result<FileResponseDto>.Success(new FileResponseDto(
                 fileMetadata.Id,
                 fileMetadata.FileName,
                 fileMetadata.ContentType,
-                fileMetadata.FileSize,
-                url
+                fileMetadata.FileSize
             ));
         }
         catch (Exception)
         {
+            if (storageKey != null)
+            {
+                try
+                {
+                    await _storageService.DeleteAsync(storageKey, cancellationToken);
+                }
+                catch (Exception)
+                {
+                    // Best effort: the original upload failure is returned below.
+                }
+            }
+
             return Result<FileResponseDto>.Failure(new Error("File.UploadFailed", "Upload failed. Please try again."));
         }
     }
 
-    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(CancellationToken cancellationToken = default)
+    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(int skip, int take, CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(_currentUser.UserId, out var ownerId) || ownerId == Guid.Empty)
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
         {
             return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
@@ -89,6 +99,8 @@ public class FileService : IFileService
             .AsNoTracking()
             .Where(f => f.OwnerId == ownerId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAtUtc)
+            .Skip(skip)
+            .Take(take)
             .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc))
             .ToListAsync(cancellationToken);
 
@@ -97,13 +109,8 @@ public class FileService : IFileService
 
     public async Task<Result<(Stream Content, string ContentType, string FileName)>> DownloadFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        if (!await _bloomFilter.MightContainAsync(id, cancellationToken))
-        {
-            return Result<(Stream, string, string)>.Failure(new Error("File.NotFound", "File metadata not found."));
-        }
-
-        var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
-        if (fileMetadata == null || fileMetadata.IsDeleted || !IsOwner(fileMetadata))
+        var fileMetadata = await FindOwnedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
         {
             return Result<(Stream, string, string)>.Failure(new Error("File.NotFound", "File metadata not found."));
         }
@@ -121,13 +128,8 @@ public class FileService : IFileService
 
     public async Task<Result> DeleteFileAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        if (!await _bloomFilter.MightContainAsync(id, cancellationToken))
-        {
-            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
-        }
-
-        var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
-        if (fileMetadata == null || fileMetadata.IsDeleted || !IsOwner(fileMetadata))
+        var fileMetadata = await FindOwnedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
         {
             return Result.Failure(new Error("File.NotFound", "File metadata not found."));
         }
@@ -148,6 +150,17 @@ public class FileService : IFileService
         }
     }
 
-    private bool IsOwner(FileMetadata fileMetadata) =>
-        Guid.TryParse(_currentUser.UserId, out var userId) && userId != Guid.Empty && fileMetadata.OwnerId == userId;
+    private async Task<FileMetadata?> FindOwnedFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var fileMetadata = await _dbContext.FileMetadatas.FindAsync(new object[] { id }, cancellationToken);
+        return fileMetadata != null && !fileMetadata.IsDeleted && fileMetadata.OwnerId == ownerId
+            ? fileMetadata
+            : null;
+    }
 }

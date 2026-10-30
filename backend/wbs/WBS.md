@@ -33,30 +33,31 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
   - **1.5 Verification and readiness — Not Started**
     - [ ] Build and run available tests; record actual results.
     - [ ] Verify the Docker Compose stack and documented local quickstart; Compose syntax validates, but runtime startup has not been exercised.
-  - **1.6 Audit remediation — Not Started**
-    - Source: [2026-10-30 ponytail audit](reports/2026-10-30-2323-ponytail-audit.md). Item numbers below match the report.
-    - **1.6.1 Must fix — Not Started**
-      - [ ] Item 1: untrack `appsettings.Development.json` (`git rm --cached`), move `Jwt:Secret` to user secrets or env, rotate the key. Open: HEAD no longer holds the secret, but the working copy has an uncommitted 64-character `Secret` in this tracked file. Needs an owner decision before committing; the old key stays in history until rotated.
+  - **1.6 Audit remediation — In Progress**
+    - Source: [2026-10-30 ponytail audit](reports/2026-10-30-2323-ponytail-audit.md). Item numbers below match the report. Build and tests verified: 48 domain tests and 2 new auth tests pass.
+    - **1.6.1 Must fix — In Progress**
+      - [ ] Item 1: partly done. The `Jwt:Secret` value is removed from `appsettings.Development.json`, and the file stays tracked because it holds shared dev defaults. Open: the old key `4a7e…` is still in git history and must be rotated if it is used in any real environment.
       - [x] Item 2: `seaweedfs/security.toml` is in the root `.gitignore` (line 13), added in commit 919cac3.
       - [x] Item 3: `FileService.DeleteFileAsync` saves `IsDeleted` before calling `DeleteAsync`.
-      - [ ] Item 4: replace `[DisableRequestSizeLimit]` with `[RequestSizeLimit(n)]`; the value of `n` needs a product decision.
+      - [x] Item 4: `[RequestSizeLimit(104857600)]` (100 MB) replaces `[DisableRequestSizeLimit]`. The 100 MB value is an assumption; change it if you want a different limit.
       - [x] Item 5: fixed error messages in `FileService` (upload, download, delete) and in `ExceptionHandlingMiddleware`.
-    - **1.6.2 Should fix — Not Started**
-      - [ ] Item 6: delete the stored object when an upload's database save fails.
-      - [ ] Item 7: rewrite the delete-failure test so the save path runs (after item 3).
-      - [ ] Item 8: add sign-in and sign-up tests.
-      - [ ] Item 9: decide on account-enumeration handling for register and login.
-      - [ ] Item 10: remove the in-memory bloom filters (covers the multi-instance bug); see item 14.
-      - [ ] Item 11: remove `GetUrlAsync` and `FileResponseDto.Url` from the upload path.
-      - [ ] Item 12: add paging to the file list.
-      - [ ] Item 13: drop `--host 0.0.0.0` from the dev frontend start in `run-dev.sh`. Frontend-side item; tracked here for the audit record.
-      - [ ] Item 14: delete the bloom filter classes, DI registrations, and their tests (about 250 lines).
-      - [ ] Item 15: move the duplicated Download/Delete lookup into one helper.
-      - [ ] Item 16: parse the owner ID once.
-    - **1.6.3 Nice to have — Not Started**
-      - [ ] Item 17: create the storage bucket once at startup, not on every upload.
-      - [ ] Item 18: update the backend README line about the SeaweedFS identity file.
-      - [ ] Item 19: check the JWT secret once at startup.
+    - **1.6.2 Should fix — In Progress**
+      - [x] Item 6: an upload's stored object is deleted when the database save fails.
+      - [x] Item 7: the delete-failure test seeds the row, so the save path runs and expects `File.DeleteFailed`.
+      - [x] Item 8: two sign-in and sign-up tests in the new `ArcanoCore.API.UnitTests` project.
+      - [x] Item 9: register returns "Could not create account." for duplicate emails, and sign-in runs a dummy password check when the user is not found.
+      - [x] Item 10: the bloom filters are removed from the file and auth flows, so every check reads the database.
+      - [x] Item 11: `GetUrlAsync` and `FileResponseDto.Url` are removed from the upload path.
+      - [x] Item 12: the file list takes `skip` and `take` (default 50, max 100). The Angular client still requests only the first page; see the open question below.
+      - [x] Item 13: `run-dev.sh` starts the dev server without `--host 0.0.0.0`.
+      - [x] Item 14: the bloom filter classes, interfaces, DI registrations, and their tests are deleted.
+      - [x] Item 15: Download and Delete share `FindOwnedFileAsync`.
+      - [x] Item 16: the owner ID is parsed once, in `CurrentOwnerId`.
+    - **1.6.3 Nice to have — In Progress**
+      - [x] Item 17: the bucket check runs once per process (`_bucketReady`).
+      - [x] Item 18: the backend README describes the SeaweedFS identity file correctly.
+      - [x] Item 19: the JWT secret is checked once, at startup.
+    - **Open question:** the frontend requests only the first page of files. Users with more than 50 files will not see the rest until the client supports paging.
 
 ## Dependencies
 - 1.2 depends on 1.1.

@@ -61,7 +61,7 @@ api_pid=$!
 
 (
   cd "$FRONTEND_DIR"
-  npm start -- --host 0.0.0.0
+  npm start
 ) &
 frontend_pid=$!
 

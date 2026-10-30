@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -16,17 +15,17 @@ namespace ArcanoCore.API.Controllers;
 
 public class AuthController : ApiControllerBase
 {
+    // Hash of a random string; verified against when the email is unknown so login timing does not reveal existing accounts.
+    private static readonly string DummyPasswordHash = new PasswordHasher<IdentityUser<Guid>>().HashPassword(new IdentityUser<Guid>(), Guid.NewGuid().ToString());
+
     private readonly UserManager<IdentityUser<Guid>> _userManager;
-    private readonly IBloomFilter<string> _emailBloomFilter;
     private readonly IConfiguration _configuration;
 
     public AuthController(
         UserManager<IdentityUser<Guid>> userManager,
-        IBloomFilter<string> emailBloomFilter,
         IConfiguration configuration)
     {
         _userManager = userManager;
-        _emailBloomFilter = emailBloomFilter;
         _configuration = configuration;
     }
 
@@ -46,18 +45,7 @@ public class AuthController : ApiControllerBase
         }
         var normalizedEmail = normalizedResult.Value;
 
-        // 2. Bloom Filter pre-check: if it MightContain, we must verify in DB.
-        // If it doesn't contain, we can skip DB uniqueness check (though Identity will still check it).
-        if (await _emailBloomFilter.MightContainAsync(normalizedEmail))
-        {
-            var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
-            if (existingUser != null)
-            {
-                return BadRequest(new Error("Auth.EmailTaken", "Email is already in use."));
-            }
-        }
-
-        // 3. Create User
+        // 2. Create User
         var user = new IdentityUser<Guid>
         {
             Id = Guid.NewGuid(),
@@ -68,13 +56,16 @@ public class AuthController : ApiControllerBase
         var result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
+            // Same message for duplicates so sign-up does not reveal which emails exist.
+            if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
+            {
+                return BadRequest(new Error("Auth.RegisterFailed", "Could not create account."));
+            }
+
             var firstError = result.Errors.FirstOrDefault();
             var description = firstError?.Description ?? "User creation failed.";
             return BadRequest(new Error("Auth.RegisterFailed", description));
         }
-
-        // 4. Update Bloom Filter
-        await _emailBloomFilter.AddAsync(normalizedEmail);
 
         return Ok(new { Message = "User registered successfully." });
     }
@@ -95,27 +86,23 @@ public class AuthController : ApiControllerBase
         }
         var normalizedEmail = normalizedResult.Value;
 
-        // 2. Bloom Filter check: if not in Bloom filter, user definitely does not exist
-        if (!await _emailBloomFilter.MightContainAsync(normalizedEmail))
-        {
-            return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
-        }
-
-        // 3. Find User
+        // 2. Find User
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null)
         {
+            // Hash anyway so unknown emails take as long as wrong passwords.
+            _userManager.PasswordHasher.VerifyHashedPassword(new IdentityUser<Guid>(), DummyPasswordHash, request.Password);
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
-        // 4. Check Password
+        // 3. Check Password
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!isPasswordValid)
         {
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
-        // 5. Generate JWT Token
+        // 4. Generate JWT Token
         var token = GenerateJwtToken(user);
 
         return Ok(new { Token = token });
@@ -138,10 +125,8 @@ public class AuthController : ApiControllerBase
         };
 
         var jwtSettings = _configuration.GetSection("Jwt");
-        var secret = jwtSettings["Secret"];
-        if (string.IsNullOrWhiteSpace(secret) || Encoding.UTF8.GetByteCount(secret) < 32)
-            throw new InvalidOperationException("Jwt:Secret must be configured and contain at least 32 UTF-8 bytes.");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
+        // Validated at startup in DependencyInjection.AddInfrastructure.
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Secret"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var expiryMinutes = double.TryParse(jwtSettings["ExpiryInMinutes"], out var parsedMinutes) ? parsedMinutes : 60;

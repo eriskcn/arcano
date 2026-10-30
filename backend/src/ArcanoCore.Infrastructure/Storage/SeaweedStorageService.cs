@@ -21,8 +21,15 @@ public class SeaweedStorageService : IStorageService
         _bucketName = configuration["Storage:BucketName"] ?? "default-bucket";
     }
 
+    private static volatile bool _bucketReady;
+
     private async Task EnsureBucketExistsAsync(CancellationToken cancellationToken)
     {
+        if (_bucketReady)
+        {
+            return;
+        }
+
         try
         {
             var bucketExists = await Amazon.S3.Util.AmazonS3Util.DoesS3BucketExistV2Async(_s3Client, _bucketName);
@@ -30,6 +37,7 @@ public class SeaweedStorageService : IStorageService
             {
                 await _s3Client.PutBucketAsync(new PutBucketRequest { BucketName = _bucketName }, cancellationToken);
             }
+            _bucketReady = true;
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
@@ -70,18 +78,5 @@ public class SeaweedStorageService : IStorageService
             BucketName = _bucketName,
             Key = key
         }, cancellationToken);
-    }
-
-    public async Task<string> GetUrlAsync(string key, int expiryHours = 24, CancellationToken cancellationToken = default)
-    {
-        var request = new GetPreSignedUrlRequest
-        {
-            BucketName = _bucketName,
-            Key = key,
-            Expires = DateTime.UtcNow.AddHours(expiryHours)
-        };
-
-        // Custom task wrap as S3 SDK lacks direct async pre-signed url generation on .NET standard 2.0 in some contexts
-        return await Task.Run(() => _s3Client.GetPreSignedURL(request), cancellationToken);
     }
 }

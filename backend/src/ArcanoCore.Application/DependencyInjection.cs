@@ -9,7 +9,6 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddSingleton<IBloomFilter<Guid>, FileBloomFilter>();
         services.AddScoped<IFileService, FileService>();
         return services;
     }

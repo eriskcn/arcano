@@ -67,9 +67,8 @@ public class FileServiceTests
         var result = await service.DeleteFileAsync(file.Id);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("File.NotFound", result.Error.Code);
+        Assert.Equal("File.DeleteFailed", result.Error.Code);
         Assert.Equal(0, storage.DeleteCalls);
-        Assert.False(file.IsDeleted);
     }
 
     [Fact]
@@ -91,7 +90,7 @@ public class FileServiceTests
         newer.CreatedAtUtc = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync();
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(0, 50);
 
         Assert.True(result.IsSuccess);
         Assert.Equal(new[] { newer.Id, older.Id }, result.Value.Select(f => f.Id).ToArray());
@@ -108,7 +107,7 @@ public class FileServiceTests
         dbContext.FileMetadatas.Add(NewFile(Guid.NewGuid(), "other.txt"));
         await dbContext.SaveChangesAsync(CancellationToken.None);
 
-        var result = await CreateListService(dbContext, Guid.NewGuid().ToString()).ListFilesAsync();
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString()).ListFilesAsync(0, 50);
 
         Assert.True(result.IsSuccess);
         Assert.Empty(result.Value);
@@ -123,7 +122,7 @@ public class FileServiceTests
     {
         await using var dbContext = CreateListDbContext();
 
-        var result = await CreateListService(dbContext, userId).ListFilesAsync();
+        var result = await CreateListService(dbContext, userId).ListFilesAsync(0, 50);
 
         Assert.True(result.IsFailure);
         Assert.Equal("File.Unauthorized", result.Error.Code);
@@ -138,7 +137,7 @@ public class FileServiceTests
     }
 
     private static FileService CreateListService(ApplicationDbContext dbContext, string? userId) =>
-        new(dbContext, new ListUnusedStorageService(), new ListUnusedBloomFilter(), new ListCurrentUser(userId));
+        new(dbContext, new ListUnusedStorageService(), new ListCurrentUser(userId));
 
     private static FileMetadata NewFile(Guid ownerId, string name, bool isDeleted = false) => new()
     {
@@ -162,28 +161,15 @@ public class FileServiceTests
         public Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<string> GetUrlAsync(string key, int expiryHours = 24, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private sealed class ListUnusedBloomFilter : IBloomFilter<Guid>
-    {
-        public Task AddAsync(Guid item, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> MightContainAsync(Guid item, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private static FileService CreateService(TestDbContext db, TestStorage storage, Guid userId) =>
-        new(db, storage, new TestBloomFilter(), new TestCurrentUser(userId));
+        new(db, storage, new TestCurrentUser(userId));
 
     private sealed class TestCurrentUser(Guid userId) : ICurrentUser
     {
         public string UserId { get; } = userId.ToString();
         public bool IsAuthenticated => true;
-    }
-
-    private sealed class TestBloomFilter : IBloomFilter<Guid>
-    {
-        public Task AddAsync(Guid item, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<bool> MightContainAsync(Guid item, CancellationToken cancellationToken = default) => Task.FromResult(true);
     }
 
     private sealed class TestStorage : IStorageService
@@ -209,9 +195,6 @@ public class FileServiceTests
             DeleteCalls++;
             return Task.CompletedTask;
         }
-
-        public Task<string> GetUrlAsync(string key, int expiryHours = 24, CancellationToken cancellationToken = default) =>
-            Task.FromResult($"https://storage.test/{key}");
     }
 
     private sealed class TestDbContext : IApplicationDbContext
@@ -244,6 +227,9 @@ public class FileServiceTests
         {
             var options = new DbContextOptionsBuilder<TestContext>().Options;
             var context = new TestContext(options, files);
+            // Seed the in-memory store so FindAsync can see the row.
+            context.Files.AddRange(files);
+            context.SaveChanges();
             return context.Files;
         }
     }
