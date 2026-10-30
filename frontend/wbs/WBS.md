@@ -14,9 +14,9 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Sidebar, breadcrumbs, toolbar, file grid/list, and details panel.
   - Responsive sidebar and navigation; file context menus support details and favorite actions.
   - Quota usage is not displayed because no backend quota contract is available.
-- [ ] **1.2 Selection management — Not Started**
+- [x] **1.2 Selection management — Complete**
   - Single, Ctrl-toggle, Shift-range, and Escape-to-clear selection.
-  - Marquee selection.
+  - Pointer-drag marquee selection in list and grid views.
 
 ### 2. Authentication and User Access
 - [ ] **2.1 Authentication and session — Not Started**

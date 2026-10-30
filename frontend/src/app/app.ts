@@ -1,4 +1,4 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, HostListener, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { environment } from '../environments/environment';
@@ -35,11 +35,17 @@ export class App {
   readonly sidebarCollapsed = signal<boolean>(false);
   readonly mobileSidebarOpen = signal<boolean>(false);
   readonly viewMode = signal<ViewMode>('list');
+  readonly selectedIds = signal<ReadonlySet<string>>(new Set(['1']));
   readonly selectedId = signal<string | null>('1');
+  readonly selectionAnchorId = signal<string | null>('1');
   readonly searchQuery = signal<string>('');
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
   readonly contextMenu = signal<{ file: FileItem; left: number; top: number } | null>(null);
+  readonly selectionRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
+  private marqueeStart: { x: number; y: number } | null = null;
+  private marqueeSurface: HTMLElement | null = null;
+  private marqueeBaseSelection = new Set<string>();
 
   // Auth Form State
   readonly signInEmail = signal<string>('');
@@ -218,9 +224,97 @@ export class App {
     this.page.set('app');
   }
 
-  selectFile(id: string): void {
-    this.selectedId.set(id);
-    this.previewOpen.set(true);
+  selectFile(id: string, event?: MouseEvent): void {
+    const files = this.filteredFiles();
+    const isToggle = event?.ctrlKey || event?.metaKey;
+    const currentSelection = this.selectedIds();
+
+    if (event?.shiftKey) {
+      const anchorId = this.selectionAnchorId();
+      const anchorIndex = files.findIndex(file => file.id === anchorId);
+      const targetIndex = files.findIndex(file => file.id === id);
+
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const nextSelection = new Set(isToggle ? currentSelection : []);
+        const [start, end] = [anchorIndex, targetIndex].sort((a, b) => a - b);
+        for (const file of files.slice(start, end + 1)) {
+          nextSelection.add(file.id);
+        }
+        this.setSelection(nextSelection, id);
+      } else {
+        this.setSelection(new Set([id]), id);
+        this.selectionAnchorId.set(id);
+      }
+    } else if (isToggle) {
+      const nextSelection = new Set(currentSelection);
+      if (nextSelection.has(id)) {
+        nextSelection.delete(id);
+      } else {
+        nextSelection.add(id);
+      }
+      this.setSelection(nextSelection, nextSelection.has(id) ? id : [...nextSelection].at(-1) ?? null);
+      this.selectionAnchorId.set(id);
+    } else {
+      this.setSelection(new Set([id]), id);
+      this.selectionAnchorId.set(id);
+    }
+
+    this.previewOpen.set(this.selectedIds().size > 0);
+  }
+
+  clearSelection(): void {
+    this.setSelection(new Set(), null);
+    this.selectionAnchorId.set(null);
+    this.selectionRect.set(null);
+    this.contextMenu.set(null);
+    this.marqueeStart = null;
+    this.marqueeSurface = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.clearSelection();
+  }
+
+  beginMarquee(event: PointerEvent): void {
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
+      return;
+    }
+    const surface = event.currentTarget;
+    const target = event.target;
+    if (target instanceof Element && target.closest('[data-file-id]')) {
+      return;
+    }
+
+    event.preventDefault();
+    surface.setPointerCapture(event.pointerId);
+    this.marqueeSurface = surface;
+    this.marqueeStart = { x: event.clientX, y: event.clientY };
+    this.marqueeBaseSelection = event.ctrlKey || event.metaKey ? new Set(this.selectedIds()) : new Set();
+    if (!event.ctrlKey && !event.metaKey) {
+      this.setSelection(new Set(), null);
+    }
+    this.updateMarquee(event.clientX, event.clientY);
+  }
+
+  moveMarquee(event: PointerEvent): void {
+    if (this.marqueeStart && event.currentTarget === this.marqueeSurface) {
+      this.updateMarquee(event.clientX, event.clientY);
+    }
+  }
+
+  endMarquee(event: PointerEvent): void {
+    if (!this.marqueeStart || event.currentTarget !== this.marqueeSurface) {
+      return;
+    }
+    this.updateMarquee(event.clientX, event.clientY);
+    if (this.marqueeSurface?.hasPointerCapture(event.pointerId)) {
+      this.marqueeSurface.releasePointerCapture(event.pointerId);
+    }
+    this.selectionAnchorId.set(this.selectedId());
+    this.marqueeStart = null;
+    this.marqueeSurface = null;
+    this.selectionRect.set(null);
   }
 
   showContextMenu(file: FileItem, event: MouseEvent): void {
@@ -239,6 +333,49 @@ export class App {
     this.files.update(files =>
       files.map(file => file.id === id ? { ...file, starred: !file.starred } : file),
     );
+  }
+
+  private setSelection(ids: Set<string>, primaryId: string | null): void {
+    this.selectedIds.set(ids);
+    this.selectedId.set(primaryId);
+  }
+
+  private updateMarquee(clientX: number, clientY: number): void {
+    const start = this.marqueeStart;
+    const surface = this.marqueeSurface;
+    if (!start || !surface) {
+      return;
+    }
+
+    const rect = {
+      left: Math.min(start.x, clientX),
+      top: Math.min(start.y, clientY),
+      right: Math.max(start.x, clientX),
+      bottom: Math.max(start.y, clientY),
+    };
+    this.selectionRect.set({
+      left: rect.left,
+      top: rect.top,
+      width: rect.right - rect.left,
+      height: rect.bottom - rect.top,
+    });
+
+    const nextSelection = new Set(this.marqueeBaseSelection);
+    for (const item of surface.querySelectorAll<HTMLElement>('[data-file-id]')) {
+      const itemRect = item.getBoundingClientRect();
+      if (
+        itemRect.left < rect.right &&
+        itemRect.right > rect.left &&
+        itemRect.top < rect.bottom &&
+        itemRect.bottom > rect.top
+      ) {
+        const id = item.dataset['fileId'];
+        if (id) {
+          nextSelection.add(id);
+        }
+      }
+    }
+    this.setSelection(nextSelection, [...nextSelection].at(-1) ?? null);
   }
 
   handleCopyLink(): void {
