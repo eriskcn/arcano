@@ -45,13 +45,15 @@ location / {
 ```
 Add `listen 443 ssl;` and certificates as usual.
 
+The nginx inside the `web` image caps request bodies at 110m (`client_max_body_size` in `frontend/nginx.conf`). If you set `MAX_UPLOAD_BYTES` above ~110 MiB, raise that value too and rebuild.
+
 ## 6. Backup and restore
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
 scripts/backup.sh               # db.dump + seaweedfs.tar.gz in backups/<UTC time>/, keeps BACKUP_KEEP=7
 scripts/backup.sh --stop-api    # stops api briefly for a consistent DB/files pair
 ```
-Cron (daily 03:00): `0 3 * * * cd /opt/arcano && scripts/backup.sh --stop-api >> backups/cron.log 2>&1`
+Cron (daily 03:00): `0 3 * * * cd /opt/arcano && mkdir -p backups && scripts/backup.sh --stop-api >> backups/cron.log 2>&1`
 Copy `backups/` off the host; it lives on the same disk otherwise.
 
 Restore (destructive; stops web/api, replaces DB and files, restarts):
@@ -68,6 +70,8 @@ Database migrations run when the API starts. Take a backup first.
 
 ## Not covered
 - No high availability; run a single API instance only.
+- The `chrislusf/seaweedfs` image is unpinned (`:latest`) in `docker-compose.prod.yml`; pin a tag if you need reproducible upgrades.
 - No email, so no password reset.
+- Sessions last at most 24 hours; access tokens expire after `Jwt:ExpiryInMinutes` (default 60).
 - Tokens cannot be revoked; rotating `JWT_SECRET` logs everyone out.
 - No monitoring or log shipping; backups are not encrypted or copied off-host.

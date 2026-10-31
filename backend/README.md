@@ -95,7 +95,7 @@ Set values in `appsettings.json` or as environment variables (`:` becomes `__`, 
 | `ForwardedHeaders:KnownProxies` | `[]` | Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; when empty, X-Forwarded-For is ignored. |
 | `Database:MigrateOnStartup` | `true` | Applies migrations at startup. |
 | `Auth:AllowRegistration` | `true` | Set `false` to disable sign-up. |
-| `Cleanup:Enabled` | `true` | Background job for old trashed files, deleted folders and abandoned upload sessions. |
+| `Cleanup:Enabled` | `true` | Background job: abandoned upload sessions older than 24 h, trashed files older than 30 days, and soft-deleted folders older than 30 days once empty. |
 | `Cleanup:IntervalMinutes` | `60` | |
 | `DataProtection:KeysPath` | `/app/keys` in a container, framework default otherwise | Where DataProtection keys are persisted. |
 

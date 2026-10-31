@@ -19,6 +19,13 @@ The client reads the API base URL from `src/environments/`:
 
 Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The client renews the token with `POST Auth/refresh` and revokes it on sign-out with `POST Auth/logout`. The backend currently provides no role claims, so the client does not infer or display role-based permissions.
 
+## Features
+
+- File explorer with folder zip download (context menu and details panel).
+- Folder star is persisted (the Favorites view still lists files only).
+- On phones (under 640 px) a floating upload button opens the file picker.
+- The "Shared" view was removed; share links are created per file from the Share dialog.
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
