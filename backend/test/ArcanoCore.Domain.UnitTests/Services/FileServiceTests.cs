@@ -615,6 +615,43 @@ public class FileServiceTests
     }
 
     [Fact]
+    public async Task UploadFileAsync_SavesAtRoot_WhenFolderIsDeletedDuringUpload()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        dbContext.Folders.Add(folder);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage { OnUpload = () => { folder.IsDeleted = true; dbContext.SaveChanges(); } };
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage)
+            .UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "file.txt", "text/plain", 1, folder.Id));
+
+        Assert.True(result.IsSuccess);
+        var saved = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
+        Assert.Null(saved.FolderId);
+    }
+
+    [Fact]
+    public async Task CopyFileAsync_SavesAtRoot_WhenFolderIsDeletedDuringCopy()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var file = NewFile(userId, "file.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage { OnUpload = () => { folder.IsDeleted = true; dbContext.SaveChanges(); } };
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).CopyFileAsync(file.Id, folder.Id);
+
+        Assert.True(result.IsSuccess);
+        var copy = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
+        Assert.Null(copy.FolderId);
+    }
+
+    [Fact]
     public async Task CopyFileAsync_RejectsAnotherUsersFile()
     {
         var file = NewFile(Guid.NewGuid(), "file.txt");
@@ -733,10 +770,12 @@ public class FileServiceTests
         public int UploadCalls { get; private set; }
         public int DownloadCalls { get; private set; }
         public int DeleteCalls { get; private set; }
+        public Action? OnUpload { get; set; }
 
         public Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default)
         {
             UploadCalls++;
+            OnUpload?.Invoke();
             return Task.FromResult("key");
         }
 

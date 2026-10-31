@@ -80,6 +80,9 @@ public class FileService : IFileService
 
             storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
 
+            // The folder may have been deleted during the upload; keep the bytes and fall back to the root.
+            var targetFolderId = await ActiveFolderIdOrNullAsync(dto.FolderId, ownerId, cancellationToken);
+
             var fileMetadata = new FileMetadata
             {
                 Id = Guid.NewGuid(),
@@ -88,7 +91,7 @@ public class FileService : IFileService
                 FileSize = dto.FileSize,
                 StorageKey = storageKey,
                 OwnerId = ownerId,
-                FolderId = dto.FolderId
+                FolderId = targetFolderId
             };
 
             await _dbContext.FileMetadatas.AddAsync(fileMetadata, cancellationToken);
@@ -422,6 +425,8 @@ public class FileService : IFileService
                 storageKey = await _storageService.UploadAsync(content, source.FileName, source.ContentType, cancellationToken);
             }
 
+            var targetFolderId = await ActiveFolderIdOrNullAsync(folderId, ownerId, cancellationToken);
+
             var copy = new FileMetadata
             {
                 Id = Guid.NewGuid(),
@@ -430,7 +435,7 @@ public class FileService : IFileService
                 FileSize = source.FileSize,
                 StorageKey = storageKey,
                 OwnerId = ownerId,
-                FolderId = folderId
+                FolderId = targetFolderId
             };
 
             await _dbContext.FileMetadatas.AddAsync(copy, cancellationToken);
@@ -462,6 +467,9 @@ public class FileService : IFileService
 
     private Task<bool> IsOwnedActiveFolderAsync(Guid folderId, Guid ownerId, CancellationToken cancellationToken) =>
         _dbContext.Folders.AnyAsync(f => f.Id == folderId && f.OwnerId == ownerId && !f.IsDeleted, cancellationToken);
+
+    private async Task<Guid?> ActiveFolderIdOrNullAsync(Guid? folderId, Guid ownerId, CancellationToken cancellationToken) =>
+        folderId != null && await IsOwnedActiveFolderAsync(folderId.Value, ownerId, cancellationToken) ? folderId : null;
 
     private async Task<FileMetadata?> FindOwnedFileAsync(Guid id, CancellationToken cancellationToken)
     {

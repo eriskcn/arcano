@@ -73,7 +73,7 @@ public class UploadService : IUploadService
         }
 
         if (dto.FolderId != null &&
-            !await _dbContext.Folders.AnyAsync(f => f.Id == dto.FolderId && f.OwnerId == ownerId, cancellationToken))
+            !await _dbContext.Folders.AnyAsync(f => f.Id == dto.FolderId && f.OwnerId == ownerId && !f.IsDeleted, cancellationToken))
         {
             return Fail<UploadStartedDto>("Folder.NotFound", "Folder not found.");
         }
@@ -205,6 +205,11 @@ public class UploadService : IUploadService
             await _multipart.CompleteAsync(session.StorageKey, session.StorageUploadId, cancellationToken);
             try
             {
+                // The folder may have been deleted during the upload; keep the bytes and fall back to the root.
+                var folderId = session.FolderId != null &&
+                    await _dbContext.Folders.AnyAsync(f => f.Id == session.FolderId && f.OwnerId == session.OwnerId && !f.IsDeleted, cancellationToken)
+                        ? session.FolderId
+                        : null;
                 var file = new FileMetadata
                 {
                     Id = Guid.NewGuid(),
@@ -213,7 +218,7 @@ public class UploadService : IUploadService
                     FileSize = session.FileSize,
                     StorageKey = session.StorageKey,
                     OwnerId = session.OwnerId,
-                    FolderId = session.FolderId
+                    FolderId = folderId
                 };
                 await _dbContext.FileMetadatas.AddAsync(file, cancellationToken);
                 _dbContext.UploadSessions.Remove(session);

@@ -19,6 +19,10 @@ public class AuthController : ApiControllerBase
     // Hash of a random string; verified against when the email is unknown so login timing does not reveal existing accounts.
     private static readonly string DummyPasswordHash = new PasswordHasher<IdentityUser<Guid>>().HashPassword(new IdentityUser<Guid>(), Guid.NewGuid().ToString());
 
+    private const string SessionStartClaim = "session_start";
+    // Longest a login may keep renewing its token, so a stolen token cannot live forever.
+    private static readonly TimeSpan MaxSessionAge = TimeSpan.FromHours(24);
+
     private readonly UserManager<IdentityUser<Guid>> _userManager;
     private readonly IConfiguration _configuration;
 
@@ -115,7 +119,7 @@ public class AuthController : ApiControllerBase
         await _userManager.ResetAccessFailedCountAsync(user);
 
         // 4. Generate JWT Token
-        var token = GenerateJwtToken(user);
+        var token = GenerateJwtToken(user, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
         return Ok(new { Token = token });
     }
@@ -127,13 +131,34 @@ public class AuthController : ApiControllerBase
         return Ok(new { Email = User.FindFirstValue(ClaimTypes.Email) });
     }
 
-    private string GenerateJwtToken(IdentityUser<Guid> user)
+    [Authorize]
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh()
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (!long.TryParse(User.FindFirstValue(SessionStartClaim), out var sessionStart) ||
+            now - sessionStart > MaxSessionAge.TotalSeconds)
+        {
+            return Unauthorized(new Error("Auth.SessionExpired", "Session expired."));
+        }
+
+        var user = await _userManager.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+        if (user == null || await _userManager.IsLockedOutAsync(user))
+        {
+            return Unauthorized(new Error("Auth.SessionExpired", "Session expired."));
+        }
+
+        return Ok(new { Token = GenerateJwtToken(user, sessionStart) });
+    }
+
+    private string GenerateJwtToken(IdentityUser<Guid> user, long sessionStart)
     {
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email!),
-            new Claim(ClaimTypes.Name, user.UserName!)
+            new Claim(ClaimTypes.Name, user.UserName!),
+            new Claim(SessionStartClaim, sessionStart.ToString(), ClaimValueTypes.Integer64)
         };
 
         var jwtSettings = _configuration.GetSection("Jwt");

@@ -1,7 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, finalize, map, of, share, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 
 interface LoginResponse {
@@ -12,12 +12,16 @@ interface SessionResponse {
   email?: unknown;
 }
 
+// Renew when the token has less than this left.
+const REFRESH_WINDOW_MS = 10 * 60 * 1000;
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly storageKey = 'arcano.auth.token';
   private verifiedToken: string | null = null;
+  private refreshing$: Observable<void> | null = null;
   readonly token = signal<string | null>(this.readStoredToken());
   readonly email = signal<string | null>(null);
 
@@ -34,6 +38,34 @@ export class AuthService {
         tap(token => this.storeToken(token)),
         map(() => undefined),
       );
+  }
+
+  // One in-flight refresh is shared by concurrent callers.
+  refresh(): Observable<void> {
+    return (this.refreshing$ ??= this.http
+      .post<LoginResponse>(`${environment.apiBaseUrl}/Auth/refresh`, null)
+      .pipe(
+        map(response => {
+          if (!response || typeof response.token !== 'string' || !this.hasValidExpiry(response.token)) {
+            throw new Error('The server returned an invalid refresh response.');
+          }
+          return response.token;
+        }),
+        tap(token => {
+          const email = this.email();
+          this.storeToken(token);
+          this.email.set(email);
+        }),
+        map(() => undefined),
+        finalize(() => (this.refreshing$ = null)),
+        share(),
+      ));
+  }
+
+  needsRefresh(): boolean {
+    const token = this.token();
+    const expiry = token ? this.expiryMs(token) : null;
+    return expiry !== null && expiry > Date.now() && expiry - Date.now() < REFRESH_WINDOW_MS;
   }
 
   register(email: string, password: string): Observable<void> {
@@ -110,27 +142,27 @@ export class AuthService {
   }
 
   private hasValidExpiry(token: string): boolean {
+    const expiry = this.expiryMs(token);
+    return expiry !== null && expiry > Date.now();
+  }
+
+  // Decodes the JWT payload and returns `exp` in milliseconds, or null if unreadable.
+  private expiryMs(token: string): number | null {
     const payload = token.split('.')[1];
     if (!payload) {
-      return false;
+      return null;
     }
     try {
       const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
       const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
       const bytes = Uint8Array.from(decoded, character => character.charCodeAt(0));
       const claims: unknown = JSON.parse(new TextDecoder().decode(bytes));
-      if (
-        typeof claims !== 'object' ||
-        claims === null ||
-        !('exp' in claims) ||
-        typeof claims.exp !== 'number' ||
-        claims.exp * 1000 <= Date.now()
-      ) {
-        return false;
+      if (typeof claims !== 'object' || claims === null || !('exp' in claims) || typeof claims.exp !== 'number') {
+        return null;
       }
-      return true;
+      return claims.exp * 1000;
     } catch {
-      return false;
+      return null;
     }
   }
 }

@@ -25,8 +25,8 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 
 ## What is verified
 
-- **Backend:** builds with no errors; 102 domain tests and 3 auth tests pass.
-- **Frontend:** 112 unit tests pass; the production build succeeds.
+- **Backend:** builds with no errors; 105 domain tests and 6 auth tests pass.
+- **Frontend:** 116 unit tests pass; the production build succeeds.
 - **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified
@@ -43,9 +43,10 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 3. **The upload lock and quota race fix work on a single API instance only.** The lock is in process.
 4. **Chunked upload limits:** no resume after a page reload; abandoned uploads of owners who never return are not swept; `MaxUploadBytes` does not cap chunked files (bounded by quota and about 80 GB).
 5. **Review item 1 is partly fixed:** a failed save in trash purge can leave an entity tracked. Item 10 (`CurrentOwnerId` copies) remains.
-6. **Public share endpoint has no rate limit.** The token is 32 random bytes, so guessing is impractical, but abuse is not throttled.
-7. **413 message** also shows for 413s from a proxy.
-8. **No ADRs** exist for the anonymous sharing model, the resumable upload design, or trash retention.
+6. **Public share endpoints are rate limited** (60/min info, 20/min download per IP). Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0`, otherwise all users share the proxy's IP.
+7. **Sessions renew themselves for up to 24 hours** (`POST api/Auth/refresh`), so a stolen token stays usable that long; there is no revocation.
+8. **413 message** also shows for 413s from a proxy.
+9. **No ADRs** exist for the anonymous sharing model, the resumable upload design, or trash retention.
 
 ## Recommended next steps
 

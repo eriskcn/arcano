@@ -113,4 +113,72 @@ describe('AuthService', () => {
     expect(externalRequest.request.headers.has('Authorization')).toBe(false);
     externalRequest.flush({});
   });
+
+  describe('proactive refresh', () => {
+    const soon = () => createToken({ exp: Math.floor(Date.now() / 1000) + 300 });
+
+    it('should wait for a refresh when the token expires within 10 minutes', () => {
+      const oldToken = soon();
+      const newToken = createToken({ sig: 'new' });
+      sessionStorage.setItem('arcano.auth.token', oldToken);
+      const http = TestBed.inject(HttpTestingController);
+      const client = TestBed.inject(HttpClient);
+      const apiUrl = `${environment.apiBaseUrl}/files`;
+
+      client.get(apiUrl).subscribe();
+      http.expectNone(apiUrl);
+      const refresh = http.expectOne(`${environment.apiBaseUrl}/Auth/refresh`);
+      expect(refresh.request.method).toBe('POST');
+      expect(refresh.request.headers.get('Authorization')).toBe(`Bearer ${oldToken}`);
+      refresh.flush({ token: newToken });
+
+      const request = http.expectOne(apiUrl);
+      expect(request.request.headers.get('Authorization')).toBe(`Bearer ${newToken}`);
+      expect(sessionStorage.getItem('arcano.auth.token')).toBe(newToken);
+      request.flush({});
+    });
+
+    it('should not refresh when the token is far from expiry', () => {
+      const token = createToken();
+      sessionStorage.setItem('arcano.auth.token', token);
+      const http = TestBed.inject(HttpTestingController);
+
+      TestBed.inject(HttpClient).get(`${environment.apiBaseUrl}/files`).subscribe();
+
+      http.expectNone(`${environment.apiBaseUrl}/Auth/refresh`);
+      const request = http.expectOne(`${environment.apiBaseUrl}/files`);
+      expect(request.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
+      request.flush({});
+    });
+
+    it('should share one refresh between concurrent requests', () => {
+      const newToken = createToken({ sig: 'new' });
+      sessionStorage.setItem('arcano.auth.token', soon());
+      const http = TestBed.inject(HttpTestingController);
+      const client = TestBed.inject(HttpClient);
+
+      client.get(`${environment.apiBaseUrl}/a`).subscribe();
+      client.get(`${environment.apiBaseUrl}/b`).subscribe();
+      http.expectOne(`${environment.apiBaseUrl}/Auth/refresh`).flush({ token: newToken });
+
+      for (const path of ['a', 'b']) {
+        const request = http.expectOne(`${environment.apiBaseUrl}/${path}`);
+        expect(request.request.headers.get('Authorization')).toBe(`Bearer ${newToken}`);
+        request.flush({});
+      }
+    });
+
+    it('should send the request with the old token when refresh fails', () => {
+      const oldToken = soon();
+      sessionStorage.setItem('arcano.auth.token', oldToken);
+      const http = TestBed.inject(HttpTestingController);
+
+      TestBed.inject(HttpClient).get(`${environment.apiBaseUrl}/files`).subscribe();
+      http.expectOne(`${environment.apiBaseUrl}/Auth/refresh`).flush({}, { status: 401, statusText: 'Unauthorized' });
+
+      const request = http.expectOne(`${environment.apiBaseUrl}/files`);
+      expect(request.request.headers.get('Authorization')).toBe(`Bearer ${oldToken}`);
+      request.flush({});
+    });
+  });
 });

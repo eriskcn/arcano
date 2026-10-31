@@ -128,6 +128,24 @@ public class UploadServiceTests
         Assert.Equal(35, quota.LastAdditionalBytes);
     }
 
+    [Fact]
+    public async Task CompleteAsync_SavesAtRoot_WhenFolderIsDeletedAfterStart()
+    {
+        var folder = new Folder { Id = Guid.NewGuid(), Name = "folder", OwnerId = _ownerId };
+        _context.Folders.Add(folder);
+        await _context.SaveChangesAsync(CancellationToken.None);
+        var service = CreateService(_ownerId);
+        var id = (await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, folder.Id))).Value.Id;
+        folder.IsDeleted = true;
+        await _context.SaveChangesAsync(CancellationToken.None);
+        await service.UploadPartAsync(id, 1, new MemoryStream(new byte[10]), 10);
+
+        var done = await service.CompleteAsync(id);
+
+        Assert.True(done.IsSuccess);
+        Assert.Null(_context.Files.Single().FolderId);
+    }
+
     private UploadService CreateService(Guid userId, Error? quotaError = null, FakeQuota? quota = null) =>
         new(_context, _multipart, new FakeStorage(), new FakeUser(userId.ToString()), quota ?? new FakeQuota(quotaError));
 
@@ -194,7 +212,7 @@ public class UploadServiceTests
         public DbSet<FileMetadata> Files => Set<FileMetadata>();
         public DbSet<UploadSession> Sessions => Set<UploadSession>();
         public DbSet<FileMetadata> FileMetadatas => Files;
-        public DbSet<Folder> Folders => throw new NotSupportedException();
+        public DbSet<Folder> Folders => Set<Folder>();
         public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => Sessions;

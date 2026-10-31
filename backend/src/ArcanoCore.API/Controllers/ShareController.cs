@@ -5,6 +5,7 @@ using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -58,6 +59,7 @@ public class PublicController : ApiControllerBase
         _shareService = shareService;
     }
 
+    [EnableRateLimiting("public-info")]
     [HttpGet("{token}/info")]
     public async Task<IActionResult> Info(string token, CancellationToken cancellationToken)
     {
@@ -65,6 +67,7 @@ public class PublicController : ApiControllerBase
         return result.IsFailure ? NotFound(result.Error) : Ok(result.Value);
     }
 
+    [EnableRateLimiting("public-download")]
     [HttpGet("{token}")]
     public async Task<IActionResult> Download(string token, CancellationToken cancellationToken)
     {

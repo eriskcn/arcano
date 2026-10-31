@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.API.Controllers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -57,7 +60,60 @@ public class AuthControllerTests
         Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
     }
 
-    private static AuthController CreateController()
+    [Fact]
+    public async Task Refresh_WithValidSession_ReturnsNewTokenWithSameSessionStart()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager();
+        await controller.Register(new RegisterRequest(Email, Password));
+        var sessionStart = DateTimeOffset.UtcNow.AddHours(-23).ToUnixTimeSeconds();
+        await SignInAs(controller, userManager, sessionStart.ToString());
+
+        var result = await controller.Refresh();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var token = (string)ok.Value!.GetType().GetProperty("Token")!.GetValue(ok.Value)!;
+        var claim = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.Single(c => c.Type == "session_start");
+        Assert.Equal(sessionStart.ToString(), claim.Value);
+    }
+
+    [Fact]
+    public async Task Refresh_WithSessionOlderThan24Hours_ReturnsUnauthorized()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager();
+        await controller.Register(new RegisterRequest(Email, Password));
+        await SignInAs(controller, userManager, DateTimeOffset.UtcNow.AddHours(-25).ToUnixTimeSeconds().ToString());
+
+        Assert.IsType<UnauthorizedObjectResult>(await controller.Refresh());
+    }
+
+    [Fact]
+    public async Task Refresh_WithoutSessionStartClaim_ReturnsUnauthorized()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager();
+        await controller.Register(new RegisterRequest(Email, Password));
+        await SignInAs(controller, userManager, null);
+
+        Assert.IsType<UnauthorizedObjectResult>(await controller.Refresh());
+    }
+
+    // Gives the controller a principal for the registered user, with the given session_start claim (omitted when null).
+    private static async Task SignInAs(AuthController controller, UserManager<IdentityUser<Guid>> userManager, string? sessionStart)
+    {
+        var user = (await userManager.FindByEmailAsync(Email))!;
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, user.Id.ToString()) };
+        if (sessionStart != null)
+        {
+            claims.Add(new Claim("session_start", sessionStart));
+        }
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test")) }
+        };
+    }
+
+    private static AuthController CreateController() => CreateControllerWithUserManager().Controller;
+
+    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -73,7 +129,7 @@ public class AuthControllerTests
             })
             .Build();
 
-        return new AuthController(userManager, configuration);
+        return (new AuthController(userManager, configuration), userManager);
     }
 
     private sealed class InMemoryUserStore :
