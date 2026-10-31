@@ -7,10 +7,11 @@ namespace ArcanoCore.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplication(this IServiceCollection services, long storageQuotaBytes = StorageQuotaService.DefaultLimitBytes)
     {
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IFolderService, FolderService>();
+        services.AddScoped<IStorageQuotaService>(sp => new StorageQuotaService(sp.GetRequiredService<IApplicationDbContext>(), storageQuotaBytes));
         return services;
     }
 }

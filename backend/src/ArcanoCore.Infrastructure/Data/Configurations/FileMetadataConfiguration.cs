@@ -31,6 +31,9 @@ public class FileMetadataConfiguration : IEntityTypeConfiguration<FileMetadata>
         builder.Property(x => x.IsDeleted)
             .HasDefaultValue(false);
 
+        builder.Property(x => x.IsStarred)
+            .HasDefaultValue(false);
+
         builder.HasQueryFilter(x => !x.IsDeleted);
 
         // Owner: restrict delete (don't cascade-delete files when user deleted)

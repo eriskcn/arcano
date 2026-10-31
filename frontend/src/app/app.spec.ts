@@ -89,16 +89,124 @@ describe('App', () => {
     expect(menu?.style.top).toBe(`${Math.max(8, window.innerHeight - 88)}px`);
   });
 
-  it('should toggle a file favorite', () => {
+  it('should star a file through the API and revert when it fails', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+
+    app.toggleFileStar('1');
+    expect(app.files()[0].starred).toBe(true);
+    const star = http.expectOne(`${environment.apiBaseUrl}/Files/1/star`);
+    expect([star.request.method, star.request.body]).toEqual(['PUT', { isStarred: true }]);
+    star.flush(null, { status: 204, statusText: 'No Content' });
+    expect(app.files()[0].starred).toBe(true);
+
+    app.toggleFileStar('1');
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/star`).flush(null, { status: 500, statusText: 'Server Error' });
+    expect(app.files()[0].starred).toBe(true);
+    expect(app.actionError()).toContain('Unable to update favorites');
+    http.verify();
+  });
+
+  it('should load the starred view for Favorites and the recent view for Recent', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+
+    app.selectNav('favorites');
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&view=starred`).flush([
+      { id: 's', fileName: 's.txt', contentType: 'text/plain', fileSize: 1, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: true, lastModifiedAtUtc: null },
+    ]);
+    expect(app.filteredFiles().map(file => [file.id, file.starred])).toEqual([['s', true]]);
+
+    app.selectNav('recent');
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&view=recent`).flush([]);
+    http.verify();
+  });
+
+  it('should search with q after a debounce and return to the folder view when cleared', () => {
+    vi.useFakeTimers();
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+
+    app.onSearchChange('rep');
+    app.onSearchChange('report');
+    vi.advanceTimersByTime(299);
+    http.expectNone(r => r.url.endsWith('/Files'));
+    vi.advanceTimersByTime(1);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&q=report`).flush([
+      { id: 'r', fileName: 'quarterly.pdf', contentType: 'application/pdf', fileSize: 1, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false, lastModifiedAtUtc: null },
+    ]);
+    expect(app.filteredFiles().map(file => file.id)).toEqual(['r']);
+
+    app.onSearchChange('');
+    vi.advanceTimersByTime(300);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    vi.useRealTimers();
+    http.verify();
+  });
+
+  it('should rename a file and show the invalid-name error', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
     app.files.set(sampleFiles);
-    const file = app.files()[0];
-    const initialStarredState = file.starred;
 
-    app.toggleFileStar(file.id);
+    app.startRenameFolder(sampleFiles[0]);
+    app.folderName.set('bad/name');
+    app.submitFolderEditor();
+    const bad = http.expectOne(`${environment.apiBaseUrl}/Files/1/name`);
+    expect([bad.request.method, bad.request.body]).toEqual(['PUT', { name: 'bad/name' }]);
+    bad.flush({ code: 'File.InvalidName' }, { status: 400, statusText: 'Bad Request' });
+    expect(app.actionError()).toBe('Enter a valid file name.');
 
-    expect(app.files()[0].starred).toBe(!initialStarredState);
+    app.folderName.set('good.txt');
+    app.submitFolderEditor();
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/name`).flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    expect(app.folderEditor()).toBeNull();
+    http.verify();
+  });
+
+  it('should list the trash and restore, delete forever and empty it', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const noContent = { status: 204, statusText: 'No Content' };
+    const reloadTrash = (withStorage = true): void => {
+      http.expectOne(`${environment.apiBaseUrl}/Files/trash?skip=0&take=100`).flush([
+        { id: 't', fileName: 't.txt', contentType: 'text/plain', fileSize: 1, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false, lastModifiedAtUtc: null },
+      ]);
+      if (withStorage) {
+        http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 1, limitBytes: 10 });
+      }
+    };
+
+    app.selectNav('trash');
+    reloadTrash(false);
+    http.verify();
+    expect(app.files().map(file => file.id)).toEqual(['t']);
+
+    app.restoreFile(app.files()[0]);
+    const restore = http.expectOne(`${environment.apiBaseUrl}/Files/t/restore`);
+    expect(restore.request.method).toBe('POST');
+    restore.flush(null, noContent);
+    reloadTrash();
+
+    app.deleteForever(app.files()[0]);
+    const forever = http.expectOne(`${environment.apiBaseUrl}/Files/t/permanent`);
+    expect(forever.request.method).toBe('DELETE');
+    forever.flush(null, noContent);
+    reloadTrash();
+
+    app.emptyTrash();
+    const empty = http.expectOne(`${environment.apiBaseUrl}/Files/trash`);
+    expect(empty.request.method).toBe('DELETE');
+    empty.flush(null, noContent);
+    reloadTrash();
+    expect(app.storage()).toEqual({ usedBytes: 1, limitBytes: 10 });
+    http.verify();
   });
 
   it('should support single, toggle, and range selection', () => {
@@ -218,6 +326,7 @@ describe('App', () => {
 
     app.deleteFile(sampleFiles[1]);
     http.expectOne(`${environment.apiBaseUrl}/Files/2`).flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
 
     expect(app.files().some(file => file.id === '2')).toBe(false);
     expect(app.selectedIds().size).toBe(0);
@@ -291,6 +400,7 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
     http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
 
     expect(app.actionBusy()).toBe(false);
     expect(app.actionError()).toBe('');
@@ -309,8 +419,29 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
 
     http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
 
     expect(app.actionError()).toContain('Unable to upload a.txt');
+    http.verify();
+  });
+
+  it('should show the quota message when an upload exceeds the storage limit', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
+
+    app.onUploadSelected({ target: input } as unknown as Event);
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush(
+      { code: 'Storage.QuotaExceeded', message: 'Not enough storage space.' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
+
+    expect(app.actionError()).toBe('Not enough storage space.');
     http.verify();
   });
 
@@ -389,6 +520,7 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=f1`).flush([]);
     http.expectOne(`${environment.apiBaseUrl}/Folders?parentId=f1`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
 
     expect(app.actionBusy()).toBe(false);
     http.verify();
@@ -514,6 +646,7 @@ describe('App', () => {
     const reload = (query = '', parent = '') => {
       http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100${query}`).flush([]);
       http.expectOne(`${environment.apiBaseUrl}/Folders${parent}`).flush([]);
+      http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
     };
 
     app.dropOnFolder(dragEvent([new File(['a'], 'a.txt')]), folderItem('f9', 'Target'));

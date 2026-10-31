@@ -67,6 +67,13 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
     - [x] **1.7.5 Folder delete — Completed (decision: reject non-empty).** Deleting a folder that has child folders or files returns `Folder.NotEmpty`. No cascade, so no storage cleanup is needed here. Empty folders are soft-deleted.
     - [x] **1.7.6 Folder tests — Completed.** Unit tests cover duplicate names, cross-owner access, cycle rejection, delete rules, and folder-scoped listing and move.
     - [x] **1.7.7 Folder name index — Completed.** The unique `(OwnerId, ParentId, Name)` index is filtered to live rows (`IsDeleted = false`) by migration `FolderUniqueLiveName`, so a deleted name can be reused under the same parent.
+  - **1.8 File management and account basics — In Progress** (from the Google Drive / OneDrive comparison, sections 1–4; verified with 83 backend tests and a live smoke test against Postgres and SeaweedFS)
+    - [x] **1.8.1 File basics — Completed.** Rename a file (`PUT /api/Files/{id}/name`), favorites (`PUT /api/Files/{id}/star`, `isStarred` in the list), list views `view=starred|recent`, and server-side name search `q`. No bulk endpoints: the client loops over single calls.
+    - [x] **1.8.2 Storage quota — Completed.** `GET /api/Account/storage` returns used and limit bytes. The limit is `Storage:QuotaBytes` (default 5 GiB). Upload is rejected with `Storage.QuotaExceeded` over the limit. Trashed files still count.
+    - [x] **1.8.3 Trash — Completed.** Delete moves a file to the trash and keeps the stored object. Endpoints to list, restore, delete permanently, and empty the trash. A restored file goes to the root if its folder was deleted. Trash older than 30 days is purged when the trash is listed (a shortcut; move it to a background job if needed). No ADR was written for the retention decision.
+    - [ ] **1.8.4 Account safety — Partly done.** Done: sign-in and sign-up are rate limited (10 per minute per IP, then 429), and an account locks after 5 wrong passwords. Blocked: password reset and email verification need an email sender, and refresh tokens need a token table and a design decision. None of these are built.
+    - Migration `FileStarAndTrash` adds `IsStarred` and `DeletedAtUtc` to `FileMetadata`.
+    - Known limits: the rate limit keys on the remote IP, so behind a reverse proxy without forwarded headers all clients share one bucket. The trash restore and permanent-delete lookups use an explicit query, because `FindAsync` still applies the "not deleted" filter on the real database; the in-memory test provider does not, so tests alone did not catch it.
 
 ## Dependencies
 - 1.2 depends on 1.1.

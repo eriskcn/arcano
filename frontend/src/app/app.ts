@@ -4,13 +4,15 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router } from '@angular/router';
-import { EMPTY, Observable, Subscription, catchError, concatMap, filter, forkJoin, from } from 'rxjs';
+import { EMPTY, Observable, Subject, Subscription, catchError, concatMap, debounceTime, distinctUntilChanged, filter, forkJoin, from, of } from 'rxjs';
 import { environment } from '../environments/environment';
+import { AccountService } from './account.service';
 import { AuthService } from './auth.service';
-import { FileDto, FilesService } from './files.service';
+import { FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
+import { QuotaMeterComponent } from './shared/components/quota-meter.component';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -61,8 +63,8 @@ const toFileItem = (file: FileDto): FileItem => ({
   name: file.fileName,
   type: fileTypeFromContentType(file.contentType),
   size: formatFileSize(file.fileSize),
-  modified: formatDate(file.createdAtUtc),
-  starred: false,
+  modified: formatDate(file.lastModifiedAtUtc ?? file.createdAtUtc),
+  starred: file.isStarred,
   shared: false,
   contentType: file.contentType,
   fileSize: file.fileSize,
@@ -81,7 +83,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, FilePreviewComponent, ModalComponent],
+  imports: [CommonModule, FormsModule, FilePreviewComponent, ModalComponent, QuotaMeterComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -90,6 +92,7 @@ export class App implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly filesApi = inject(FilesService);
   private readonly foldersApi = inject(FoldersService);
+  private readonly accountApi = inject(AccountService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly userEmail = this.auth.email;
@@ -145,6 +148,15 @@ export class App implements OnInit {
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncPageWithRoute());
+    // loadFiles cancels the previous request, so a stale search never overwrites a newer one.
+    this.searchInput
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.loadFiles());
+  }
+
+  onSearchChange(value: string): void {
+    this.searchQuery.set(value);
+    this.searchInput.next(value.trim());
   }
 
   // Static options
@@ -199,6 +211,8 @@ export class App implements OnInit {
   readonly dropKey = signal<string | null>(null);
   private draggedItems: FileItem[] = [];
   private loadSubscription: Subscription | null = null;
+  private readonly searchInput = new Subject<string>();
+  readonly storage = signal<{ usedBytes: number; limitBytes: number } | null>(null);
 
   readonly currentFolderId = computed(() => this.folderPath().at(-1)?.id ?? null);
   readonly items = computed<FileItem[]>(() => [...this.folders(), ...this.files()]);
@@ -209,17 +223,14 @@ export class App implements OnInit {
 
   readonly showFiles = computed(() => {
     const nav = this.activeNav();
-    return nav === 'my-files' || nav === 'home' || nav === 'recent' || nav === 'favorites' || nav === 'shared';
+    return nav === 'my-files' || nav === 'home' || nav === 'recent' || nav === 'favorites' || nav === 'shared' || nav === 'trash';
   });
 
   readonly filteredFiles = computed(() => {
-    const q = this.searchQuery().toLowerCase();
     const nav = this.activeNav();
     const filter = this.activeFilter();
 
     return this.items().filter(f => {
-      const matchSearch = f.name.toLowerCase().includes(q);
-      if (!matchSearch) return false;
       if (nav === 'favorites') return f.starred;
       if (nav === 'shared') return f.shared;
       if (filter === 'Folders') return f.type === 'folder';
@@ -302,8 +313,9 @@ export class App implements OnInit {
   selectNav(key: NavItem): void {
     const changed = key !== this.activeNav();
     this.activeNav.set(key);
-    if (changed && this.folderPath().length > 0) {
-      this.goToFolder(0);
+    if (changed) {
+      this.folderPath.set([]);
+      this.loadFiles();
     }
   }
 
@@ -351,7 +363,9 @@ export class App implements OnInit {
     this.actionError.set('');
 
     const request: Observable<unknown> = editor.mode === 'rename'
-      ? this.foldersApi.update(editor.folder.id, name, this.currentFolderId())
+      ? (editor.folder.type === 'folder'
+        ? this.foldersApi.update(editor.folder.id, name, this.currentFolderId())
+        : this.filesApi.rename(editor.folder.id, name))
       : this.foldersApi.create(name, this.currentFolderId());
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
@@ -361,9 +375,9 @@ export class App implements OnInit {
       },
       error: error => {
         this.actionBusy.set(false);
-        this.actionError.set(this.folderErrorMessage(error, editor.mode === 'rename'
+        this.actionError.set(this.fileErrorMessage(error, this.folderErrorMessage(error, editor.mode === 'rename'
           ? `Unable to rename ${editor.folder.name}. Please try again.`
-          : 'Unable to create the folder. Please try again.'));
+          : 'Unable to create the folder. Please try again.')));
       },
     });
   }
@@ -583,10 +597,22 @@ export class App implements OnInit {
   }
 
   toggleFileStar(id: string): void {
-    const star = (items: FileItem[]): FileItem[] =>
-      items.map(file => file.id === id ? { ...file, starred: !file.starred } : file);
-    this.files.update(star);
-    this.folders.update(star);
+    const setStar = (starred: boolean) => (items: FileItem[]): FileItem[] =>
+      items.map(file => file.id === id ? { ...file, starred } : file);
+    const file = this.files().find(item => item.id === id);
+    if (!file) {
+      // Folders have no backend star yet, so this stays local.
+      this.folders.update(items => items.map(item => item.id === id ? { ...item, starred: !item.starred } : item));
+      return;
+    }
+    this.actionError.set('');
+    this.files.update(setStar(!file.starred));
+    this.filesApi.star(id, !file.starred).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      error: () => {
+        this.files.update(setStar(file.starred));
+        this.actionError.set(`Unable to update favorites for ${file.name}. Please try again.`);
+      },
+    });
   }
 
   onUploadSelected(event: Event): void {
@@ -733,8 +759,8 @@ export class App implements OnInit {
     from(selected)
       .pipe(
         concatMap(file => this.filesApi.upload(file, folderId).pipe(
-          catchError(() => {
-            this.actionError.set(`Unable to upload ${file.name}. Please try again.`);
+          catchError(error => {
+            this.actionError.set(this.fileErrorMessage(error, `Unable to upload ${file.name}. Please try again.`));
             return EMPTY;
           }),
         )),
@@ -746,6 +772,7 @@ export class App implements OnInit {
           const error = this.actionError();
           this.loadFiles();
           this.actionError.set(error);
+          this.refreshStorage();
         },
       });
   }
@@ -759,10 +786,15 @@ export class App implements OnInit {
     this.actionError.set('');
 
     const parentId = this.currentFolderId();
+    const nav = this.activeNav();
+    const q = this.searchQuery().trim();
+    const view: FilesView = nav === 'favorites' ? 'starred' : nav === 'recent' || nav === 'home' ? 'recent' : 'all';
+    // Folders are listed only in the plain folder view; search, trash, starred and recent show files only.
+    const withFolders = !q && view === 'all' && nav !== 'trash';
     this.loadSubscription?.unsubscribe();
     this.loadSubscription = forkJoin({
-      files: this.filesApi.list(parentId),
-      folders: this.foldersApi.list(parentId),
+      files: nav === 'trash' ? this.filesApi.trash() : this.filesApi.list(parentId, view, q),
+      folders: withFolders ? this.foldersApi.list(parentId) : of([]),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ files, folders }) => {
         this.folders.set(folders.map(toFolderItem));
@@ -832,11 +864,52 @@ export class App implements OnInit {
           this.contextMenu.set(null);
         }
         this.actionBusy.set(false);
+        this.refreshStorage();
       },
       error: () => {
         this.actionBusy.set(false);
         this.actionError.set(`Unable to delete ${file.name}. Please try again.`);
       },
+    });
+  }
+
+  restoreFile(file: FileItem): void {
+    this.trashAction(this.filesApi.restore(file.id), `Unable to restore ${file.name}. Please try again.`);
+  }
+
+  deleteForever(file: FileItem): void {
+    this.trashAction(this.filesApi.deletePermanent(file.id), `Unable to delete ${file.name}. Please try again.`);
+  }
+
+  emptyTrash(): void {
+    this.trashAction(this.filesApi.emptyTrash(), 'Unable to empty the trash. Please try again.');
+  }
+
+  private trashAction(request: Observable<void>, failure: string): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+    this.contextMenu.set(null);
+
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.actionBusy.set(false);
+        this.loadFiles();
+        this.refreshStorage();
+      },
+      error: () => {
+        this.actionBusy.set(false);
+        this.actionError.set(failure);
+      },
+    });
+  }
+
+  private refreshStorage(): void {
+    this.accountApi.storage().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: storage => this.storage.set(storage),
+      error: () => {},
     });
   }
 
@@ -852,6 +925,20 @@ export class App implements OnInit {
     this.page.set(next);
     if (next === 'app' && previous !== 'app') {
       this.loadFiles();
+      this.refreshStorage();
+    }
+  }
+
+  private fileErrorMessage(error: unknown, fallback: string): string {
+    const body: unknown = error instanceof HttpErrorResponse ? error.error : null;
+    const code = typeof body === 'object' && body !== null && 'code' in body ? body.code : null;
+    switch (code) {
+      case 'Storage.QuotaExceeded':
+        return 'Not enough storage space.';
+      case 'File.InvalidName':
+        return 'Enter a valid file name.';
+      default:
+        return fallback;
     }
   }
 

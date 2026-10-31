@@ -23,8 +23,8 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Login/register UI, token/session handling, and protected routes.
   - Login and registration use the verified backend contracts; protected and anonymous routes are guarded.
   - No role-specific UI is exposed because the current token has no role claims; API authorization remains authoritative.
-- [ ] **2.2 User profile and quota — Blocked on backend quota contract**
-  - The signed-in email is displayed from the authenticated token. Usage display and upload quota enforcement require a backend endpoint and defined quota contract, which are not currently available.
+- [x] **2.2 User profile and quota — Completed (unit-tested, not verified in a browser)**
+  - The signed-in email is displayed from the authenticated token. The sidebar storage box shows used and limit from `GET /api/Account/storage` and refreshes after upload, delete, restore, permanent delete, and empty trash. A quota error on upload shows "Not enough storage space."
 
 ### 3. Admin Storage and User Management (Planned)
 - [ ] **3.1 System storage overview — Not Started**
@@ -32,9 +32,11 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [ ] **3.3 User lifecycle and role controls — Not Started**
 
 ### 4. File Explorer Workflows
-- [ ] **4.1 Core file listing and actions — Not Started**
-  - List the current user's files; support download and delete using secured backend APIs.
-  - Add folder navigation, create/rename/move, and trash only when matching backend contracts exist.
+- [x] **4.1 Core file listing and actions — Completed (unit-tested, not verified in a browser)**
+  - Lists the current user's files; download, rename, favorite, and delete (to the trash) use the secured backend APIs.
+  - Favorites, Recent, and Home load the matching server views. The search box searches by name on the server across all folders.
+  - The Trash view lists trashed files with Restore and Delete forever, plus Empty trash. Folders are still starred locally only, because the backend has no folder favorite.
+  - Folder navigation, create, rename, and move are tracked in 4.4.
 - [ ] **4.2 Keyboard actions — Not Started**
   - Shortcuts for selection, rename, copy/move, undo, and delete, limited to supported operations.
 - [x] **4.3 Drag and drop — Completed (unit-tested, not verified in a browser)**
@@ -84,7 +86,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 
 ## Status
 - Angular scaffold and desktop UI shell are present; backend-connected workflows have not been verified as complete.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota work (2.2) is blocked on a backend contract; remaining workflows are not started.
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; none are verified in a browser. Admin, keyboard actions, and sharing are not started.
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization

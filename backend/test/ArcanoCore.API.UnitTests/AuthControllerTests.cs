@@ -43,6 +43,20 @@ public class AuthControllerTests
         Assert.Equal(401, unauthorized.StatusCode);
     }
 
+    [Fact]
+    public async Task Login_AfterFiveWrongPasswords_RejectsCorrectPassword()
+    {
+        var controller = CreateController();
+        await controller.Register(new RegisterRequest(Email, Password));
+
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new LoginRequest(Email, "Wrong-Passw0rd")));
+        }
+
+        Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
+    }
+
     private static AuthController CreateController()
     {
         var services = new ServiceCollection();
@@ -65,7 +79,8 @@ public class AuthControllerTests
     private sealed class InMemoryUserStore :
         IUserStore<IdentityUser<Guid>>,
         IUserPasswordStore<IdentityUser<Guid>>,
-        IUserEmailStore<IdentityUser<Guid>>
+        IUserEmailStore<IdentityUser<Guid>>,
+        IUserLockoutStore<IdentityUser<Guid>>
     {
         private readonly List<IdentityUser<Guid>> _users = new();
 
@@ -150,6 +165,36 @@ public class AuthControllerTests
         public Task SetNormalizedEmailAsync(IdentityUser<Guid> user, string? normalizedEmail, CancellationToken cancellationToken)
         {
             user.NormalizedEmail = normalizedEmail;
+            return Task.CompletedTask;
+        }
+
+        public Task<DateTimeOffset?> GetLockoutEndDateAsync(IdentityUser<Guid> user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.LockoutEnd);
+
+        public Task SetLockoutEndDateAsync(IdentityUser<Guid> user, DateTimeOffset? lockoutEnd, CancellationToken cancellationToken)
+        {
+            user.LockoutEnd = lockoutEnd;
+            return Task.CompletedTask;
+        }
+
+        public Task<int> IncrementAccessFailedCountAsync(IdentityUser<Guid> user, CancellationToken cancellationToken) =>
+            Task.FromResult(++user.AccessFailedCount);
+
+        public Task ResetAccessFailedCountAsync(IdentityUser<Guid> user, CancellationToken cancellationToken)
+        {
+            user.AccessFailedCount = 0;
+            return Task.CompletedTask;
+        }
+
+        public Task<int> GetAccessFailedCountAsync(IdentityUser<Guid> user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.AccessFailedCount);
+
+        public Task<bool> GetLockoutEnabledAsync(IdentityUser<Guid> user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.LockoutEnabled);
+
+        public Task SetLockoutEnabledAsync(IdentityUser<Guid> user, bool enabled, CancellationToken cancellationToken)
+        {
+            user.LockoutEnabled = enabled;
             return Task.CompletedTask;
         }
 

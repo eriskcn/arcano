@@ -1,6 +1,7 @@
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
+using ArcanoCore.Domain.Common;
 using ArcanoCore.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -263,6 +264,284 @@ public class FileServiceTests
         Assert.Null(file.FolderId);
     }
 
+    private static FileMetadata Trashed(Guid ownerId, string name, DateTime deletedAtUtc, Guid? folderId = null)
+    {
+        var file = NewFile(ownerId, name, isDeleted: true, folderId: folderId);
+        file.DeletedAtUtc = deletedAtUtc;
+        return file;
+    }
+
+    [Fact]
+    public async Task RenameFileAsync_TrimsAndRenames()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "old.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).RenameFileAsync(file.Id, "  new.txt ");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("new.txt", file.FileName);
+        Assert.NotNull(file.LastModifiedAtUtc);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("")]
+    public async Task RenameFileAsync_RejectsEmptyName(string name)
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "old.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).RenameFileAsync(file.Id, name);
+
+        Assert.Equal("File.InvalidName", result.Error.Code);
+        Assert.Equal("old.txt", file.FileName);
+    }
+
+    [Fact]
+    public async Task RenameFileAsync_ReturnsNotFound_ForAnotherUsersFile()
+    {
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(Guid.NewGuid(), "old.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString()).RenameFileAsync(file.Id, "new.txt");
+
+        Assert.Equal("File.NotFound", result.Error.Code);
+        Assert.Equal("old.txt", file.FileName);
+    }
+
+    [Fact]
+    public async Task SetStarredAsync_TogglesStar()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "file.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var service = CreateListService(dbContext, userId.ToString());
+
+        Assert.True((await service.SetStarredAsync(file.Id, true)).IsSuccess);
+        Assert.True(file.IsStarred);
+        Assert.True((await service.SetStarredAsync(file.Id, false)).IsSuccess);
+        Assert.False(file.IsStarred);
+        Assert.Equal("File.NotFound", (await service.SetStarredAsync(Guid.NewGuid(), true)).Error.Code);
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_StarredView_ReturnsStarredFilesAcrossFolders()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var rootStar = NewFile(userId, "a.txt");
+        var folderStar = NewFile(userId, "b.txt", folderId: folder.Id);
+        rootStar.IsStarred = true;
+        folderStar.IsStarred = true;
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.AddRange(rootStar, folderStar, NewFile(userId, "plain.txt"));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(0, 50, view: "starred");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(new[] { rootStar.Id, folderStar.Id }.Order(), result.Value.Select(f => f.Id).Order());
+        Assert.All(result.Value, f => Assert.True(f.IsStarred));
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_RecentView_OrdersByLastModifiedThenCreated()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var a = NewFile(userId, "a.txt", folderId: folder.Id);
+        var b = NewFile(userId, "b.txt");
+        var c = NewFile(userId, "c.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.AddRange(a, b, c);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var service = CreateListService(dbContext, userId.ToString());
+
+        // SaveChangesAsync stamps LastModifiedAtUtc on update, so modify in the wanted order.
+        await Task.Delay(20);
+        await service.RenameFileAsync(b.Id, "b2.txt");
+        await Task.Delay(20);
+        await service.RenameFileAsync(a.Id, "a2.txt");
+
+        var result = await service.ListFilesAsync(0, 50, view: "recent");
+
+        Assert.Equal(new[] { a.Id, b.Id, c.Id }, result.Value.Select(f => f.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_Query_SearchesAllFoldersCaseInsensitive()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var inFolder = NewFile(userId, "Report-2024.txt", folderId: folder.Id);
+        var root = NewFile(userId, "my report.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.AddRange(inFolder, root, NewFile(userId, "other.txt"), NewFile(Guid.NewGuid(), "report-foreign.txt"));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListFilesAsync(0, 50, folder.Id, query: "REPORT");
+
+        Assert.Equal(new[] { inFolder.Id, root.Id }.Order(), result.Value.Select(f => f.Id).Order());
+    }
+
+    [Fact]
+    public async Task ListFilesAsync_ReturnsInvalidView_ForUnknownView()
+    {
+        await using var dbContext = CreateListDbContext();
+
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString()).ListFilesAsync(0, 50, view: "bogus");
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("File.InvalidView", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task DeleteFileAsync_MovesFileToTrashWithoutDeletingStorage()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "file.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).DeleteFileAsync(file.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(file.IsDeleted);
+        Assert.NotNull(file.DeletedAtUtc);
+        Assert.Equal(0, storage.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task ListTrashAsync_ReturnsOnlyCallersTrashedFiles()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var mine = Trashed(userId, "mine.txt", DateTime.UtcNow);
+        dbContext.FileMetadatas.AddRange(mine, Trashed(Guid.NewGuid(), "theirs.txt", DateTime.UtcNow), NewFile(userId, "live.txt"));
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).ListTrashAsync(0, 50);
+
+        Assert.Equal(new[] { mine.Id }, result.Value.Select(f => f.Id).ToArray());
+    }
+
+    [Fact]
+    public async Task ListTrashAsync_PurgesItemsOlderThan30Days()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var expired = Trashed(userId, "expired.txt", DateTime.UtcNow.AddDays(-31));
+        var fresh = Trashed(userId, "fresh.txt", DateTime.UtcNow.AddDays(-1));
+        dbContext.FileMetadatas.AddRange(expired, fresh);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).ListTrashAsync(0, 50);
+
+        Assert.Equal(new[] { fresh.Id }, result.Value.Select(f => f.Id).ToArray());
+        Assert.Equal(1, storage.DeleteCalls);
+        Assert.False(await dbContext.FileMetadatas.IgnoreQueryFilters().AnyAsync(f => f.Id == expired.Id));
+    }
+
+    [Fact]
+    public async Task RestoreFileAsync_RestoresFileToItsFolder()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var file = Trashed(userId, "file.txt", DateTime.UtcNow, folder.Id);
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).RestoreFileAsync(file.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(file.IsDeleted);
+        Assert.Null(file.DeletedAtUtc);
+        Assert.Equal(folder.Id, file.FolderId);
+    }
+
+    [Fact]
+    public async Task RestoreFileAsync_MovesFileToRoot_WhenFolderIsDeleted()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        folder.IsDeleted = true;
+        var file = Trashed(userId, "file.txt", DateTime.UtcNow, folder.Id);
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).RestoreFileAsync(file.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(file.FolderId);
+    }
+
+    [Fact]
+    public async Task RestoreFileAsync_ReturnsNotFound_ForLiveFile()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "file.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString()).RestoreFileAsync(file.Id);
+
+        Assert.Equal("File.NotFound", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task PermanentlyDeleteFileAsync_RemovesRowAndDeletesStorageOnce()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = Trashed(userId, "file.txt", DateTime.UtcNow);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).PermanentlyDeleteFileAsync(file.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, storage.DeleteCalls);
+        Assert.False(await dbContext.FileMetadatas.IgnoreQueryFilters().AnyAsync(f => f.Id == file.Id));
+    }
+
+    [Fact]
+    public async Task UploadFileAsync_ReturnsQuotaFailure_WithoutUploading()
+    {
+        await using var dbContext = CreateListDbContext();
+        var storage = new TestStorage();
+        var quota = new TestQuota { Result = Result.Failure(new Error("Storage.QuotaExceeded", "Quota exceeded.")) };
+
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString(), storage, quota)
+            .UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "file.txt", "text/plain", 1));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Storage.QuotaExceeded", result.Error.Code);
+        Assert.Equal(0, storage.UploadCalls);
+    }
+
     private static ApplicationDbContext CreateListDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -271,8 +550,8 @@ public class FileServiceTests
         return new ApplicationDbContext(options);
     }
 
-    private static FileService CreateListService(ApplicationDbContext dbContext, string? userId, IStorageService? storage = null) =>
-        new(dbContext, storage ?? new ListUnusedStorageService(), new ListCurrentUser(userId));
+    private static FileService CreateListService(ApplicationDbContext dbContext, string? userId, IStorageService? storage = null, IStorageQuotaService? quota = null) =>
+        new(dbContext, storage ?? new ListUnusedStorageService(), new ListCurrentUser(userId), quota ?? new TestQuota());
 
     private static FileMetadata NewFile(Guid ownerId, string name, bool isDeleted = false, Guid? folderId = null) => new()
     {
@@ -307,12 +586,23 @@ public class FileServiceTests
     }
 
     private static FileService CreateService(TestDbContext db, TestStorage storage, Guid userId) =>
-        new(db, storage, new TestCurrentUser(userId));
+        new(db, storage, new TestCurrentUser(userId), new TestQuota());
 
     private sealed class TestCurrentUser(Guid userId) : ICurrentUser
     {
         public string UserId { get; } = userId.ToString();
         public bool IsAuthenticated => true;
+    }
+
+    private sealed class TestQuota : IStorageQuotaService
+    {
+        public Result Result { get; set; } = Result.Success();
+
+        public Task<Result> EnsureWithinQuotaAsync(Guid ownerId, long additionalBytes, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result);
+
+        public Task<StorageUsageDto> GetUsageAsync(Guid ownerId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StorageUsageDto(0, long.MaxValue));
     }
 
     private sealed class TestStorage : IStorageService

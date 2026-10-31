@@ -11,6 +11,11 @@ public class FileMetadata : BaseEntity<Guid>, IAuditableEntity
     public long FileSize { get; set; }
     public string StorageKey { get; set; } = string.Empty;
 
+    public bool IsStarred { get; set; }
+
+    // Set when the file moves to the trash; the stored object is kept until it is purged.
+    public DateTime? DeletedAtUtc { get; set; }
+
     // Ownership — FK only; nav-prop to IdentityUser lives in Infrastructure
     public Guid OwnerId { get; set; }
 

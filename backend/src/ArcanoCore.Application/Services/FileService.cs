@@ -17,12 +17,15 @@ public class FileService : IFileService
     private readonly IApplicationDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly ICurrentUser _currentUser;
+    private readonly IStorageQuotaService _quotaService;
 
     public FileService(
         IApplicationDbContext dbContext,
         IStorageService storageService,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        IStorageQuotaService quotaService)
     {
+        _quotaService = quotaService;
         _dbContext = dbContext;
         _storageService = storageService;
         _currentUser = currentUser;
@@ -47,6 +50,12 @@ public class FileService : IFileService
         if (dto.FolderId != null && !await IsOwnedActiveFolderAsync(dto.FolderId.Value, ownerId, cancellationToken))
         {
             return Result<FileResponseDto>.Failure(new Error("Folder.NotFound", "Folder not found."));
+        }
+
+        var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, dto.FileSize, cancellationToken);
+        if (quotaResult.IsFailure)
+        {
+            return Result<FileResponseDto>.Failure(quotaResult.Error);
         }
 
         string? storageKey = null;
@@ -93,7 +102,7 @@ public class FileService : IFileService
         }
     }
 
-    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(int skip, int take, Guid? folderId = null, CancellationToken cancellationToken = default)
+    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListFilesAsync(int skip, int take, Guid? folderId = null, string? view = null, string? query = null, CancellationToken cancellationToken = default)
     {
         var ownerId = CurrentOwnerId;
         if (ownerId == Guid.Empty)
@@ -101,15 +110,41 @@ public class FileService : IFileService
             return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
 
-        // A null folderId lists the root (FolderId is null).
-        var files = await _dbContext.FileMetadatas
+        var normalizedView = string.IsNullOrWhiteSpace(view) ? "all" : view.Trim().ToLowerInvariant();
+        if (normalizedView is not ("all" or "starred" or "recent"))
+        {
+            return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.InvalidView", "Unknown view."));
+        }
+
+        var live = _dbContext.FileMetadatas
             .AsNoTracking()
-            .Where(f => f.OwnerId == ownerId && !f.IsDeleted && f.FolderId == folderId)
-            .OrderByDescending(f => f.CreatedAtUtc)
-            .ThenBy(f => f.Id)
+            .Where(f => f.OwnerId == ownerId && !f.IsDeleted);
+
+        IOrderedQueryable<FileMetadata> ordered;
+        if (!string.IsNullOrEmpty(query))
+        {
+            var q = query.ToLower();
+            ordered = live.Where(f => f.FileName.ToLower().Contains(q))
+                .OrderByDescending(f => f.CreatedAtUtc).ThenBy(f => f.Id);
+        }
+        else if (normalizedView == "recent")
+        {
+            ordered = live.OrderByDescending(f => f.LastModifiedAtUtc ?? f.CreatedAtUtc).ThenBy(f => f.Id);
+        }
+        else if (normalizedView == "starred")
+        {
+            ordered = live.Where(f => f.IsStarred).OrderByDescending(f => f.CreatedAtUtc).ThenBy(f => f.Id);
+        }
+        else
+        {
+            // A null folderId lists the root (FolderId is null).
+            ordered = live.Where(f => f.FolderId == folderId).OrderByDescending(f => f.CreatedAtUtc).ThenBy(f => f.Id);
+        }
+
+        var files = await ordered
             .Skip(skip)
             .Take(take)
-            .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc))
+            .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc, f.IsStarred, f.LastModifiedAtUtc))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<FileListItemDto>>.Success(files);
@@ -144,12 +179,160 @@ public class FileService : IFileService
 
         try
         {
+            var now = DateTime.UtcNow;
             fileMetadata.IsDeleted = true;
-            fileMetadata.LastModifiedAtUtc = DateTime.UtcNow;
+            fileMetadata.DeletedAtUtc = now;
+            fileMetadata.LastModifiedAtUtc = now;
 
             await _dbContext.SaveChangesAsync(cancellationToken);
-            await _storageService.DeleteAsync(fileMetadata.StorageKey, cancellationToken);
 
+            return Result.Success();
+        }
+        catch (Exception)
+        {
+            return Result.Failure(new Error("File.DeleteFailed", "Delete failed. Please try again."));
+        }
+    }
+
+    public async Task<Result> RenameFileAsync(Guid id, string name, CancellationToken cancellationToken = default)
+    {
+        var trimmed = (name ?? string.Empty).Trim();
+        if (trimmed.Length == 0 || trimmed.Length > 255)
+        {
+            return Result.Failure(new Error("File.InvalidName", "Name must be 1 to 255 characters."));
+        }
+
+        var fileMetadata = await FindOwnedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
+        {
+            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        fileMetadata.FileName = trimmed;
+        fileMetadata.LastModifiedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> SetStarredAsync(Guid id, bool isStarred, CancellationToken cancellationToken = default)
+    {
+        var fileMetadata = await FindOwnedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
+        {
+            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        fileMetadata.IsStarred = isStarred;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
+    }
+
+    public async Task<Result<IReadOnlyList<FileListItemDto>>> ListTrashAsync(int skip, int take, CancellationToken cancellationToken = default)
+    {
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
+        {
+            return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
+        }
+
+        // shortcut: expired items are purged when the trash is listed, move to a background job if the trash must be purged without anyone opening it
+        var cutoff = DateTime.UtcNow.AddDays(-30);
+        var expired = await _dbContext.FileMetadatas
+            .IgnoreQueryFilters()
+            .Where(f => f.OwnerId == ownerId && f.IsDeleted && f.DeletedAtUtc != null && f.DeletedAtUtc < cutoff)
+            .ToListAsync(cancellationToken);
+        foreach (var file in expired)
+        {
+            await PurgeAsync(file, cancellationToken);
+        }
+
+        var files = await _dbContext.FileMetadatas
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(f => f.OwnerId == ownerId && f.IsDeleted)
+            .OrderByDescending(f => f.DeletedAtUtc)
+            .ThenBy(f => f.Id)
+            .Skip(skip)
+            .Take(take)
+            .Select(f => new FileListItemDto(f.Id, f.FileName, f.ContentType, f.FileSize, f.CreatedAtUtc, f.IsStarred, f.LastModifiedAtUtc))
+            .ToListAsync(cancellationToken);
+
+        return Result<IReadOnlyList<FileListItemDto>>.Success(files);
+    }
+
+    public async Task<Result> RestoreFileAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var fileMetadata = await FindOwnedTrashedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
+        {
+            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        if (fileMetadata.FolderId != null)
+        {
+            var folderId = fileMetadata.FolderId.Value;
+            var folderIsLive = await _dbContext.Folders
+                .IgnoreQueryFilters()
+                .AnyAsync(f => f.Id == folderId && !f.IsDeleted, cancellationToken);
+            if (!folderIsLive)
+            {
+                fileMetadata.FolderId = null;
+            }
+        }
+
+        fileMetadata.IsDeleted = false;
+        fileMetadata.DeletedAtUtc = null;
+        fileMetadata.LastModifiedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
+    }
+
+    public async Task<Result> PermanentlyDeleteFileAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var fileMetadata = await FindOwnedTrashedFileAsync(id, cancellationToken);
+        if (fileMetadata == null)
+        {
+            return Result.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        return await PurgeAsync(fileMetadata, cancellationToken);
+    }
+
+    public async Task<Result> EmptyTrashAsync(CancellationToken cancellationToken = default)
+    {
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
+        {
+            return Result.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
+        }
+
+        var trashed = await _dbContext.FileMetadatas
+            .IgnoreQueryFilters()
+            .Where(f => f.OwnerId == ownerId && f.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        var failed = false;
+        foreach (var file in trashed)
+        {
+            failed |= (await PurgeAsync(file, cancellationToken)).IsFailure;
+        }
+
+        return failed
+            ? Result.Failure(new Error("File.DeleteFailed", "Delete failed. Please try again."))
+            : Result.Success();
+    }
+
+    private async Task<Result> PurgeAsync(FileMetadata file, CancellationToken cancellationToken)
+    {
+        try
+        {
+            _dbContext.FileMetadatas.Remove(file);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            // The row is already gone if the storage delete fails; the orphaned object is accepted.
+            await _storageService.DeleteAsync(file.StorageKey, cancellationToken);
             return Result.Success();
         }
         catch (Exception)
@@ -192,5 +375,19 @@ public class FileService : IFileService
         return fileMetadata != null && !fileMetadata.IsDeleted && fileMetadata.OwnerId == ownerId
             ? fileMetadata
             : null;
+    }
+
+    private async Task<FileMetadata?> FindOwnedTrashedFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
+        {
+            return null;
+        }
+
+        // Find/FindAsync applies the "not deleted" query filter on the real provider, so trashed rows need an explicit query.
+        return await _dbContext.FileMetadatas
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId && f.IsDeleted, cancellationToken);
     }
 }

@@ -231,7 +231,7 @@
           type="text"
           placeholder="Search files and folders…"
           [ngModel]="searchQuery()"
-          (ngModelChange)="searchQuery.set($event)"
+          (ngModelChange)="onSearchChange($event)"
           class="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-gray-400"
         />
       </div>
@@ -340,6 +340,8 @@
 
         <!-- Storage Bar -->
         <div *ngIf="!sidebarCollapsed()" class="px-3 py-4">
+          <app-quota-meter *ngIf="storage() as s; else usageUnavailable" [usedBytes]="s.usedBytes" [totalBytes]="s.limitBytes" />
+          <ng-template #usageUnavailable>
           <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
             <div class="flex items-center gap-2 mb-2">
               <span class="material-symbols-rounded text-blue-600" style="font-size: 16px">cloud</span>
@@ -347,6 +349,7 @@
             </div>
             <p class="text-xs text-gray-500">Usage unavailable</p>
           </div>
+          </ng-template>
         </div>
 
         <!-- Bottom -->
@@ -396,6 +399,15 @@
           </p>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            *ngIf="activeNav() === 'trash' && files().length > 0"
+            type="button"
+            (click)="emptyTrash()"
+            [disabled]="actionBusy()"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
+          >
+            Empty trash
+          </button>
           <button class="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors hidden sm:block cursor-pointer" title="Sort">
             <span class="material-symbols-rounded" style="font-size: 18px">sort</span>
           </button>
@@ -453,8 +465,8 @@
             <span class="material-symbols-rounded filled text-amber-500" style="font-size: 20px">folder</span>
             <input
               type="text"
-              placeholder="Folder name"
-              aria-label="Folder name"
+              placeholder="Name"
+              aria-label="Name"
               [ngModel]="folderName()"
               (ngModelChange)="folderName.set($event)"
               (keydown.enter)="submitFolderEditor()"
@@ -808,14 +820,14 @@
               >
                 <span class="material-symbols-rounded" [ngClass]="{'filled': file.starred, 'text-amber-400': file.starred}" style="font-size: 18px">star</span>
               </button>
-              <button class="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors cursor-pointer" title="Rename">
+              <button (click)="startRenameFolder(file)" *ngIf="activeNav() !== 'trash'" class="p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors cursor-pointer" title="Rename">
                 <span class="material-symbols-rounded" style="font-size: 18px">edit</span>
               </button>
               <button
-                (click)="deleteFile(file)"
+                (click)="activeNav() === 'trash' ? deleteForever(file) : deleteFile(file)"
                 [disabled]="actionBusy()"
                 class="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
-                title="Delete"
+                [title]="activeNav() === 'trash' ? 'Delete forever' : 'Move to trash'"
               >
                 <span class="material-symbols-rounded" style="font-size: 18px">delete</span>
               </button>
@@ -1139,6 +1151,8 @@
       </nav>
       <!-- Storage -->
       <div class="px-3 py-4">
+        <app-quota-meter *ngIf="storage() as s; else mobileUsageUnavailable" [usedBytes]="s.usedBytes" [totalBytes]="s.limitBytes" />
+        <ng-template #mobileUsageUnavailable>
         <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
           <div class="flex items-center gap-2 mb-2">
             <span class="material-symbols-rounded text-blue-600" style="font-size: 16px">cloud</span>
@@ -1146,6 +1160,7 @@
           </div>
           <p class="text-xs text-gray-500">Usage unavailable</p>
         </div>
+        </ng-template>
       </div>
       <div class="border-t border-gray-100 px-2 py-3">
         <button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 cursor-pointer">
@@ -1183,7 +1198,25 @@
     [attr.aria-label]="'Actions for ' + menu.file.name"
     (keydown.escape)="contextMenu.set(null)"
   >
-    <ng-container *ngIf="contextMenuView() === 'actions'">
+    <ng-container *ngIf="contextMenuView() === 'actions' && activeNav() === 'trash'">
+      <button
+        type="button"
+        role="menuitem"
+        (click)="restoreFile(menu.file)"
+        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+      >
+        Restore
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        (click)="deleteForever(menu.file)"
+        class="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+      >
+        Delete forever
+      </button>
+    </ng-container>
+    <ng-container *ngIf="contextMenuView() === 'actions' && activeNav() !== 'trash'">
       <ng-container *ngIf="menu.file.type === 'folder'">
         <button
           type="button"
@@ -1193,15 +1226,15 @@
         >
           Open
         </button>
-        <button
-          type="button"
-          role="menuitem"
-          (click)="startRenameFolder(menu.file)"
-          class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-        >
-          Rename
-        </button>
       </ng-container>
+      <button
+        type="button"
+        role="menuitem"
+        (click)="startRenameFolder(menu.file)"
+        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+      >
+        Rename
+      </button>
       <button
         *ngIf="menu.file.type !== 'folder'"
         type="button"
@@ -1228,13 +1261,12 @@
         {{ menu.file.starred ? 'Remove from favorites' : 'Add to favorites' }}
       </button>
       <button
-        *ngIf="menu.file.type === 'folder'"
         type="button"
         role="menuitem"
-        (click)="deleteFolder(menu.file)"
+        (click)="deleteFile(menu.file); contextMenu.set(null)"
         class="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 cursor-pointer"
       >
-        Delete
+        {{ menu.file.type === 'folder' ? 'Delete' : 'Move to trash' }}
       </button>
     </ng-container>
     <ng-container *ngIf="contextMenuView() === 'move'">

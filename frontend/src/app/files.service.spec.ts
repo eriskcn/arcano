@@ -32,7 +32,7 @@ describe('FilesService', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);
     const files: FileDto[] = [
-      { id, fileName: 'report.pdf', contentType: 'application/pdf', fileSize: 2048, createdAtUtc: '2026-07-22T10:00:00Z' },
+      { id, fileName: 'report.pdf', contentType: 'application/pdf', fileSize: 2048, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false, lastModifiedAtUtc: null },
     ];
     let result: FileDto[] | undefined;
 
@@ -55,6 +55,8 @@ describe('FilesService', () => {
         contentType: 'text/plain',
         fileSize: 1,
         createdAtUtc: '2026-07-22T10:00:00Z',
+        isStarred: false,
+        lastModifiedAtUtc: null,
       }));
     let result: FileDto[] | undefined;
 
@@ -148,5 +150,55 @@ describe('FilesService', () => {
     expect(request.request.method).toBe('DELETE');
     request.flush(null, { status: 204, statusText: 'No Content' });
     expect(completed).toBe(true);
+  });
+
+  it('should pass the view and search query when listing', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+
+    service.list(null, 'starred').subscribe();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&view=starred`).flush([]);
+    service.list(null, 'all', 'rep').subscribe();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&q=rep`).flush([]);
+  });
+
+  it('should rename and star a file', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+
+    service.rename(id, 'new.txt').subscribe();
+    const rename = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/name`);
+    expect([rename.request.method, rename.request.body]).toEqual(['PUT', { name: 'new.txt' }]);
+    rename.flush(null, { status: 204, statusText: 'No Content' });
+
+    service.star(id, true).subscribe();
+    const star = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/star`);
+    expect([star.request.method, star.request.body]).toEqual(['PUT', { isStarred: true }]);
+    star.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('should list the trash, restore, delete forever and empty the trash', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    const noContent = { status: 204, statusText: 'No Content' };
+
+    service.trash().subscribe();
+    expect(http.expectOne(`${environment.apiBaseUrl}/Files/trash?skip=0&take=100`).request.method).toBe('GET');
+    http.match(() => true).forEach(r => r.flush([]));
+
+    service.restore(id).subscribe();
+    const restore = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/restore`);
+    expect(restore.request.method).toBe('POST');
+    restore.flush(null, noContent);
+
+    service.deletePermanent(id).subscribe();
+    const forever = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/permanent`);
+    expect(forever.request.method).toBe('DELETE');
+    forever.flush(null, noContent);
+
+    service.emptyTrash().subscribe();
+    const empty = http.expectOne(`${environment.apiBaseUrl}/Files/trash`);
+    expect(empty.request.method).toBe('DELETE');
+    empty.flush(null, noContent);
   });
 });

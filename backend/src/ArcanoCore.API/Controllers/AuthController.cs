@@ -8,6 +8,7 @@ using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
@@ -29,6 +30,7 @@ public class AuthController : ApiControllerBase
         _configuration = configuration;
     }
 
+    [EnableRateLimiting("auth")]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest? request)
     {
@@ -70,6 +72,7 @@ public class AuthController : ApiControllerBase
         return Ok(new { Message = "User registered successfully." });
     }
 
+    [EnableRateLimiting("auth")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest? request)
     {
@@ -95,12 +98,21 @@ public class AuthController : ApiControllerBase
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
+        // Locked-out accounts get the same response as a wrong password so lockout is not revealed.
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
+        }
+
         // 3. Check Password
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!isPasswordValid)
         {
+            await _userManager.AccessFailedAsync(user);
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
 
         // 4. Generate JWT Token
         var token = GenerateJwtToken(user);
