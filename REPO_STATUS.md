@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
 **Assessment date:** 2026-10-31
-**Repository state:** `main` at `d795494` ("feat: implement session cleanup for abandoned uploads and add related unit tests"). Working tree clean.
+**Repository state:** `main` at `d795494` plus uncommitted keyboard shortcuts and file copy.
 
 ## Overview
 
@@ -19,12 +19,14 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 - Previews for images, audio, video, and plain text (PDF is deferred).
 - Large files: configurable upload limit (`Storage:MaxUploadBytes`, 413 on oversize), upload progress, and resumable chunked uploads (8 MiB parts over S3 multipart, retry within a session). Abandoned sessions older than 24 hours are swept when their owner starts another upload.
 
-Planned, not built: admin features, keyboard actions, folder sharing, share-link passwords, PDF preview, password reset, email verification, refresh tokens.
+Also built: keyboard shortcuts (Ctrl+A/C/X/V/Z, Delete, Shift+Delete, F2) and file copy (`POST api/Files/{id}/copy`).
+
+Planned, not built: admin features, folder sharing, share-link passwords, PDF preview, password reset, email verification, refresh tokens.
 
 ## What is verified
 
-- **Backend:** builds with no errors; 97 domain tests and 3 auth tests pass.
-- **Frontend:** 96 unit tests pass; the production build succeeds.
+- **Backend:** builds with no errors; 100 domain tests and 3 auth tests pass.
+- **Frontend:** 103 unit tests pass; the production build succeeds.
 - **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified

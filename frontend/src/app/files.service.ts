@@ -146,6 +146,10 @@ export class FilesService {
       .pipe(map(() => undefined));
   }
 
+  copyFile(id: string, folderId: string | null): Observable<FileDto> {
+    return this.http.post<FileDto>(`${this.baseUrl}/${encodeURIComponent(id)}/copy`, { folderId });
+  }
+
   download(id: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${encodeURIComponent(id)}`, { responseType: 'blob' });
   }

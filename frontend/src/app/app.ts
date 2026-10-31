@@ -116,6 +116,9 @@ export class App implements OnInit {
   private marqueeStart: { x: number; y: number } | null = null;
   private marqueeSurface: HTMLElement | null = null;
   private marqueeBaseSelection = new Set<string>();
+  // In-memory clipboard for files (folders are never copied) and a capped undo stack.
+  readonly clipboard = signal<{ mode: 'copy' | 'cut'; items: FileItem[]; sourceFolderId: string | null } | null>(null);
+  private undoStack: (() => void)[] = [];
 
   // Auth Form State
   readonly signInEmail = signal<string>('');
@@ -537,6 +540,122 @@ export class App implements OnInit {
     }
   }
 
+  @HostListener('document:keydown', ['$event'])
+  onShortcut(event: KeyboardEvent): void {
+    const target = event.target;
+    if (
+      this.page() !== 'app' || this.shareOpen() || this.previewModalOpen() || this.folderEditor() ||
+      (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
+    ) {
+      return;
+    }
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    const trash = this.activeNav() === 'trash';
+    const selected = this.files().filter(file => this.selectedIds().has(file.id));
+    const mutating = key === 'delete' || (mod && 'xvz'.includes(key));
+    if (mutating && this.actionBusy()) {
+      return;
+    }
+
+    let handled = false;
+    if (mod && key === 'a') {
+      const ids = this.filteredFiles().map(file => file.id);
+      this.setSelection(new Set(ids), ids.at(-1) ?? null);
+      this.selectionAnchorId.set(ids[0] ?? null);
+      this.previewOpen.set(ids.length > 0);
+      handled = true;
+    } else if (key === 'delete' && event.shiftKey) {
+      handled = trash && selected.length > 0;
+      if (handled) {
+        this.bulk(selected, file => this.filesApi.deletePermanent(file.id), name => `Unable to delete ${name}. Please try again.`);
+      }
+    } else if (key === 'delete') {
+      handled = !trash && selected.length > 0;
+      if (handled) {
+        this.bulk(selected, file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
+          const deleted = done.map(([file]) => file);
+          this.pushUndo(() => this.bulk(deleted, file => this.filesApi.restore(file.id), name => `Unable to restore ${name}. Please try again.`));
+        });
+      }
+    } else if (key === 'f2' && !trash && this.selectedIds().size === 1 && this.selectedFile()) {
+      this.startRenameFolder(this.selectedFile()!);
+      handled = true;
+    } else if (mod && (key === 'c' || key === 'x') && !trash && selected.length > 0) {
+      this.clipboard.set({ mode: key === 'c' ? 'copy' : 'cut', items: selected, sourceFolderId: this.currentFolderId() });
+      handled = true;
+    } else if (mod && key === 'v' && this.activeNav() === 'my-files' && this.clipboard()) {
+      handled = this.paste();
+    } else if (mod && key === 'z' && !event.shiftKey && this.undoStack.length > 0) {
+      this.undoStack.pop()!();
+      handled = true;
+    }
+    if (handled) {
+      event.preventDefault();
+    }
+  }
+
+  private paste(): boolean {
+    const clip = this.clipboard()!;
+    const folderId = this.currentFolderId();
+    if (clip.mode === 'cut') {
+      if (clip.sourceFolderId === folderId) {
+        return false;
+      }
+      this.clipboard.set(null);
+      this.moveItems(clip.items, folderId, clip.sourceFolderId);
+      return true;
+    }
+    this.bulk(clip.items, file => this.filesApi.copyFile(file.id, folderId), name => `Unable to copy ${name}. Please try again.`, done => {
+      const copies = done.map(([file, copy]) => ({ id: copy.id, name: file.name }));
+      this.pushUndo(() => this.bulk(copies, file => this.filesApi.delete(file.id), name => `Unable to undo the copy of ${name}. Please try again.`));
+    });
+    return true;
+  }
+
+  private pushUndo(undo: () => void): void {
+    this.undoStack = [...this.undoStack, undo].slice(-20);
+  }
+
+  // Runs op for each item in order, reports failures through actionError, then reloads like upload does.
+  private bulk<R>(
+    items: { id: string; name: string }[],
+    op: (item: { id: string; name: string }) => Observable<R>,
+    failure: (name: string) => string,
+    done?: (succeeded: [{ id: string; name: string }, R][]) => void,
+  ): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+    const succeeded: [{ id: string; name: string }, R][] = [];
+
+    from(items)
+      .pipe(
+        concatMap(item => op(item).pipe(
+          tap(result => succeeded.push([item, result])),
+          catchError(error => {
+            this.actionError.set(this.fileErrorMessage(error, failure(item.name)));
+            return EMPTY;
+          }),
+        )),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        complete: () => {
+          this.actionBusy.set(false);
+          const error = this.actionError();
+          this.loadFiles();
+          this.actionError.set(error);
+          this.refreshStorage();
+          if (succeeded.length > 0) {
+            done?.(succeeded);
+          }
+        },
+      });
+  }
+
   beginMarquee(event: PointerEvent): void {
     if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
       return;
@@ -714,12 +833,13 @@ export class App implements OnInit {
     return items.length > 0 && targetId !== this.currentFolderId() && !items.some(item => item.id === targetId);
   }
 
-  private moveItems(items: FileItem[], targetId: string | null): void {
+  private moveItems(items: FileItem[], targetId: string | null, origin = this.currentFolderId(), record = true): void {
     if (this.actionBusy()) {
       return;
     }
     this.actionBusy.set(true);
     this.actionError.set('');
+    const moved: FileItem[] = [];
 
     from(items)
       .pipe(
@@ -727,6 +847,7 @@ export class App implements OnInit {
           ? this.foldersApi.update(item.id, item.name, targetId)
           : this.filesApi.moveFile(item.id, targetId)
         ).pipe(
+          tap(() => moved.push(item)),
           catchError(error => {
             this.actionError.set(this.folderErrorMessage(error, `Unable to move ${item.name}. Please try again.`));
             return EMPTY;
@@ -740,6 +861,9 @@ export class App implements OnInit {
           const error = this.actionError();
           this.loadFiles();
           this.actionError.set(error);
+          if (record && moved.length > 0) {
+            this.pushUndo(() => this.moveItems(moved, origin, targetId, false));
+          }
         },
       });
   }

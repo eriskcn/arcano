@@ -110,6 +110,13 @@ public class FilesController : ApiControllerBase
     public async Task<IActionResult> MoveFolder(Guid id, [FromBody] MoveFileRequest request, CancellationToken cancellationToken) =>
         ToNoContent(await _fileService.MoveFileAsync(id, request.FolderId, cancellationToken));
 
+    [HttpPost("{id:guid}/copy")]
+    public async Task<IActionResult> Copy(Guid id, [FromBody] CopyFileRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _fileService.CopyFileAsync(id, request.FolderId, cancellationToken);
+        return result.IsFailure ? ToError(result.Error) : StatusCode(StatusCodes.Status201Created, result.Value);
+    }
+
     private IActionResult ToNoContent(ArcanoCore.Domain.Common.Result result) =>
         result.IsFailure ? ToError(result.Error) : NoContent();
 

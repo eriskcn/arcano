@@ -390,6 +390,76 @@ public class FileService : IFileService
         return Result.Success();
     }
 
+    public async Task<Result<FileResponseDto>> CopyFileAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default)
+    {
+        var source = await FindOwnedFileAsync(id, cancellationToken);
+        if (source == null)
+        {
+            return Result<FileResponseDto>.Failure(new Error("File.NotFound", "File metadata not found."));
+        }
+
+        var ownerId = CurrentOwnerId;
+        if (folderId != null && !await IsOwnedActiveFolderAsync(folderId.Value, ownerId, cancellationToken))
+        {
+            return Result<FileResponseDto>.Failure(new Error("Folder.NotFound", "Folder not found."));
+        }
+
+        // Same per-user lock as upload, so a copy cannot race another upload past the quota check.
+        var uploadLock = UploadLocks.GetOrAdd(ownerId, _ => new SemaphoreSlim(1, 1));
+        await uploadLock.WaitAsync(cancellationToken);
+        string? storageKey = null;
+        try
+        {
+            var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, source.FileSize, cancellationToken);
+            if (quotaResult.IsFailure)
+            {
+                return Result<FileResponseDto>.Failure(quotaResult.Error);
+            }
+
+            // shortcut: streams the object through the API; use S3 CopyObject (5 GB limit) if copies get heavy.
+            await using (var content = await _storageService.DownloadAsync(source.StorageKey, cancellationToken))
+            {
+                storageKey = await _storageService.UploadAsync(content, source.FileName, source.ContentType, cancellationToken);
+            }
+
+            var copy = new FileMetadata
+            {
+                Id = Guid.NewGuid(),
+                FileName = source.FileName,
+                ContentType = source.ContentType,
+                FileSize = source.FileSize,
+                StorageKey = storageKey,
+                OwnerId = ownerId,
+                FolderId = folderId
+            };
+
+            await _dbContext.FileMetadatas.AddAsync(copy, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return Result<FileResponseDto>.Success(new FileResponseDto(copy.Id, copy.FileName, copy.ContentType, copy.FileSize));
+        }
+        catch (Exception)
+        {
+            if (storageKey != null)
+            {
+                try
+                {
+                    await _storageService.DeleteAsync(storageKey, cancellationToken);
+                }
+                catch (Exception)
+                {
+                    // Best effort: the original copy failure is returned below.
+                }
+            }
+
+            return Result<FileResponseDto>.Failure(new Error("File.CopyFailed", "Copy failed. Please try again."));
+        }
+        finally
+        {
+            uploadLock.Release();
+        }
+    }
+
     private Task<bool> IsOwnedActiveFolderAsync(Guid folderId, Guid ownerId, CancellationToken cancellationToken) =>
         _dbContext.Folders.AnyAsync(f => f.Id == folderId && f.OwnerId == ownerId && !f.IsDeleted, cancellationToken);
 

@@ -37,8 +37,9 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Favorites, Recent, and Home load the matching server views. The search box searches by name on the server across all folders.
   - The Trash view lists trashed files with Restore and Delete forever, plus Empty trash. Folders are still starred locally only, because the backend has no folder favorite.
   - Folder navigation, create, rename, and move are tracked in 4.4.
-- [ ] **4.2 Keyboard actions — Not Started**
-  - Shortcuts for selection, rename, copy/move, undo, and delete, limited to supported operations.
+- [x] **4.2 Keyboard actions — Completed (unit-tested, not verified in a browser)**
+  - Ctrl+A selects all; Delete moves selected files to the trash; Shift+Delete deletes forever (Trash view only); Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste files into the current folder; Ctrl+Z undoes the last delete, move or paste (in memory, last 20); F2 renames. Ignored while typing in a field or with a dialog open.
+  - Files only: folders are not copied, cut or deleted by keyboard. The context-menu "Move to" is not undoable. Ctrl+C and Ctrl+X take over the browser shortcut whenever files are selected. Undo is not cleared on sign-out.
 - [x] **4.3 Drag and drop — Completed (unit-tested, not verified in a browser)**
   - No backend work was needed: upload with `folderId`, `PUT /api/Files/{id}/folder`, and `PUT /api/Folders/{id}` already exist.
   - [x] **4.3.1 Drop files to upload — Completed.** Dropping OS files on the list or grid area uploads them into the current folder, using the same sequential path as the Upload button. A drop on a folder row uploads into that folder.

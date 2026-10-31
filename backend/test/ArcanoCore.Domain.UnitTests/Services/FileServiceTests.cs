@@ -590,6 +590,64 @@ public class FileServiceTests
         Assert.Equal(0, storage.UploadCalls);
     }
 
+    [Fact]
+    public async Task CopyFileAsync_CopiesIntoFolderWithNewIdAndKey()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var folder = NewFolder(userId);
+        var file = NewFile(userId, "file.txt");
+        dbContext.Folders.Add(folder);
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).CopyFileAsync(file.Id, folder.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotEqual(file.Id, result.Value.Id);
+        Assert.Equal(file.FileName, result.Value.FileName);
+        var copy = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
+        Assert.NotEqual(file.StorageKey, copy.StorageKey);
+        Assert.Equal(folder.Id, copy.FolderId);
+        Assert.Equal(1, storage.DownloadCalls);
+        Assert.Equal(1, storage.UploadCalls);
+    }
+
+    [Fact]
+    public async Task CopyFileAsync_RejectsAnotherUsersFile()
+    {
+        var file = NewFile(Guid.NewGuid(), "file.txt");
+        await using var dbContext = CreateListDbContext();
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, Guid.NewGuid().ToString(), storage).CopyFileAsync(file.Id, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("File.NotFound", result.Error.Code);
+        Assert.Equal(0, storage.UploadCalls);
+    }
+
+    [Fact]
+    public async Task CopyFileAsync_ReturnsQuotaFailure_WithoutCopying()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, "file.txt");
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+        var quota = new TestQuota { Result = Result.Failure(new Error("Storage.QuotaExceeded", "Quota exceeded.")) };
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage, quota).CopyFileAsync(file.Id, null);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal("Storage.QuotaExceeded", result.Error.Code);
+        Assert.Equal(0, storage.UploadCalls);
+    }
+
     private static ApplicationDbContext CreateListDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

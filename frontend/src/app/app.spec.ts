@@ -797,4 +797,115 @@ describe('App', () => {
     http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ code: 'Share.Past', description: 'Expiry is in the past.', title: 'x' }, { status: 400, statusText: 'Bad Request' });
     expect(app.shareError()).toBe('Expiry is in the past.');
   });
+
+  describe('keyboard shortcuts', () => {
+    const api = environment.apiBaseUrl;
+    const setup = () => {
+      const app = TestBed.createComponent(App).componentInstance;
+      const http = TestBed.inject(HttpTestingController);
+      app.page.set('app');
+      app.files.set(sampleFiles);
+      return { app, http };
+    };
+    const press = (key: string, init: KeyboardEventInit = {}, target: EventTarget = document): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+      target.dispatchEvent(event);
+      return event;
+    };
+    // Answers the reload and storage requests that follow a completed bulk action.
+    const settle = (http: HttpTestingController) => {
+      http.match(r => r.method === 'GET').forEach(r => r.flush([]));
+    };
+
+    it('Delete moves the selection to trash', () => {
+      const { app, http } = setup();
+      app.selectFile('1');
+      app.selectFile('2', new MouseEvent('click', { ctrlKey: true }));
+
+      expect(press('Delete').defaultPrevented).toBe(true);
+      http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${api}/Files/2`).flush(null, { status: 204, statusText: 'No Content' });
+      settle(http);
+    });
+
+    it('ignores shortcuts while typing in an input', () => {
+      const { app, http } = setup();
+      app.selectFile('1');
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+
+      expect(press('Delete', {}, input).defaultPrevented).toBe(false);
+      input.remove();
+      http.verify();
+    });
+
+    it('Ctrl+A selects every item in view', () => {
+      const { app } = setup();
+
+      press('a', { ctrlKey: true });
+
+      expect(app.selectedIds().size).toBe(sampleFiles.length);
+    });
+
+    it('Ctrl+C then Ctrl+V posts a copy into the current folder', () => {
+      const { app, http } = setup();
+      app.activeNav.set('my-files');
+      app.folderPath.set([{ id: 'f9', name: 'Docs' }]);
+      app.selectFile('3');
+
+      press('c', { ctrlKey: true });
+      press('v', { ctrlKey: true });
+
+      const req = http.expectOne(`${api}/Files/3/copy`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ folderId: 'f9' });
+      req.flush({ id: 'new' }, { status: 201, statusText: 'Created' });
+      settle(http);
+      expect(app.clipboard()).not.toBeNull();
+    });
+
+    it('Ctrl+X then Ctrl+V moves the file and clears the clipboard', () => {
+      const { app, http } = setup();
+      app.activeNav.set('my-files');
+      app.selectFile('3');
+      press('x', { ctrlKey: true });
+      app.folderPath.set([{ id: 'f9', name: 'Docs' }]);
+
+      press('v', { ctrlKey: true });
+
+      const req = http.expectOne(`${api}/Files/3/folder`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({ folderId: 'f9' });
+      req.flush(null, { status: 204, statusText: 'No Content' });
+      settle(http);
+      expect(app.clipboard()).toBeNull();
+
+      press('z', { ctrlKey: true });
+      expect(http.expectOne(`${api}/Files/3/folder`).request.body).toEqual({ folderId: null });
+    });
+
+    it('Ctrl+Z restores a deleted file', () => {
+      const { app, http } = setup();
+      app.selectFile('1');
+      press('Delete');
+      http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+      settle(http);
+
+      expect(press('z', { ctrlKey: true }).defaultPrevented).toBe(true);
+      expect(http.expectOne(`${api}/Files/1/restore`).request.method).toBe('POST');
+    });
+
+    it('Shift+Delete deletes forever only in Trash', () => {
+      const { app, http } = setup();
+      app.selectFile('1');
+
+      expect(press('Delete', { shiftKey: true }).defaultPrevented).toBe(false);
+      http.verify();
+
+      app.activeNav.set('trash');
+      expect(press('Delete', { shiftKey: true }).defaultPrevented).toBe(true);
+      http.expectOne(`${api}/Files/1/permanent`).flush(null, { status: 204, statusText: 'No Content' });
+      settle(http);
+    });
+  });
 });

@@ -21,4 +21,5 @@ public interface IFileService
     Task<Result> PermanentlyDeleteFileAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result> EmptyTrashAsync(CancellationToken cancellationToken = default);
     Task<Result> MoveFileAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default);
+    Task<Result<FileResponseDto>> CopyFileAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default);
 }
