@@ -23,7 +23,7 @@ import { previewKind } from './preview/preview-kind';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
-export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'shared' | 'trash';
+export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'trash';
 
 export interface MenuEntry {
   label: string;
@@ -191,18 +191,16 @@ export class App implements OnInit {
     { key: 'my-files', label: 'My Files', icon: 'folder' },
     { key: 'recent', label: 'Recent', icon: 'schedule' },
     { key: 'favorites', label: 'Favorites', icon: 'star' },
-    { key: 'shared', label: 'Shared', icon: 'group' },
     { key: 'trash', label: 'Trash', icon: 'delete' },
   ];
 
-  readonly filterChips = ['All', 'Folders', 'Documents', 'Images', 'Videos', 'Shared'];
+  readonly filterChips = ['All', 'Folders', 'Documents', 'Images', 'Videos'];
 
   readonly navLabels: Record<NavItem, string> = {
     home: 'Home',
     'my-files': 'My Files',
     recent: 'Recent',
     favorites: 'Favorites',
-    shared: 'Shared',
     trash: 'Trash',
   };
 
@@ -211,7 +209,6 @@ export class App implements OnInit {
     'my-files': { icon: 'folder', title: 'No files yet', sub: 'Upload or create new files to get started.' },
     recent: { icon: 'schedule', title: 'No recent activity', sub: 'Files you open will appear here.' },
     favorites: { icon: 'star', title: 'No favorites yet', sub: 'Star files to find them quickly.' },
-    shared: { icon: 'group', title: 'Nothing shared', sub: 'Files shared with you will appear here.' },
     trash: { icon: 'delete', title: 'Trash is empty', sub: 'Deleted files will appear here for 30 days.' },
   };
 
@@ -243,7 +240,7 @@ export class App implements OnInit {
 
   readonly showFiles = computed(() => {
     const nav = this.activeNav();
-    return nav === 'my-files' || nav === 'home' || nav === 'recent' || nav === 'favorites' || nav === 'shared' || nav === 'trash';
+    return nav === 'my-files' || nav === 'home' || nav === 'recent' || nav === 'favorites' || nav === 'trash';
   });
 
   readonly filteredFiles = computed(() => {
@@ -252,12 +249,10 @@ export class App implements OnInit {
 
     return this.items().filter(f => {
       if (nav === 'favorites') return f.starred;
-      if (nav === 'shared') return f.shared;
       if (filter === 'Folders') return f.type === 'folder';
       if (filter === 'Documents') return f.type === 'document' || f.type === 'pdf' || f.type === 'spreadsheet';
       if (filter === 'Images') return f.type === 'image';
       if (filter === 'Videos') return f.type === 'video';
-      if (filter === 'Shared') return f.shared;
       return true;
     });
   });

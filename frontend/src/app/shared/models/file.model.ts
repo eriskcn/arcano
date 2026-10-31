@@ -25,4 +25,4 @@ export interface UserProfile {
 }
 
 export type ViewMode = 'list' | 'grid';
-export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'shared' | 'trash';
+export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'trash';

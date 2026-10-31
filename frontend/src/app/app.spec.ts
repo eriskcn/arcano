@@ -56,6 +56,13 @@ describe('App', () => {
     expect(compiled.querySelector('h1')?.textContent).toContain('Welcome back');
   });
 
+  it('should have no Shared nav item or filter chip, and keep Trash in the bottom nav', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    expect(app.navItems.some(i => i.label === 'Shared')).toBe(false);
+    expect(app.filterChips).not.toContain('Shared');
+    expect(app.navItems.slice(0, 5).some(i => i.key === 'trash')).toBe(true);
+  });
+
   it('should derive the profile initial from the signed-in email', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;

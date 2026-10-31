@@ -45,8 +45,8 @@ All routes are under `/api` except `/health`. "Bearer" means `Authorization: Bea
 | POST | `/api/Auth/refresh` (new token; the session ends 24 hours after sign-in) | Bearer |
 | POST | `/api/Auth/logout` (revokes all of the user's tokens) | Bearer |
 | GET | `/api/Account/storage` (quota and usage) | Bearer |
-| POST | `/api/Account/password` (change password; returns a new token) | Bearer |
-| DELETE | `/api/Account` (delete the account and its data) | Bearer |
+| POST | `/api/Account/password` (change password; returns a new token; rate limited) | Bearer |
+| DELETE | `/api/Account` (delete the account and its data; rate limited) | Bearer |
 | POST | `/api/Files/upload` (form-data `file`, optional `folderId`) | Bearer |
 | GET | `/api/Files` (query: `skip`, `take` (default 50, max 100), `folderId`, `view`, `q`) | Bearer |
 | GET | `/api/Files/{id}` (download) | Bearer |

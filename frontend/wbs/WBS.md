@@ -124,3 +124,4 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
   - The phone upload gap noted here was closed in 9.11.
 - [x] **9.11 Phone upload (checked in a browser).** On phones (under 640 px) the floating button (now an upload icon, labelled "Upload files") opens the file picker through the same hidden input as the header Upload button; from 640 px up the header Upload button is used and the floating button is hidden. Checked at 375 and 768 px, including an upload through the input. 1 new spec; 143 specs pass.
 
+- [x] **9.12 Shared view removed.** The "Shared" nav item and filter chip always showed nothing (the flag was never set by the API) and the empty text promised files shared with you, which the backend does not support. Both are removed; share links are created per file from the Share dialog. Trash now sits in the mobile bottom nav.
