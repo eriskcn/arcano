@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Usage: scripts/backup.sh [--stop-api]
+# Writes backups/<UTC timestamp>/{db.dump,seaweedfs.tar.gz}; keeps newest BACKUP_KEEP (default 7).
+# Consistency: DB and object data are copied at slightly different moments. For a point-in-time
+# consistent pair pass --stop-api (api is stopped briefly, then started); otherwise accept small drift.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+DC=(docker compose -p arcano -f docker-compose.prod.yml)
+KEEP="${BACKUP_KEEP:-7}"
+VOLUME=arcano_seaweedfs_data # <project>_<volume>; check: docker compose -p arcano -f docker-compose.prod.yml config --volumes
+STOP_API=0
+[ "${1:-}" = "--stop-api" ] && STOP_API=1
+
+dir="backups/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$dir"
+umask 077
+
+if [ "$STOP_API" = 1 ]; then
+  "${DC[@]}" stop api
+  trap '"${DC[@]}" start api' EXIT
+fi
+
+"${DC[@]}" exec -T postgres pg_dump -U postgres -Fc arcanocore > "$dir/db.dump"
+[ -s "$dir/db.dump" ] || { echo "empty db dump" >&2; exit 1; }
+docker run --rm -v "$VOLUME":/data:ro -v "$PWD/$dir":/backup alpine tar czf /backup/seaweedfs.tar.gz -C /data .
+
+# prune: timestamp dir names sort chronologically
+ls -1d backups/*/ | sort | head -n -"$KEEP" | xargs -r rm -rf
+
+echo "wrote $dir/db.dump"
+echo "wrote $dir/seaweedfs.tar.gz"

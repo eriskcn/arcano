@@ -621,6 +621,21 @@ describe('App', () => {
     http.verify();
   });
 
+  it('should show the backend message when sign-up is disabled', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.signUpEmail.set('a@b.co');
+    app.signUpPassword.set('secret123');
+
+    app.onSignUpSubmit(new Event('submit'));
+    http.expectOne(`${environment.apiBaseUrl}/Auth/register`).flush(
+      { code: 'Auth.RegistrationDisabled', message: 'Sign-up is disabled on this server.' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    expect(app.signUpError()).toBe('Sign-up is disabled on this server.');
+  });
+
   it('should show the backend cycle error when a folder move is rejected', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);

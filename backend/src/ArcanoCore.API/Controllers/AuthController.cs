@@ -38,6 +38,11 @@ public class AuthController : ApiControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest? request)
     {
+        if (!_configuration.GetValue("Auth:AllowRegistration", true))
+        {
+            return StatusCode(403, new Error("Auth.RegistrationDisabled", "Sign-up is disabled on this server."));
+        }
+
         if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new Error("Auth.InvalidInput", "Email and password are required."));

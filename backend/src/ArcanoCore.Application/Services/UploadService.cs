@@ -67,9 +67,14 @@ public class UploadService : IUploadService
             return Fail<UploadStartedDto>("File.NameTooLong", "File name must be 1 to 255 characters.");
         }
 
-        if (string.IsNullOrWhiteSpace(dto.ContentType) || dto.ContentType.Length > 100)
+        if (string.IsNullOrWhiteSpace(dto.ContentType))
         {
-            return Fail<UploadStartedDto>("File.ContentTypeTooLong", "Content type must be 1 to 100 characters.");
+            return Fail<UploadStartedDto>("File.ContentTypeRequired", "Content type is required.");
+        }
+
+        if (dto.ContentType.Length > 100)
+        {
+            return Fail<UploadStartedDto>("File.ContentTypeTooLong", "Content type cannot exceed 100 characters.");
         }
 
         if (dto.FolderId != null &&

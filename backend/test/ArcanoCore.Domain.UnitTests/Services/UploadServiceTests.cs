@@ -15,6 +15,24 @@ public class UploadServiceTests
     private readonly TestContext _context = new();
     private readonly FakeMultipart _multipart = new();
 
+    [Theory]
+    [InlineData("", "File.ContentTypeRequired")]
+    [InlineData("   ", "File.ContentTypeRequired")]
+    public async Task StartAsync_EmptyContentType_FailsWithRequiredCode(string contentType, string code)
+    {
+        var result = await CreateService(_ownerId).StartAsync(new UploadStartDto("a.bin", contentType, 10, null));
+
+        Assert.Equal(code, result.Error.Code);
+    }
+
+    [Fact]
+    public async Task StartAsync_ContentTypeOver100Chars_FailsWithTooLongCode()
+    {
+        var result = await CreateService(_ownerId).StartAsync(new UploadStartDto("a.bin", new string('a', 101), 10, null));
+
+        Assert.Equal("File.ContentTypeTooLong", result.Error.Code);
+    }
+
     [Fact]
     public async Task StartAsync_QuotaExceeded_FailsWithoutCreatingSession()
     {

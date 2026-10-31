@@ -11,3 +11,6 @@ run-dev.log
 appsettings.Development.json
 .claude/
 backend/seaweedfs/security.toml
+.env.production
+backend/seaweedfs/s3.prod.json
+backups/

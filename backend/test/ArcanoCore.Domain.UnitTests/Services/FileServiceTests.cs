@@ -606,12 +606,28 @@ public class FileServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.NotEqual(file.Id, result.Value.Id);
-        Assert.Equal(file.FileName, result.Value.FileName);
+        Assert.Equal("Copy of file.txt", result.Value.FileName);
         var copy = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
         Assert.NotEqual(file.StorageKey, copy.StorageKey);
         Assert.Equal(folder.Id, copy.FolderId);
         Assert.Equal(1, storage.DownloadCalls);
         Assert.Equal(1, storage.UploadCalls);
+    }
+
+    [Fact]
+    public async Task CopyFileAsync_TruncatesCopyNameTo255Characters()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var file = NewFile(userId, new string('a', 255));
+        dbContext.FileMetadatas.Add(file);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+
+        var result = await CreateListService(dbContext, userId.ToString(), new TestStorage()).CopyFileAsync(file.Id, null);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(255, result.Value.FileName.Length);
+        Assert.StartsWith("Copy of ", result.Value.FileName);
     }
 
     [Fact]

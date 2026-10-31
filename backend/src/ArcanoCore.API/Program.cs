@@ -2,6 +2,8 @@ using ArcanoCore.API.Middleware;
 using ArcanoCore.Application;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Infrastructure;
+using ArcanoCore.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -83,6 +85,29 @@ builder.Services.AddApplication(builder.Configuration.GetValue<long?>("Storage:Q
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+// shortcut: runs on every instance start, so with several API instances a deploy could race; use a one-off migrate step if that is ever needed.
+if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))
+{
+    for (var attempt = 1; ; attempt++)
+    {
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.Migrate();
+            break;
+        }
+        catch (Exception ex)
+        {
+            if (attempt >= 5)
+            {
+                throw;
+            }
+            app.Logger.LogWarning(ex, "Database migration attempt {Attempt} failed; retrying in 2 seconds.", attempt);
+            Thread.Sleep(TimeSpan.FromSeconds(2));
+        }
+    }
+}
 
 // Configure the HTTP request pipeline.
 // Forwarded headers are trusted only from proxies the operator lists; otherwise clients could spoof X-Forwarded-For past the rate limiter.

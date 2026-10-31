@@ -430,7 +430,7 @@ public class FileService : IFileService
             var copy = new FileMetadata
             {
                 Id = Guid.NewGuid(),
-                FileName = source.FileName,
+                FileName = $"Copy of {source.FileName}"[..Math.Min(255, source.FileName.Length + 8)],
                 ContentType = source.ContentType,
                 FileSize = source.FileSize,
                 StorageKey = storageKey,

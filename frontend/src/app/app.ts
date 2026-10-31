@@ -469,7 +469,12 @@ export class App implements OnInit {
       },
       error: error => {
         this.authBusy.set(false);
-        this.signUpError.set(this.authErrorMessage(error, 'Unable to create your account. Please try again.'));
+        const body = errorBody(error);
+        this.signUpError.set(
+          body?.code === 'Auth.RegistrationDisabled' && typeof body.message === 'string'
+            ? body.message
+            : this.authErrorMessage(error, 'Unable to create your account. Please try again.'),
+        );
       },
     });
   }

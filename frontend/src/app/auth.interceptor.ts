@@ -6,7 +6,7 @@ import { environment } from '../environments/environment';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
-  const apiUrl = new URL(environment.apiBaseUrl, 'http://localhost');
+  const apiUrl = new URL(environment.apiBaseUrl, location.origin);
   const requestUrl = new URL(request.url, apiUrl);
   const apiPath = apiUrl.pathname.replace(/\/$/, '');
   const isApiRequest =

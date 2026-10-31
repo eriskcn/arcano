@@ -35,6 +35,19 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task Register_WhenDisabled_Returns403AndCreatesNoUser()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager(allowRegistration: false);
+
+        var result = await controller.Register(new RegisterRequest(Email, Password));
+
+        var forbidden = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, forbidden.StatusCode);
+        Assert.Equal("Auth.RegistrationDisabled", Assert.IsType<ArcanoCore.Domain.Common.Error>(forbidden.Value).Code);
+        Assert.Null(await userManager.FindByEmailAsync(Email));
+    }
+
+    [Fact]
     public async Task Login_WithWrongPassword_ReturnsUnauthorized()
     {
         var controller = CreateController();
@@ -113,7 +126,7 @@ public class AuthControllerTests
 
     private static AuthController CreateController() => CreateControllerWithUserManager().Controller;
 
-    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager()
+    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager(bool? allowRegistration = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -125,7 +138,8 @@ public class AuthControllerTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Secret"] = "test-secret-key-that-is-at-least-32-bytes-long"
+                ["Jwt:Secret"] = "test-secret-key-that-is-at-least-32-bytes-long",
+                ["Auth:AllowRegistration"] = allowRegistration?.ToString()
             })
             .Build();
 
