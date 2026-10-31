@@ -688,23 +688,6 @@
               </button>
             </div>
 
-            <!-- Preview popup (single file only) -->
-            <app-modal
-              [open]="previewModalOpen()"
-              [title]="file.name"
-              maxWidth="2xl"
-              (close)="closePreview()"
-            >
-              <app-file-preview
-                *ngIf="previewModalOpen() && selectedFile(); let previewFile"
-                [fileId]="previewFile.id"
-                [contentType]="previewFile.contentType ?? ''"
-                [fileSize]="previewFile.fileSize ?? 0"
-                [fileName]="previewFile.name"
-                (download)="downloadFile(previewFile)"
-              ></app-file-preview>
-            </app-modal>
-
             <!-- Thumbnail -->
             <div class="mx-4 mt-4 rounded-2xl flex items-center justify-center aspect-video" [ngClass]="fileBgColor(file.type)">
               <span
@@ -790,24 +773,6 @@
               <div class="space-y-2.5">
                 <div class="flex items-start gap-2.5">
                   <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-rounded text-gray-500" style="font-size: 12px">edit</span>
-                  </div>
-                  <div>
-                    <p class="text-xs text-gray-700">Modified by you</p>
-                    <p class="text-xs text-gray-400">2 hours ago</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-2.5">
-                  <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <span class="material-symbols-rounded text-gray-500" style="font-size: 12px">group_add</span>
-                  </div>
-                  <div>
-                    <p class="text-xs text-gray-700">Shared with Jordan</p>
-                    <p class="text-xs text-gray-400">Yesterday</p>
-                  </div>
-                </div>
-                <div class="flex items-start gap-2.5">
-                  <div class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                     <span class="material-symbols-rounded text-gray-500" style="font-size: 12px">upload</span>
                   </div>
                   <div>
@@ -882,6 +847,23 @@
         </li>
       </ul>
     </div>
+  </app-modal>
+
+  <!-- Preview popup (single file only); outside the xl-only details panel so it shows at every width -->
+  <app-modal
+    [open]="previewModalOpen()"
+    [title]="selectedFile()?.name ?? ''"
+    maxWidth="2xl"
+    (close)="closePreview()"
+  >
+    <app-file-preview
+      *ngIf="previewModalOpen() && selectedFile(); let previewFile"
+      [fileId]="previewFile.id"
+      [contentType]="previewFile.contentType ?? ''"
+      [fileSize]="previewFile.fileSize ?? 0"
+      [fileName]="previewFile.name"
+      (download)="downloadFile(previewFile)"
+    ></app-file-preview>
   </app-modal>
 
   <!-- Mobile sidebar overlay -->

@@ -309,9 +309,9 @@ export class App implements OnInit {
   fileTypeName(type: FileItem['type']): string {
     const map: Record<FileItem['type'], string> = {
       folder: 'Folder',
-      document: 'Word Document',
-      image: 'PNG Image',
-      video: 'MP4 Video',
+      document: 'Document',
+      image: 'Image',
+      video: 'Video',
       archive: 'ZIP Archive',
       spreadsheet: 'Excel Spreadsheet',
       pdf: 'PDF Document',
