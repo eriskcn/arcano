@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, HostListener, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { IconComponent } from './icon.component';
 
@@ -65,6 +65,13 @@ export class ModalComponent {
   readonly maxWidth = input<'sm' | 'md' | 'lg' | 'xl' | '2xl'>('md');
 
   readonly close = output<void>();
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.open()) {
+      this.close.emit();
+    }
+  }
 
   readonly maxWidthClasses = {
     sm: 'max-w-sm',

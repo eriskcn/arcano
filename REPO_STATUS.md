@@ -9,7 +9,7 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## Current stage
 
-**Feature-rich local-development build, not yet verified in a browser.** The backend API and the frontend are built and unit-tested for:
+**Feature-rich local-development build; the main flows were checked in a browser, the rest were not.** The backend API and the frontend are built and unit-tested for:
 
 - Sign-up, sign-in, protected routes.
 - Files: upload, list, download, rename, star, move, trash, restore, delete forever, and search.
@@ -26,12 +26,13 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 ## What is verified
 
 - **Backend:** builds with no errors; 100 domain tests and 3 auth tests pass.
-- **Frontend:** 109 unit tests pass; the production build succeeds.
+- **Frontend:** 111 unit tests pass; the production build succeeds.
 - **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified
 
-- The web app has not been checked in a browser. This includes sharing, previews, drag and drop, upload progress, and chunked upload.
+- **Checked in a browser (2026-10-31, built-in browser, local stack):** sign-in, create folder, upload (small and a 20 MiB chunked file, hash identical on download), Make a copy, right-click menu, image preview, share link create/open anonymously/revoke, Delete + Ctrl+Z, Ctrl+X/Ctrl+V into a folder + Ctrl+Z. One bug found and fixed: Escape did not close dialogs and cleared the selection behind them.
+- **Not checked in a browser:** sign-up page, drag and drop, upload progress bar (localhost is too fast to see it), Shift+Delete and Trash view, audio/video/text preview in the app, marquee selection, mobile layout.
 - The abandoned-session sweep has only a unit test, not a run against SeaweedFS.
 - The backend has no integration tests for the database and storage paths.
 

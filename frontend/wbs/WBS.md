@@ -49,7 +49,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - [x] **4.3.5 Drop feedback — Completed.** Valid folder and breadcrumb targets get a blue ring while a drag is over them. Dropping on a file does nothing.
   - [x] **4.3.6 Drag tests — Completed.** Eleven tests cover the upload drop (background and folder row), file-to-folder move, folder-to-folder move, self-drop, drop on a file, a backend cycle error, and the three breadcrumb drops.
 
-- [x] **4.5 Context menu — Completed (unit-tested, not verified in a browser).** Right-click menu in the style of Google Drive and OneDrive: icons, shortcut hints, dividers; Open or Preview, Download, Share, Rename, Make a copy, Copy, Cut, Move to, favorite, Details, Move to trash. Right-click selects an unselected item and acts on the whole selection where it can. Trash view has Restore and Delete forever. Right-click on empty space offers New folder, Upload files and Paste. Closes on Escape, click, scroll and resize; arrow keys and Enter work.
+- [x] **4.5 Context menu — Completed (unit-tested; menu, Make a copy and Preview checked in a browser on 2026-10-31).** Right-click menu in the style of Google Drive and OneDrive: icons, shortcut hints, dividers; Open or Preview, Download, Share, Rename, Make a copy, Copy, Cut, Move to, favorite, Details, Move to trash. Right-click selects an unselected item and acts on the whole selection where it can. Trash view has Restore and Delete forever. Right-click on empty space offers New folder, Upload files and Paste. Closes on Escape, click, scroll and resize; arrow keys and Enter work.
   - Limits: Move to trash on a multi-selection skips folders; the Move to submenu is not clamped to the viewport; no background menu when the list is empty; a right-click elsewhere does not close the menu; right-click in Trash does not change the selection and acts on the clicked file only; `moveFile()` in `app.ts` is no longer used by the template (dead code, left in place).
 
 - [~] **4.4 Folder navigation — Built, not verified in a browser (backend 1.7 complete)**
@@ -106,3 +106,9 @@ The listed admin dashboard, advanced keyboard operations, password-protected sha
 
 ## Review Record
 Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment pass; implementation and verification were not performed. Keep statuses evidence-based and update them after code changes and relevant checks.
+
+### 9. Browser verification (2026-10-31)
+- [x] **9.1 Main flows checked in a browser — Completed.** Sign-in, folder create, small and 20 MiB chunked upload (hash identical), Make a copy, right-click menu, image preview, share create/open anonymously/revoke, Delete and Ctrl+Z, Ctrl+X/Ctrl+V and Ctrl+Z.
+- [x] **9.2 Escape closes dialogs — Fixed.** Found in the browser: Escape did not close the share or preview dialog and cleared the selection behind it. `ModalComponent` now closes on Escape and the page handler ignores Escape while a dialog is open. 2 new specs.
+- [ ] **9.3 Not yet checked in a browser — Not Started.** Sign-up page, drag and drop, upload progress bar, Shift+Delete and Trash view, audio/video/text preview, marquee selection, mobile layout.
+- [ ] **9.4 Small issues seen — Not Started.** The "Share" button in the details panel is clipped at the right edge; a copied file keeps the same name (Drive adds "Copy of"); a 1-pixel image previews at 1 px.

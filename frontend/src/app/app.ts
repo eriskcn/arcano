@@ -541,6 +541,9 @@ export class App implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.shareOpen() || this.previewModalOpen()) {
+      return; // the modal closes itself
+    }
     if (this.contextMenu()) {
       this.contextMenu.set(null);
       return;
