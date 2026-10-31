@@ -46,6 +46,7 @@ location / {
 Add `listen 443 ssl;` and certificates as usual.
 
 ## 6. Backup and restore
+Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
 scripts/backup.sh               # db.dump + seaweedfs.tar.gz in backups/<UTC time>/, keeps BACKUP_KEEP=7
 scripts/backup.sh --stop-api    # stops api briefly for a consistent DB/files pair

@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
 **Assessment date:** 2026-10-31
-**Repository state:** `main` at `6a6acb6`, plus uncommitted changes to the copy name, content-type error and Dockerfile (audit findings 12-14).
+**Repository state:** `main`; the release-blocker work (production compose, scripts, frontend image, migrate on startup, sign-up switch) may still be partly uncommitted; check `git status`.
 
 ## Overview
 
@@ -9,7 +9,7 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## MVP verdict
 
-**Feature-complete for a personal-use MVP, and verified end to end on a local stack. Not ready to deploy.** Every core workflow works in a real browser and against the real database and storage. What is missing is deployment and operations work, not features.
+**Feature-complete for a personal-use MVP, verified end to end in a browser and on a throwaway production stack. The five release blockers are addressed; TLS in front is still yours to set up, and the Should-fix list below remains.**
 
 | MVP area | Status | Evidence |
 |---|---|---|
@@ -26,8 +26,8 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend:** builds; 109 domain tests and 6 auth tests pass. 3 integration tests pass against the real SeaweedFS (`ARCANO_IT_S3=1`).
-- **Frontend:** 126 unit tests pass; the production build succeeds.
+- **Backend:** builds; 109 domain tests and 7 auth tests pass. 3 integration tests pass against the real SeaweedFS (`ARCANO_IT_S3=1`).
+- **Frontend:** 128 unit tests pass; the production build succeeds.
 - **Docker image (smoke test, 2026-10-31):** the API image built and ran on the Compose network against a separate database. Register, login, small upload, hash-checked 9 MiB chunked upload, and a share link with public download all passed. The test container and database were removed afterwards.
 - **Browser pass (2026-10-31):** sign-up and its errors, trash (restore, delete forever, Shift+Delete, empty), drag and drop, previews of text, image, audio, video (PDF shows download only), progress bar on a 60 MB chunked upload, marquee selection and Ctrl+A/Escape, mobile and tablet layouts, and console output (no script errors).
 
@@ -38,13 +38,17 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 3. **Dragging a file with a real mouse worked once and then failed on later tries** (no request sent), although synthetic drag events always worked. This may be a limit of the automation tool; check by hand.
 4. Smaller: an audio file is labelled "Document"; double-click on a file row does nothing (folders open); the page heading says "My Files" inside a folder; the sign-up error text is the same for an invalid email and a weak password; Delete forever and Empty trash ask for no confirmation.
 
-## Blockers before a real release
+## Release blockers (2026-10-31): now addressed, verified on a throwaway production stack
 
-1. **Nothing applies database migrations.** There is no `Migrate()` call, so a fresh deploy (including the Compose `api` service) starts against an empty database and fails on the first query. Apply the migrations at startup or in a one-off step.
-2. **No production setup.** The compose API serves plain HTTP only, `apiBaseUrl` in the frontend is hard-coded to `http://localhost:5000/api` with one environment file, and there is no TLS or reverse-proxy configuration. Compose also does not pass `Cors__AllowedOrigins`, `ForwardedHeaders__KnownProxies__0`, `Storage__QuotaBytes` or `Storage__MaxUploadBytes` to the API.
-3. **Development credentials.** `seaweedfs/s3.json` still holds `any_key`/`any_secret` with Admin rights, the database password has a development default, and the old dev JWT key is in git history.
-4. **No backups** of the `postgres_data` and `seaweedfs_data` volumes.
-5. **Sign-up is open to anyone** who can reach the app, each account with 5 GiB. Acceptable only on a private network; otherwise it needs an invite or a switch.
+Verified by bringing up `docker-compose.prod.yml` with throwaway secrets (project `arcano`, fresh volumes, one loopback port), then removing it. Your dev containers and data were not touched.
+
+1. **Migrations:** the API now applies them at startup (`Database:MigrateOnStartup`, 5 retries). On an empty database it created all 12 tables. Several API instances starting together could race (single instance only).
+2. **Production setup:** `docker-compose.prod.yml` publishes only the `web` service (nginx: serves the app and proxies `/api` and `/health` on the same origin, so no CORS and no hard-coded API address). Checked through nginx: a 90 MB single upload and a 20 MiB chunked upload both download with matching hashes, the public rate limit returns 429, and the app shell and deep links load. **TLS is not included:** put a TLS-terminating proxy or load balancer in front of `web` (see `docs/DEPLOY.md`).
+3. **Credentials:** the production compose has no defaults for `POSTGRES_PASSWORD`, `JWT_SECRET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` or `PUBLIC_ORIGIN`; `scripts/gen-s3-config.sh` writes the SeaweedFS identity from the S3 keys and refuses the dev defaults. The old dev JWT key is still in git history (not rewritten); production must use a fresh `JWT_SECRET`.
+4. **Backups:** `scripts/backup.sh` and `scripts/restore.sh` were run for real: a backup, then a restore that removed a file added after the backup and kept the older files, which still downloaded. The check found and fixed a bug (the scripts did not pass the env file). Backups stay on the same host until you copy them off; there is no automatic schedule (cron example in `docs/DEPLOY.md`).
+5. **Open sign-up:** `Auth:AllowRegistration` (production compose default: off, `ALLOW_REGISTRATION`). With it off, sign-up returns 403 `Auth.RegistrationDisabled` and the sign-up page shows "Sign-up is disabled on this server."; existing users still sign in. Create the first account by starting once with it on (see `docs/DEPLOY.md`).
+
+Still not covered: real TLS in front, `web` behind a real proxy, a restore of the file volume while uploads are running (use `backup.sh --stop-api` for a consistent pair), and the Kerberos library warning in the API image log (harmless: no Kerberos is used).
 
 ## Should fix
 

@@ -9,7 +9,9 @@ src="$1"
 [ -s "$src/db.dump" ] && [ -s "$src/seaweedfs.tar.gz" ] || { echo "missing db.dump or seaweedfs.tar.gz in $src" >&2; exit 1; }
 src="$(cd "$src" && pwd)"
 
-DC=(docker compose -p arcano -f docker-compose.prod.yml)
+ENV_FILE="${ENV_FILE:-.env.production}" # the compose file has required variables, so every compose call needs it
+[ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found (set ENV_FILE=...)" >&2; exit 1; }
+DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 VOLUME=arcano_seaweedfs_data
 
 "${DC[@]}" stop web api seaweedfs

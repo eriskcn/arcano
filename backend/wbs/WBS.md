@@ -125,3 +125,8 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
 
 ## Overall Status
 **In Progress.** File endpoint authentication and owner checks are implemented. The JWT secret check is implemented, but the audit found a tracked dev key, so that item is reopened. Upload size limits, storage/metadata failure consistency, integration/security tests, and Compose runtime verification remain incomplete. The 2026-10-30 ponytail audit added section 1.6 with 19 findings, all Not Started. Status reflects the repository review dated 2026-10-30; update it as implementation and verification progress.
+  - [x] **1.14 Release blockers (2026-10-31) — Completed, verified on a throwaway production stack**
+    - Migrations run at API startup (`Database:MigrateOnStartup`, default on, 5 retries); `Auth:AllowRegistration` (default on; production compose default off) makes sign-up return 403 `Auth.RegistrationDisabled`; 1 unit test.
+    - `docker-compose.prod.yml`, `.env.production.example`, `scripts/gen-s3-config.sh`, `scripts/backup.sh`, `scripts/restore.sh`, `docs/DEPLOY.md`. Backup and restore were run for real (restore removed a file added after the backup); this found and fixed a bug (the scripts did not pass the env file).
+    - Not covered: TLS (terminate it in front of `web`), several API instances, an automatic backup schedule or off-host copies, rewriting the git history that contains the old dev JWT key.
+

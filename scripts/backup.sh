@@ -6,7 +6,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DC=(docker compose -p arcano -f docker-compose.prod.yml)
+ENV_FILE="${ENV_FILE:-.env.production}" # the compose file has required variables, so every compose call needs it
+[ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found (set ENV_FILE=...)" >&2; exit 1; }
+DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 KEEP="${BACKUP_KEEP:-7}"
 VOLUME=arcano_seaweedfs_data # <project>_<volume>; check: docker compose -p arcano -f docker-compose.prod.yml config --volumes
 STOP_API=0

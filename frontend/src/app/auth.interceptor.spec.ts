@@ -3,11 +3,15 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { authInterceptor } from './auth.interceptor';
 import { AuthService } from './auth.service';
+import { environment } from '../environments/environment';
 
-vi.mock('../environments/environment', () => ({ environment: { appName: 'test', apiBaseUrl: '/api' } }));
 
 describe('authInterceptor with a relative apiBaseUrl', () => {
+  const original = environment.apiBaseUrl;
+  afterEach(() => { environment.apiBaseUrl = original; });
+
   beforeEach(() => {
+    environment.apiBaseUrl = '/api';
     TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useValue: { tokenForRequest: () => 'tok', needsRefresh: () => false } },
