@@ -1,45 +1,57 @@
 # Arcano Repository Status Report
 
-**Assessment date:** 2026-10-30
-**Repository state:** `main` at `7c4fe47` ("feat: implement pagination for file listing and enforce upload size limit"). Earlier this day: audit remediation in `c4ae916`. Two WBS files are staged but not committed; `REPO_STATUS.md` is untracked.
+**Assessment date:** 2026-10-31
+**Repository state:** `main` at `d795494` ("feat: implement session cleanup for abandoned uploads and add related unit tests"). Working tree clean.
 
 ## Overview
 
-Arcano is a monorepo for a personal cloud-storage application. It contains an ASP.NET Core backend and an Angular frontend. The backend API for files and authentication works end to end. The frontend has a working file explorer that uses the API, but several planned UI features are not started.
+Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (.NET 10) backend with PostgreSQL and SeaweedFS (S3), and an Angular 22 frontend.
 
 ## Current stage
 
-**Working file-storage MVP for local development.** Sign-up, sign-in, and the file API (upload, list, download, delete) work against the real PostgreSQL and SeaweedFS stack. The frontend lists, uploads, downloads, and deletes files through the API. Folders, sharing, previews, and admin features are planned, not built.
+**Feature-rich local-development build, not yet verified in a browser.** The backend API and the frontend are built and unit-tested for:
+
+- Sign-up, sign-in, protected routes.
+- Files: upload, list, download, rename, star, move, trash, restore, delete forever, and search.
+- Folders: create, rename, move, tree and breadcrumb navigation, drag and drop.
+- Storage quota and usage display.
+- Share links for files (create, expiry, revoke) and a public share page at `/share/:token`.
+- Previews for images, audio, video, and plain text (PDF is deferred).
+- Large files: configurable upload limit (`Storage:MaxUploadBytes`, 413 on oversize), upload progress, and resumable chunked uploads (8 MiB parts over S3 multipart, retry within a session). Abandoned sessions older than 24 hours are swept when their owner starts another upload.
+
+Planned, not built: admin features, keyboard actions, folder sharing, share-link passwords, PDF preview, password reset, email verification, refresh tokens.
 
 ## What is verified
 
-- **Backend build and tests:** the solution builds with no errors. Tests pass: 49 domain tests and 2 auth tests.
-- **End-to-end upload (local, port 5001):** sign-up, sign-in, upload, list, download (bytes match), delete, cross-user access (404), and no-token access (401) all behaved as expected. The database row and stored object were checked.
-- **Frontend:** 29 unit tests pass, and the production build succeeds.
+- **Backend:** builds with no errors; 97 domain tests and 3 auth tests pass.
+- **Frontend:** 96 unit tests pass; the production build succeeds.
+- **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified
 
-- The web app has not been checked in a browser. The paging fix is covered only by unit tests.
-- The 100 MB upload limit has not been tested with a real oversized request.
+- The web app has not been checked in a browser. This includes sharing, previews, drag and drop, upload progress, and chunked upload.
+- The abandoned-session sweep has only a unit test, not a run against SeaweedFS.
 - The backend has no integration tests for the database and storage paths.
 
-## Gaps and risks to resolve
+## Gaps and risks
 
-1. **A dev JWT signing key is still in git history.** The key was in `backend/src/ArcanoCore.API/appsettings.Development.json` from the first commit. The working copy no longer has it, but the file is still tracked. Rotate the key if it is used in any real environment, and decide whether to untrack the file.
-2. **Compose credentials are fixed.** The database and storage credentials in `backend/docker-compose.yml` are for local development only. Replace them before any deployment.
-3. **The frontend WBS is out of date.** Section 4.1 (core file listing and actions) still says "Not Started", but the explorer already lists, uploads, downloads, and deletes through the API. Update it to match.
-4. **Folders are planned, with one open decision.** The backend has the folder data model but no folder API. Deleting a non-empty folder still needs a decision: reject it, or cascade to its files (backend WBS task 1.7.5).
-5. **Upload failure handling is partly done.** Failed uploads clean up stored objects, and failed deletes save the database change first. Failure handling is not yet verified with integration tests.
+1. **A dev JWT signing key is still in git history.** `appsettings.Development.json` is still tracked. Rotate the key if used anywhere real, and decide whether to untrack the file.
+2. **Compose credentials are fixed** for local development. Replace them before any deployment.
+3. **The upload lock and quota race fix work on a single API instance only.** The lock is in process.
+4. **Chunked upload limits:** no resume after a page reload; abandoned uploads of owners who never return are not swept; `MaxUploadBytes` does not cap chunked files (bounded by quota and about 80 GB).
+5. **Review item 1 is partly fixed:** a failed save in trash purge can leave an entity tracked. Item 10 (`CurrentOwnerId` copies) remains.
+6. **Public share endpoint has no rate limit.** The token is 32 random bytes, so guessing is impractical, but abuse is not throttled.
+7. **413 message** also shows for 413s from a proxy.
+8. **No ADRs** exist for the anonymous sharing model, the resumable upload design, or trash retention.
 
 ## Recommended next steps
 
-1. Decide on the JWT key: rotate it and untrack the dev settings file.
-2. Test the web app in a browser: sign in, upload, page through more than 50 files, delete.
-3. Add integration tests for upload, delete, and failure paths against the Compose stack.
-4. Update the frontend WBS section 4.1 to match the working explorer.
-5. Decide the folder-delete behavior (backend WBS 1.7.5), then build folders.
-6. Replace fixed Compose credentials with a development-safe configuration pattern before deployment.
+1. Check the web app in a browser end to end (sign in, upload including a file over 8 MiB, folders, drag and drop, share, preview, trash).
+2. Decide on the JWT key: rotate it and untrack the dev settings file.
+3. Add integration tests for upload, chunked upload, and delete paths against the Compose stack.
+4. Write ADRs for sharing and resumable uploads before extending them (folder sharing, passwords).
+5. Add a rate limit on the public share endpoints.
 
 ## Verification scope
 
-This update reflects the work done on 2026-10-30: backend and frontend builds and tests, the end-to-end upload check against the local stack, and the code review of commit `c4ae916`. The browser UI and the 100 MB limit were not tested.
+Reflects work through 2026-10-31: backend and frontend builds and tests run on `d795494`, plus the live API checks listed above. Nothing was tested in a browser.
