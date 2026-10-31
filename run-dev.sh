@@ -65,5 +65,5 @@ api_pid=$!
 ) &
 frontend_pid=$!
 
-printf 'API:      http://localhost:5000\nFrontend: http://localhost:4200\nPress Ctrl+C to stop the API and frontend.\n'
+printf 'API:      http://localhost:5000\nFrontend: http://localhost:4200\nPress Ctrl+C to stop the API and frontend.\nRun `cd backend/ && docker compose down && cd ..` to stop postgres seaweedfs'
 wait -n "$api_pid" "$frontend_pid"
