@@ -10,6 +10,7 @@ import { AccountService } from './account.service';
 import { AuthService } from './auth.service';
 import { FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
+import { ShareLinkDto, ShareService } from './share.service';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
 import { QuotaMeterComponent } from './shared/components/quota-meter.component';
@@ -17,8 +18,6 @@ import { QuotaMeterComponent } from './shared/components/quota-meter.component';
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
 export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'shared' | 'trash';
-export type ShareView = 'share' | 'manage' | 'link-settings';
-export type LinkScope = 'anyone' | 'org' | 'existing' | 'chosen';
 
 export interface FileItem {
   id: string;
@@ -92,6 +91,7 @@ export class App implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly filesApi = inject(FilesService);
   private readonly foldersApi = inject(FoldersService);
+  private readonly shareApi = inject(ShareService);
   private readonly accountApi = inject(AccountService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -132,15 +132,16 @@ export class App implements OnInit {
 
   // Share Dialog State
   readonly shareOpen = signal<boolean>(false);
-  readonly shareView = signal<ShareView>('share');
-  readonly shareRecipient = signal<string>('');
-  readonly shareMessage = signal<string>('');
-  readonly shareCopied = signal<boolean>(false);
-  readonly shareSent = signal<boolean>(false);
-  readonly manageTab = signal<'people' | 'groups' | 'links'>('people');
-  readonly linkScope = signal<LinkScope>('org');
-  readonly sharePermission = signal<string>('Can view');
-  readonly shareExpiration = signal<string>('');
+  readonly shareLinks = signal<ShareLinkDto[]>([]);
+  readonly shareExpiryDays = signal<number | null>(null);
+  readonly shareBusy = signal<boolean>(false);
+  readonly shareError = signal<string>('');
+  readonly shareExpiryOptions: { label: string; days: number | null }[] = [
+    { label: 'Never', days: null },
+    { label: '1 day', days: 1 },
+    { label: '7 days', days: 7 },
+    { label: '30 days', days: 30 },
+  ];
 
   ngOnInit(): void {
     this.syncPageWithRoute();
@@ -170,13 +171,6 @@ export class App implements OnInit {
   ];
 
   readonly filterChips = ['All', 'Folders', 'Documents', 'Images', 'Videos', 'Shared'];
-
-  readonly linkScopeOptions: { key: LinkScope; label: string; sub?: string; icon: string; color: string }[] = [
-    { key: 'anyone', label: 'Anyone', icon: 'public', color: 'text-green-600' },
-    { key: 'org', label: `People in ${this.appName} Org`, sub: 'Share within your organization, account required.', icon: 'corporate_fare', color: 'text-blue-600' },
-    { key: 'existing', label: 'Only people with existing access', icon: 'person', color: 'text-orange-500' },
-    { key: 'chosen', label: 'People you choose', icon: 'group', color: 'text-purple-600' },
-  ];
 
   readonly navLabels: Record<NavItem, string> = {
     home: 'Home',
@@ -1015,19 +1009,63 @@ export class App implements OnInit {
     this.setSelection(nextSelection, [...nextSelection].at(-1) ?? null);
   }
 
-  handleCopyLink(): void {
-    navigator.clipboard.writeText('https://arcanodrive.app/share/df92bc7a').catch(() => {});
-    this.shareCopied.set(true);
-    setTimeout(() => this.shareCopied.set(false), 2000);
+  openShare(): void {
+    const file = this.selectedFile();
+    if (!file) {
+      return;
+    }
+    this.shareOpen.set(true);
+    this.shareLinks.set([]);
+    this.shareError.set('');
+    this.shareApi.list(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: links => this.shareLinks.set(links),
+      error: err => this.shareError.set(this.shareErrorMessage(err, 'Unable to load share links.')),
+    });
   }
 
-  handleSendShare(): void {
-    if (!this.shareRecipient().trim()) return;
-    this.shareSent.set(true);
-    setTimeout(() => {
-      this.shareSent.set(false);
-      this.shareRecipient.set('');
-      this.shareMessage.set('');
-    }, 1800);
+  closeShare(): void {
+    this.shareOpen.set(false);
+  }
+
+  createShareLink(): void {
+    const file = this.selectedFile();
+    if (!file || this.shareBusy()) {
+      return;
+    }
+    const days = this.shareExpiryDays();
+    const expiresAtUtc = days === null ? null : new Date(Date.now() + days * 86_400_000).toISOString();
+    this.shareBusy.set(true);
+    this.shareError.set('');
+    this.shareApi.create(file.id, expiresAtUtc).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: link => {
+        this.shareLinks.update(links => [link, ...links]);
+        this.shareBusy.set(false);
+      },
+      error: err => {
+        this.shareBusy.set(false);
+        this.shareError.set(this.shareErrorMessage(err, 'Unable to create share link.'));
+      },
+    });
+  }
+
+  revokeShareLink(link: ShareLinkDto): void {
+    this.shareError.set('');
+    this.shareApi.revoke(link.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => this.shareLinks.update(links => links.filter(l => l.id !== link.id)),
+      error: err => this.shareError.set(this.shareErrorMessage(err, 'Unable to revoke share link.')),
+    });
+  }
+
+  copyShareLink(link: ShareLinkDto): void {
+    navigator.clipboard.writeText(this.shareApi.linkFor(link.token)).catch(() => {});
+  }
+
+  shareLinkUrl(token: string): string {
+    return this.shareApi.linkFor(token);
+  }
+
+  private shareErrorMessage(err: unknown, fallback: string): string {
+    const body = err instanceof HttpErrorResponse ? err.error : null;
+    return (typeof body === 'string' && body) || body?.detail || body?.title || body?.message || fallback;
   }
 }

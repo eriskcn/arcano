@@ -708,4 +708,44 @@ describe('App', () => {
 
     http.verify();
   });
+
+  it('should open the share dialog, create and revoke a link', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+    app.selectedId.set('1');
+
+    app.openShare();
+    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share` && r.params.get('fileId') === '1').flush([]);
+    expect(app.shareOpen()).toBe(true);
+
+    app.shareExpiryDays.set(7);
+    app.createShareLink();
+    const create = http.expectOne(`${environment.apiBaseUrl}/Share`);
+    expect(create.request.body.fileId).toBe('1');
+    expect(create.request.body.expiresAtUtc).not.toBeNull();
+    const link = { id: 'l1', fileId: '1', token: 'tok', expiresAtUtc: null, createdAtUtc: '2026-07-22T10:00:00Z' };
+    create.flush(link);
+    expect(app.shareLinks()).toEqual([link]);
+
+    app.revokeShareLink(link);
+    http.expectOne(`${environment.apiBaseUrl}/Share/l1`).flush(null);
+    expect(app.shareLinks()).toEqual([]);
+    http.verify();
+  });
+
+  it('should show backend errors in the share dialog', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+    app.selectedId.set('1');
+
+    app.openShare();
+    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share`).flush([]);
+    app.createShareLink();
+    http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ title: 'Expiry must be in the future.' }, { status: 400, statusText: 'Bad Request' });
+    expect(app.shareError()).toBe('Expiry must be in the future.');
+  });
 });

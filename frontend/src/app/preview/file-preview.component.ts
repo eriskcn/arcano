@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, OnDestroy, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { ButtonComponent } from '../shared/components/button.component';
 import { FilesService } from '../files.service';
 import { PreviewKind, previewKind } from './preview-kind';
@@ -44,7 +44,9 @@ export class FilePreviewComponent implements OnDestroy {
   private readonly files = inject(FilesService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly fileId = input.required<string>();
+  readonly fileId = input<string>('');
+  // Optional override for sources other than an owned file (e.g. a public share).
+  readonly loader = input<(() => Observable<Blob>) | null>(null);
   readonly contentType = input.required<string>();
   readonly fileSize = input.required<number>();
   readonly fileName = input.required<string>();
@@ -65,7 +67,8 @@ export class FilePreviewComponent implements OnDestroy {
     effect(() => {
       const id = this.fileId();
       const kind = this.kind();
-      untracked(() => this.load(id, kind));
+      const loader = this.loader();
+      untracked(() => this.load(id, kind, loader));
     });
   }
 
@@ -74,7 +77,7 @@ export class FilePreviewComponent implements OnDestroy {
     this.releaseObjectUrl();
   }
 
-  private load(id: string, kind: PreviewKind): void {
+  private load(id: string, kind: PreviewKind, loader: (() => Observable<Blob>) | null): void {
     this.subscription?.unsubscribe();
     const token = ++this.loadToken;
     this.releaseObjectUrl();
@@ -87,8 +90,7 @@ export class FilePreviewComponent implements OnDestroy {
     }
 
     this.state.set('loading');
-    this.subscription = this.files
-      .download(id)
+    this.subscription = (loader ? loader() : this.files.download(id))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => void this.show(blob, kind, token),

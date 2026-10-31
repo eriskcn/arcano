@@ -54,10 +54,8 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Wire the existing "Folders" filter chip to real folder data instead of the mock; the chip is not implemented against the API yet.
 
 ### 5. File Sharing (Planned)
-- [ ] **5.1 Share-link management — Not Started**
-  - Generate and manage links with supported access, password, and expiration options.
-- [ ] **5.2 Public share view — Not Started**
-  - Recipient view depends on backend public-share and access-control contracts.
+- [x] **5.1 Share-link management — Completed for files (unit-tested, not verified in a browser).** A Share button in the details panel opens a dialog to create a link (never, 1, 7, or 30 days), copy it, and revoke it. Replaces the earlier mock dialog. Password and folder sharing are not included.
+- [x] **5.2 Public share view — Completed (unit-tested, not verified in a browser).** Route `/share/:token` needs no login. It shows the file name and size, a Download button, and an inline preview (image, media, text only), or "This link is invalid or has expired." Download errors show no message yet.
 
 ### 6. Media and Document Previews (Planned)
 - Current state: the preview panel shell exists (desktop, toggled from the toolbar) and shows the selected item's details. It does not render file content yet.

@@ -11,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IFolderService, FolderService>();
+        services.AddScoped<IShareService, ShareService>();
         services.AddScoped<IStorageQuotaService>(sp => new StorageQuotaService(sp.GetRequiredService<IApplicationDbContext>(), storageQuotaBytes));
         return services;
     }
