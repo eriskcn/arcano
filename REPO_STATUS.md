@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
 **Assessment date:** 2026-10-31
-**Repository state:** `main` plus the uncommitted should-fix round (see below); check `git status`.
+**Repository state:** the `v0.1.0` tag (commit `7374246`) on `main`.
 
 ## Overview
 
@@ -56,9 +56,9 @@ Still not covered: real TLS in front, `web` behind a real proxy, a restore of th
 
 Done:
 - **Accounts:** password length 8; the Identity security stamp is in every token, so a password change or `POST api/Auth/logout` ("sign out everywhere") revokes all other tokens at once; change password and delete account (data, files and uploads are removed) in a new Settings dialog.
-- **Cleanup:** a background job (every `Cleanup:IntervalMinutes`, default 60) removes abandoned upload sessions older than 24 hours and trashed files older than 30 days for all users.
+- **Cleanup:** a background job (every `Cleanup:IntervalMinutes`, default 60) removes abandoned upload sessions older than 24 hours and trashed files and soft-deleted folders older than 30 days for all users.
 - **Folders:** deleting a non-empty folder moves everything inside to the Trash (after a confirmation); a folder downloads as a zip (up to 5,000 files).
-- **Operations:** `/health` checks the database and storage; non-root API image with persisted data-protection keys; Compose healthcheck; the dev API port is loopback-only; `security.toml.example` for fresh clones; a GitHub Actions workflow (`.github/workflows/ci.yml`, not yet run on GitHub).
+- **Operations:** `/health` checks the database and storage; non-root API image with persisted data-protection keys; Compose healthcheck; the dev API port is loopback-only; `security.toml.example` for fresh clones; a GitHub Actions workflow (`.github/workflows/ci.yml`, active in the repo; as far as verified it has not yet run on GitHub).
 - **Tests:** real-PostgreSQL integration tests.
 - **Bugs this round's production run found:** the folder zip returned a truncated archive on the real server (Kestrel forbids the synchronous writes `ZipArchive` makes; the unit tests used a `MemoryStream`, which allows them), now fixed by allowing synchronous IO for that one response; and one Postgres test sorted culture-sensitively.
 
@@ -68,7 +68,7 @@ Not done:
 - **Shared view removed:** the backend only supports share links you create, so there is no "Shared" nav item or filter; links are created per file.
 - **Several API instances** are not supported (upload lock and migrations are per process).
 - **Token renewal** still keeps a stolen token usable for up to 24 hours unless the owner signs out everywhere.
-- **The CI workflow** has not run on GitHub yet.
+- **CI:** push and check the CI run; the workflow has not run on GitHub as far as verified.
 
 ## Later
 
@@ -81,7 +81,7 @@ The README files and both WBS files were brought up to date after the release-bl
 ## Not verified
 
 - Real TLS in front of `web`, and `web` behind a real proxy.
-- The new GitHub Actions workflow on GitHub (the YAML parses; it has not run).
+- The GitHub Actions workflow on GitHub (the YAML parses; it has not run as far as verified).
 - The Settings dialog, the confirmation dialogs and double-click preview in a real browser (unit tests only).
 - Real touch input on mobile, keyboard accessibility, and a restore of the file volume while uploads are running.
 - Test instances: the Angular dev server may still be running on port 4200 and an API on port 5000.

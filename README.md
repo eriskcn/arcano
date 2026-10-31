@@ -5,7 +5,7 @@ A personal cloud-storage application monorepo with an ASP.NET Core backend and A
 ## Repository overview
 
 - `backend/`: ASP.NET Core (.NET 10) Web API organized around Domain, Application, Infrastructure, and API layers. PostgreSQL stores metadata; SeaweedFS provides object storage.
-- `frontend/`: Angular 22 client: sign-in and sign-up, a file explorer with folders, drag and drop, trash, share links, previews, chunked uploads, keyboard shortcuts, a right-click menu and an account settings dialog.
+- `frontend/`: Angular 22 client: sign-in and sign-up, a file explorer with folders, drag and drop, trash, share links, previews, chunked uploads (including from a phone), folder zip download, starred items that persist, keyboard shortcuts, a right-click menu and an account settings dialog.
 - `REPO_STATUS.md`: current repository-stage assessment, gaps, and recommended next steps.
 - `backend/wbs/WBS.md` and `frontend/wbs/WBS.md`: implementation task tracking.
 
@@ -56,9 +56,9 @@ Set `RUN_DEV_LOG_FILE` to change the log file path.
 
 ## Current status
 
-- Backend: accounts (register, login, token refresh, logout, change password, delete account), files with folders, trash, star, copy and move, share links, chunked and resumable uploads, storage quota, folder zip download, a background cleanup job and a deep `/health` check. The upload limit is configurable (`Storage:MaxUploadBytes`, default 100 MB).
-- Frontend: file explorer with folders, drag and drop, trash, share links, previews (image, text, audio, video), chunked uploads with a progress bar, keyboard shortcuts, a right-click menu and an account settings dialog.
-- Tests: backend unit tests, API tests and integration tests (S3 and PostgreSQL), and frontend specs. Run the backend tests with `dotnet test backend/ArcanoCore.sln` and the frontend tests from `frontend/` with `npm test`. See [backend/README.md](backend/README.md#tests) for the integration tests.
+- Backend: accounts (register, login, token refresh, logout, change password, delete account), files with folders, trash, star, copy and move, share links, chunked and resumable uploads, storage quota, folder zip download, persisted folder star, a background cleanup job (abandoned uploads, old trash and soft-deleted folders) and a deep `/health` check. The upload limit is configurable (`Storage:MaxUploadBytes`, default 100 MB).
+- Frontend: file explorer with folders, drag and drop, trash, share links, previews (image, text, audio, video), chunked uploads with a progress bar (file picker works on phones), folder zip download, persisted star, keyboard shortcuts, a right-click menu and an account settings dialog.
+- Tests: backend unit tests, API tests and integration tests (S3 and PostgreSQL), and frontend specs. Run the backend tests with `dotnet test backend/ArcanoCore.sln` and the frontend tests from `frontend/` with `npm test`. Integration tests need `ARCANO_IT_S3` and `ARCANO_IT_PG` set; see [backend/README.md](backend/README.md#tests).
 
 ## Before deployment
 
