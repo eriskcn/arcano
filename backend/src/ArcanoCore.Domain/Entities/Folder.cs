@@ -18,7 +18,4 @@ public class Folder : BaseEntity<Guid>, IAuditableEntity
 
     // Contents
     public ICollection<FileMetadata> Files { get; set; } = [];
-
-    // Shared links
-    public ICollection<SharedLink> SharedLinks { get; set; } = [];
 }

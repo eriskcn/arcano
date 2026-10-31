@@ -12,9 +12,6 @@ public class SharedLink : BaseEntity<Guid>, IAuditableEntity
     public Guid? FileMetadataId { get; set; }
     public FileMetadata? FileMetadata { get; set; }
 
-    public Guid? FolderId { get; set; }
-    public Folder? Folder { get; set; }
-
     // Creator — FK only
     public Guid CreatedById { get; set; }
 

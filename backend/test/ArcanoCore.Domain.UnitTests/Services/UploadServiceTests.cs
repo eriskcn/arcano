@@ -213,7 +213,6 @@ public class UploadServiceTests
         public DbSet<UploadSession> Sessions => Set<UploadSession>();
         public DbSet<FileMetadata> FileMetadatas => Files;
         public DbSet<Folder> Folders => Set<Folder>();
-        public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => Sessions;
 

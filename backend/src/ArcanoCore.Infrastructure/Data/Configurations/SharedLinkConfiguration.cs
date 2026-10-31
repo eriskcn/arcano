@@ -31,11 +31,5 @@ public class SharedLinkConfiguration : IEntityTypeConfiguration<SharedLink>
             .WithMany(f => f.SharedLinks)
             .HasForeignKey(x => x.FileMetadataId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // Optional folder target
-        builder.HasOne(x => x.Folder)
-            .WithMany(f => f.SharedLinks)
-            .HasForeignKey(x => x.FolderId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

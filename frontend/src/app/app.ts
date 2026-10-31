@@ -418,26 +418,6 @@ export class App implements OnInit {
     });
   }
 
-  moveFile(file: FileItem, folderId: string | null): void {
-    if (this.actionBusy()) {
-      return;
-    }
-    this.actionBusy.set(true);
-    this.actionError.set('');
-    this.contextMenu.set(null);
-
-    this.filesApi.moveFile(file.id, folderId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.actionBusy.set(false);
-        this.loadFiles();
-      },
-      error: () => {
-        this.actionBusy.set(false);
-        this.actionError.set(`Unable to move ${file.name}. Please try again.`);
-      },
-    });
-  }
-
   signOut(): void {
     this.auth.logout();
     this.files.set([]);

@@ -83,37 +83,6 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.ToTable("FileMetadata", (string)null);
                 });
 
-            modelBuilder.Entity("ArcanoCore.Domain.Entities.FileTag", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("FileMetadataId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("LastModifiedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FileMetadataId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("FileTag", (string)null);
-                });
-
             modelBuilder.Entity("ArcanoCore.Domain.Entities.Folder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -171,9 +140,6 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.Property<Guid?>("FileMetadataId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("FolderId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -193,8 +159,6 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.HasIndex("CreatedById");
 
                     b.HasIndex("FileMetadataId");
-
-                    b.HasIndex("FolderId");
 
                     b.HasIndex("Token")
                         .IsUnique();
@@ -464,17 +428,6 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.Navigation("Folder");
                 });
 
-            modelBuilder.Entity("ArcanoCore.Domain.Entities.FileTag", b =>
-                {
-                    b.HasOne("ArcanoCore.Domain.Entities.FileMetadata", "FileMetadata")
-                        .WithMany("Tags")
-                        .HasForeignKey("FileMetadataId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FileMetadata");
-                });
-
             modelBuilder.Entity("ArcanoCore.Domain.Entities.Folder", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser<System.Guid>", null)
@@ -504,14 +457,7 @@ namespace ArcanoCore.Infrastructure.Migrations
                         .HasForeignKey("FileMetadataId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("ArcanoCore.Domain.Entities.Folder", "Folder")
-                        .WithMany("SharedLinks")
-                        .HasForeignKey("FolderId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.Navigation("FileMetadata");
-
-                    b.Navigation("Folder");
                 });
 
             modelBuilder.Entity("ArcanoCore.Domain.Entities.UploadSession", b =>
@@ -577,8 +523,6 @@ namespace ArcanoCore.Infrastructure.Migrations
             modelBuilder.Entity("ArcanoCore.Domain.Entities.FileMetadata", b =>
                 {
                     b.Navigation("SharedLinks");
-
-                    b.Navigation("Tags");
                 });
 
             modelBuilder.Entity("ArcanoCore.Domain.Entities.Folder", b =>
@@ -586,8 +530,6 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Files");
-
-                    b.Navigation("SharedLinks");
                 });
 #pragma warning restore 612, 618
         }

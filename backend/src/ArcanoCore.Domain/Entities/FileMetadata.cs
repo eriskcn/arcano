@@ -23,9 +23,6 @@ public class FileMetadata : BaseEntity<Guid>, IAuditableEntity
     public Guid? FolderId { get; set; }
     public Folder? Folder { get; set; }
 
-    // Tags (one-to-many)
-    public ICollection<FileTag> Tags { get; set; } = [];
-
     // Shared links
     public ICollection<SharedLink> SharedLinks { get; set; } = [];
 }

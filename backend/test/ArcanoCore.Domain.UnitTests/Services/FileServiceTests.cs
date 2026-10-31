@@ -806,7 +806,6 @@ public class FileServiceTests
 
         public DbSet<FileMetadata> FileMetadatas { get; }
         public DbSet<Folder> Folders => throw new NotSupportedException();
-        public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
 

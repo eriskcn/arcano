@@ -47,11 +47,5 @@ public class FileMetadataConfiguration : IEntityTypeConfiguration<FileMetadata>
             .WithMany(f => f.Files)
             .HasForeignKey(x => x.FolderId)
             .OnDelete(DeleteBehavior.SetNull);
-
-        // Tags (one-to-many; FileTag owns the FK)
-        builder.HasMany(x => x.Tags)
-            .WithOne(t => t.FileMetadata)
-            .HasForeignKey(t => t.FileMetadataId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }
