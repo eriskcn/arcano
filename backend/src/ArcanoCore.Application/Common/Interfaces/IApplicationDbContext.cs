@@ -11,5 +11,6 @@ public interface IApplicationDbContext
     DbSet<Folder> Folders { get; }
     DbSet<FileTag> FileTags { get; }
     DbSet<SharedLink> SharedLinks { get; }
+    DbSet<UploadSession> UploadSessions { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

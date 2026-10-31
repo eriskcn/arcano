@@ -63,6 +63,7 @@ public class StorageQuotaServiceTests
         public DbSet<Folder> Folders => throw new NotSupportedException();
         public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
+        public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken) => Task.FromResult(0);
     }
 

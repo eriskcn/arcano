@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,6 +19,9 @@ public class FileService : IFileService
     private readonly IStorageService _storageService;
     private readonly ICurrentUser _currentUser;
     private readonly IStorageQuotaService _quotaService;
+
+    // shortcut: in-process lock, so the quota check is only race-free on a single API instance; use a DB lock when scaling out.
+    internal static readonly ConcurrentDictionary<Guid, SemaphoreSlim> UploadLocks = new();
 
     public FileService(
         IApplicationDbContext dbContext,
@@ -62,15 +66,18 @@ public class FileService : IFileService
             return Result<FileResponseDto>.Failure(new Error("Folder.NotFound", "Folder not found."));
         }
 
-        var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, dto.FileSize, cancellationToken);
-        if (quotaResult.IsFailure)
-        {
-            return Result<FileResponseDto>.Failure(quotaResult.Error);
-        }
-
+        // One upload per user at a time, so parallel uploads cannot each pass the quota check.
+        var uploadLock = UploadLocks.GetOrAdd(ownerId, _ => new SemaphoreSlim(1, 1));
+        await uploadLock.WaitAsync(cancellationToken);
         string? storageKey = null;
         try
         {
+            var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, dto.FileSize, cancellationToken);
+            if (quotaResult.IsFailure)
+            {
+                return Result<FileResponseDto>.Failure(quotaResult.Error);
+            }
+
             storageKey = await _storageService.UploadAsync(dto.Content, dto.FileName, dto.ContentType, cancellationToken);
 
             var fileMetadata = new FileMetadata
@@ -109,6 +116,10 @@ public class FileService : IFileService
             }
 
             return Result<FileResponseDto>.Failure(new Error("File.UploadFailed", "Upload failed. Please try again."));
+        }
+        finally
+        {
+            uploadLock.Release();
         }
     }
 

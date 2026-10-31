@@ -20,7 +20,6 @@ public class FilesController : ApiControllerBase
     }
 
     [HttpPost("upload")]
-    [RequestSizeLimit(104857600)] // 100 MB
     public async Task<IActionResult> Upload(IFormFile file, [FromForm] Guid? folderId, CancellationToken cancellationToken)
     {
         if (file == null || file.Length == 0)

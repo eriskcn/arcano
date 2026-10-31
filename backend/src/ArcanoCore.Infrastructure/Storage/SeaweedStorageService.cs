@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace ArcanoCore.Infrastructure.Storage;
 
-public class SeaweedStorageService : IStorageService
+public class SeaweedStorageService : IStorageService, IMultipartStorage
 {
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
@@ -77,6 +79,82 @@ public class SeaweedStorageService : IStorageService
         {
             BucketName = _bucketName,
             Key = key
+        }, cancellationToken);
+    }
+
+    public async Task<(string Key, string UploadId)> InitiateAsync(string contentType, CancellationToken cancellationToken = default)
+    {
+        await EnsureBucketExistsAsync(cancellationToken);
+        var key = Guid.NewGuid().ToString();
+        var response = await _s3Client.InitiateMultipartUploadAsync(new InitiateMultipartUploadRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            ContentType = contentType
+        }, cancellationToken);
+        return (key, response.UploadId);
+    }
+
+    public async Task UploadPartAsync(string key, string uploadId, int partNumber, Stream content, CancellationToken cancellationToken = default)
+    {
+        await _s3Client.UploadPartAsync(new UploadPartRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            UploadId = uploadId,
+            PartNumber = partNumber,
+            InputStream = content
+        }, cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<int, long>> ListPartsAsync(string key, string uploadId, CancellationToken cancellationToken = default)
+    {
+        var parts = new Dictionary<int, long>();
+        var request = new ListPartsRequest { BucketName = _bucketName, Key = key, UploadId = uploadId };
+        ListPartsResponse response;
+        do
+        {
+            response = await _s3Client.ListPartsAsync(request, cancellationToken);
+            foreach (var part in response.Parts)
+            {
+                parts[part.PartNumber] = part.Size;
+            }
+            request.PartNumberMarker = response.NextPartNumberMarker.ToString();
+        }
+        while (response.IsTruncated);
+        return parts;
+    }
+
+    public async Task CompleteAsync(string key, string uploadId, CancellationToken cancellationToken = default)
+    {
+        // The ETags come from the listing, so the caller only has to track part numbers.
+        var request = new ListPartsRequest { BucketName = _bucketName, Key = key, UploadId = uploadId };
+        var etags = new List<PartETag>();
+        ListPartsResponse response;
+        do
+        {
+            response = await _s3Client.ListPartsAsync(request, cancellationToken);
+            etags.AddRange(response.Parts.Select(p => new PartETag(p.PartNumber, p.ETag)));
+            request.PartNumberMarker = response.NextPartNumberMarker.ToString();
+        }
+        while (response.IsTruncated);
+
+        await _s3Client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            UploadId = uploadId,
+            PartETags = etags
+        }, cancellationToken);
+    }
+
+    public async Task AbortAsync(string key, string uploadId, CancellationToken cancellationToken = default)
+    {
+        await _s3Client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+        {
+            BucketName = _bucketName,
+            Key = key,
+            UploadId = uploadId
         }, cancellationToken);
     }
 }

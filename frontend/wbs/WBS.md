@@ -74,6 +74,10 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [x] **7.2 Item 9: share error messages — Completed (unit-tested, not verified in a browser).** `shareErrorMessage` in `app.ts` reads `detail`, `title` and `message`, but the backend sends `{code, description}`, so messages such as "Expiry must be in the future." never show. **Fixed:** `description` is read first.
 - [x] **7.3 Item 10 (frontend part): duplicated error parsing — Completed (unit-tested, not verified in a browser).** `fileErrorMessage`, `folderErrorMessage` and `shareErrorMessage` repeat the same error-code extraction. This is a cleanup, not a bug. **Fixed:** One `errorBody()` helper in `app.ts`.
 
+### 8. Large Files
+- [x] **8.1 Upload progress — Completed (unit-tested, not verified in a browser).** `FilesService.upload` emits 0-100. A block above the file list shows the file name, "n of m", and a progress bar for both the Upload button and drag-and-drop. A 413 shows "File is too large." with no hard-coded size.
+- [x] **8.2 Resumable uploads — Completed for retry within one session (unit-tested, not verified in a browser).** Files over 8 MiB upload in 8 MiB chunks through `uploadChunked`. A failed chunk waits 500 ms, asks the server which parts are stored, and retries up to 3 times; if it still fails, the session is aborted. Progress stays at 99% until the file is complete. A page reload does not resume.
+
 ## Dependencies
 - The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.
 - Core file workflows depend on backend authorization and ownership enforcement.

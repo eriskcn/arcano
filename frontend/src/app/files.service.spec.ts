@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpEventType, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { authInterceptor } from './auth.interceptor';
@@ -109,6 +109,24 @@ describe('FilesService', () => {
     expect(completed).toBe(true);
   });
 
+  it('should emit upload progress then complete on the response', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    const seen: number[] = [];
+    let completed = false;
+
+    service.upload(new File(['hello'], 'hello.txt')).subscribe({ next: p => seen.push(p), complete: () => (completed = true) });
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect(request.request.reportProgress).toBe(true);
+    request.event({ type: HttpEventType.UploadProgress, loaded: 25, total: 100 });
+    request.event({ type: HttpEventType.UploadProgress, loaded: 50, total: 100 });
+    expect(completed).toBe(false);
+    request.flush({ id });
+    expect(seen).toEqual([25, 50, 100]);
+    expect(completed).toBe(true);
+  });
+
   it('should upload a file into a folder', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);
@@ -200,5 +218,74 @@ describe('FilesService', () => {
     const empty = http.expectOne(`${environment.apiBaseUrl}/Files/trash`);
     expect(empty.request.method).toBe('DELETE');
     empty.flush(null, noContent);
+  });
+
+  describe('uploadChunked', () => {
+    const url = `${environment.apiBaseUrl}/Uploads`;
+    const sid = 'u1';
+    // 25 bytes with 10-byte chunks -> parts of 10, 10, 5.
+    const file = new File(['a'.repeat(25)], 'big.bin', { type: 'application/octet-stream' });
+
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    const start = (): { http: HttpTestingController; seen: number[]; state: { done: boolean; error: unknown } } => {
+      const http = TestBed.inject(HttpTestingController);
+      const seen: number[] = [];
+      const state = { done: false, error: undefined as unknown };
+      TestBed.inject(FilesService).uploadChunked(file, id).subscribe({
+        next: p => seen.push(p),
+        error: e => (state.error = e),
+        complete: () => (state.done = true),
+      });
+      const create = http.expectOne(url);
+      expect(create.request.body).toEqual({ fileName: 'big.bin', contentType: 'application/octet-stream', fileSize: 25, folderId: id });
+      create.flush({ id: sid, chunkSize: 10 });
+      return { http, seen, state };
+    };
+
+    it('should upload chunks sequentially then complete', async () => {
+      const { http, seen, state } = start();
+      for (const [n, size] of [[1, 10], [2, 10], [3, 5]]) {
+        const put = http.expectOne(`${url}/${sid}/parts/${n}`);
+        expect(put.request.method).toBe('PUT');
+        expect((put.request.body as Blob).size).toBe(size);
+        put.flush(null, { status: 204, statusText: 'No Content' });
+      }
+      expect(seen).toEqual([40, 80, 99]);
+      http.expectOne(`${url}/${sid}/complete`).flush({ id });
+      expect(seen).toEqual([40, 80, 99, 100]);
+      expect(state.done).toBe(true);
+    });
+
+    it('should retry a failed chunk and skip it when the server already stored it', async () => {
+      const { http, state } = start();
+      http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${url}/${sid}/parts/2`).flush(null, { status: 500, statusText: 'Server Error' });
+      await vi.advanceTimersByTimeAsync(500);
+      http.expectOne(`${url}/${sid}`).flush({ fileSize: 25, chunkSize: 10, uploadedParts: [1, 2] });
+      // Part 2 is stored, so the next request is part 3, not a resend of 2.
+      http.expectOne(`${url}/${sid}/parts/3`).flush(null, { status: 500, statusText: 'Server Error' });
+      await vi.advanceTimersByTimeAsync(500);
+      http.expectOne(`${url}/${sid}`).flush({ fileSize: 25, chunkSize: 10, uploadedParts: [1, 2] });
+      http.expectOne(`${url}/${sid}/parts/3`).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${url}/${sid}/complete`).flush({ id });
+      expect(state.done).toBe(true);
+    });
+
+    it('should abort the session when a chunk keeps failing', async () => {
+      const { http, state } = start();
+      http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 500, statusText: 'Server Error' });
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(500);
+        http.expectOne(`${url}/${sid}`).flush({ fileSize: 25, chunkSize: 10, uploadedParts: [] });
+        http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 500, statusText: 'Server Error' });
+      }
+      const abort = http.expectOne(`${url}/${sid}`);
+      expect(abort.request.method).toBe('DELETE');
+      abort.flush(null, { status: 204, statusText: 'No Content' });
+      expect((state.error as { status: number }).status).toBe(500);
+      expect(state.done).toBe(false);
+    });
   });
 });

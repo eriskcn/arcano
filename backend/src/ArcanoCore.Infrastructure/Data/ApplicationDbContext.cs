@@ -21,6 +21,7 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<FileTag> FileTags => Set<FileTag>();
     public DbSet<SharedLink> SharedLinks => Set<SharedLink>();
+    public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

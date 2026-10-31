@@ -3,13 +3,24 @@ using ArcanoCore.Application;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Infrastructure;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        var defaultFactory = options.InvalidModelStateResponseFactory;
+        // shortcut: matches the framework's message text; there is no typed signal for an oversized form body.
+        options.InvalidModelStateResponseFactory = context =>
+            context.ModelState.Values.SelectMany(v => v.Errors).Any(e => e.ErrorMessage.Contains("body too large") || e.ErrorMessage.Contains("body length limit"))
+                ? new ObjectResult(new { code = "File.TooLarge", description = "File is too large." }) { StatusCode = StatusCodes.Status413PayloadTooLarge }
+                : defaultFactory(context);
+    });
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -56,6 +67,10 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
 });
 
+// Upload size limit: one value drives Kestrel and the multipart form reader (both default to lower caps).
+var maxUploadBytes = builder.Configuration.GetValue<long?>("Storage:MaxUploadBytes") ?? 104857600;
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = maxUploadBytes + 1048576); // + multipart overhead
+builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = maxUploadBytes);
 builder.Services.AddApplication(builder.Configuration.GetValue<long?>("Storage:QuotaBytes") ?? StorageQuotaService.DefaultLimitBytes);
 builder.Services.AddInfrastructure(builder.Configuration);
 

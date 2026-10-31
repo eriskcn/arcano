@@ -4,7 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationEnd, Router } from '@angular/router';
-import { EMPTY, Observable, Subject, Subscription, catchError, concatMap, debounceTime, distinctUntilChanged, filter, forkJoin, from, of } from 'rxjs';
+import { EMPTY, Observable, Subject, Subscription, catchError, concatMap, debounceTime, distinctUntilChanged, filter, forkJoin, from, of, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AccountService } from './account.service';
 import { AuthService } from './auth.service';
@@ -194,6 +194,7 @@ export class App implements OnInit {
   readonly filesLoading = signal<boolean>(false);
   readonly filesError = signal<string>('');
   readonly actionError = signal<string>('');
+  readonly uploadState = signal<{ name: string; index: number; total: number; percent: number } | null>(null);
   readonly actionBusy = signal<boolean>(false);
 
   // Folder navigation: folders of the current folder, the path to it, and the create/rename editor.
@@ -752,7 +753,8 @@ export class App implements OnInit {
 
     from(selected)
       .pipe(
-        concatMap(file => this.filesApi.upload(file, folderId).pipe(
+        concatMap((file, index) => (file.size > 8 * 1024 * 1024 ? this.filesApi.uploadChunked(file, folderId) : this.filesApi.upload(file, folderId)).pipe(
+          tap(percent => this.uploadState.set({ name: file.name, index: index + 1, total: selected.length, percent })),
           catchError(error => {
             this.actionError.set(this.fileErrorMessage(error, `Unable to upload ${file.name}. Please try again.`));
             return EMPTY;
@@ -763,6 +765,7 @@ export class App implements OnInit {
       .subscribe({
         complete: () => {
           this.actionBusy.set(false);
+          this.uploadState.set(null);
           const error = this.actionError();
           this.loadFiles();
           this.actionError.set(error);
@@ -930,6 +933,9 @@ export class App implements OnInit {
   }
 
   private fileErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse && error.status === 413) {
+      return 'File is too large.';
+    }
     switch (this.errorBody(error)?.code) {
       case 'Storage.QuotaExceeded':
         return 'Not enough storage space.';

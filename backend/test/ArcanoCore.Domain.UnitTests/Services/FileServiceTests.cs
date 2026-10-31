@@ -492,6 +492,22 @@ public class FileServiceTests
     }
 
     [Fact]
+    public async Task UploadFileAsync_SameUserParallelUploads_RunOneAtATime()
+    {
+        var storage = new GatedStorage();
+        var service = new FileService(new TestDbContext(), storage, new TestCurrentUser(Guid.NewGuid()), new TestQuota());
+
+        var first = service.UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "a.txt", "text/plain", 1));
+        var second = service.UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "b.txt", "text/plain", 1));
+        await Task.Delay(100);
+        Assert.Equal(1, storage.Started);
+
+        storage.Gate.SetResult();
+        await Task.WhenAll(first, second);
+        Assert.Equal(2, storage.Started);
+    }
+
+    [Fact]
     public async Task RestoreFileAsync_RestoresFileToItsFolder()
     {
         var userId = Guid.NewGuid();
@@ -637,6 +653,23 @@ public class FileServiceTests
             Task.FromResult(new StorageUsageDto(0, long.MaxValue));
     }
 
+    private sealed class GatedStorage : IStorageService
+    {
+        private int _started;
+        public int Started => _started;
+        public TaskCompletionSource Gate { get; } = new();
+
+        public async Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _started);
+            await Gate.Task;
+            return "key";
+        }
+
+        public Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
     private sealed class TestStorage : IStorageService
     {
         public int UploadCalls { get; private set; }
@@ -678,6 +711,7 @@ public class FileServiceTests
         public DbSet<Folder> Folders => throw new NotSupportedException();
         public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
+        public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
         {

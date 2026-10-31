@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpEventType, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
@@ -427,6 +427,37 @@ describe('App', () => {
 
     expect(app.actionError()).toContain('Unable to upload a.txt');
     http.verify();
+  });
+
+  it('should show upload progress, then clear it when done', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')] });
+
+    app.onUploadSelected({ target: input } as unknown as Event);
+    const first = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    first.event({ type: HttpEventType.UploadProgress, loaded: 1, total: 4 });
+    expect(app.uploadState()).toEqual({ name: 'a.txt', index: 1, total: 2, percent: 25 });
+    first.flush({});
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
+    expect(app.uploadState()).toBeNull();
+    http.match(() => true);
+  });
+
+  it('should show a too-large message when the server answers 413', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const input = document.createElement('input');
+    input.type = 'file';
+    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
+
+    app.onUploadSelected({ target: input } as unknown as Event);
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('', { status: 413, statusText: 'Payload Too Large' });
+    http.match(() => true);
+
+    expect(app.actionError()).toBe('File is too large.');
   });
 
   it('should show the quota message when an upload exceeds the storage limit', () => {

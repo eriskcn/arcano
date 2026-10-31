@@ -156,6 +156,7 @@ public class ShareServiceTests
         public DbSet<Folder> Folders => throw new NotSupportedException();
         public DbSet<FileTag> FileTags => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => Links;
+        public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
