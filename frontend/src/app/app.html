@@ -514,6 +514,7 @@
           <div
             *ngIf="showFiles() && filteredFiles().length > 0 && viewMode() === 'list'"
             (pointerdown)="beginMarquee($event)"
+            (contextmenu)="showBackgroundMenu($event)"
             (pointermove)="moveMarquee($event)"
             (pointerup)="endMarquee($event)"
             (pointercancel)="endMarquee($event)"
@@ -601,6 +602,7 @@
           <div
             *ngIf="showFiles() && filteredFiles().length > 0 && viewMode() === 'grid'"
             (pointerdown)="beginMarquee($event)"
+            (contextmenu)="showBackgroundMenu($event)"
             (pointermove)="moveMarquee($event)"
             (pointerup)="endMarquee($event)"
             (pointercancel)="endMarquee($event)"
@@ -956,95 +958,48 @@
 
   <div
     *ngIf="contextMenu(); let menu"
-    class="fixed z-50 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+    class="fixed z-50 w-60 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
     [style.left.px]="menu.left"
     [style.top.px]="menu.top"
     role="menu"
-    [attr.aria-label]="'Actions for ' + menu.file.name"
-    (keydown.escape)="contextMenu.set(null)"
+    [attr.aria-label]="'Actions for ' + menu.title"
+    (keydown)="onMenuKey($event)"
+    (click)="$event.stopPropagation()"
   >
-    <ng-container *ngIf="contextMenuView() === 'actions' && activeNav() === 'trash'">
-      <button
-        type="button"
-        role="menuitem"
-        (click)="restoreFile(menu.file)"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-      >
-        Restore
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        (click)="deleteForever(menu.file)"
-        class="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-      >
-        Delete forever
-      </button>
-    </ng-container>
-    <ng-container *ngIf="contextMenuView() === 'actions' && activeNav() !== 'trash'">
-      <ng-container *ngIf="menu.file.type === 'folder'">
+    <ng-container *ngIf="contextMenuView() === 'actions'">
+      <ng-container *ngFor="let entry of menu.entries">
+        <hr *ngIf="entry.divider" role="separator" class="my-1 border-gray-100" />
         <button
           type="button"
           role="menuitem"
-          (click)="openFolder(menu.file); contextMenu.set(null)"
-          class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+          [attr.aria-disabled]="entry.disabled ? 'true' : null"
+          (click)="activateMenuEntry(entry)"
+          [ngClass]="[
+            entry.danger ? 'text-red-600 hover:bg-red-50 focus:bg-red-50' : 'text-gray-700 hover:bg-gray-50 focus:bg-gray-50',
+            entry.disabled ? 'opacity-40 cursor-default' : 'cursor-pointer'
+          ]"
+          class="flex h-9 w-full items-center gap-3 px-3 text-left text-sm outline-none"
         >
-          Open
+          <span class="material-symbols-rounded" style="font-size: 18px">{{ entry.icon }}</span>
+          <span class="flex-1 truncate">{{ entry.label }}</span>
+          <span *ngIf="entry.shortcut" class="text-xs text-gray-400">{{ entry.shortcut }}</span>
         </button>
       </ng-container>
-      <button
-        type="button"
-        role="menuitem"
-        (click)="startRenameFolder(menu.file)"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-      >
-        Rename
-      </button>
-      <button
-        *ngIf="menu.file.type !== 'folder'"
-        type="button"
-        role="menuitem"
-        (click)="contextMenuView.set('move')"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-      >
-        Move to…
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        (click)="selectFile(menu.file.id); contextMenu.set(null)"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-      >
-        Show details
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        (click)="toggleFileStar(menu.file.id); contextMenu.set(null)"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
-      >
-        {{ menu.file.starred ? 'Remove from favorites' : 'Add to favorites' }}
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        (click)="deleteFile(menu.file); contextMenu.set(null)"
-        class="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 cursor-pointer"
-      >
-        {{ menu.file.type === 'folder' ? 'Delete' : 'Move to trash' }}
-      </button>
     </ng-container>
     <ng-container *ngIf="contextMenuView() === 'move'">
-      <p *ngIf="moveTargets().length === 0" class="px-3 py-2 text-xs text-gray-400">No folders to move to</p>
-      <button
-        *ngFor="let target of moveTargets()"
-        type="button"
-        role="menuitem"
-        (click)="moveFile(menu.file, target.id)"
-        class="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 cursor-pointer truncate"
-      >
-        {{ target.name }}
-      </button>
+      <ng-container *ngFor="let targets of [moveTargets().filter(t => !menu.items.some(i => i.id === t.id))]">
+        <p *ngIf="targets.length === 0" class="px-3 py-2 text-xs text-gray-400">No folders to move to</p>
+        <button
+          *ngFor="let target of targets"
+          type="button"
+          role="menuitem"
+          (click)="moveMenuItems(menu.items, target.id)"
+          class="flex h-9 w-full items-center gap-3 px-3 text-left text-sm text-gray-700 hover:bg-gray-50 focus:bg-gray-50 outline-none cursor-pointer"
+        >
+          <span class="material-symbols-rounded" style="font-size: 18px">folder</span>
+          <span class="truncate">{{ target.name }}</span>
+        </button>
+      </ng-container>
     </ng-container>
   </div>
 

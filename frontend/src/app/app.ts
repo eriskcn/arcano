@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, HostListener, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,6 +18,17 @@ import { QuotaMeterComponent } from './shared/components/quota-meter.component';
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
 export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'shared' | 'trash';
+
+export interface MenuEntry {
+  label: string;
+  icon: string;
+  run: () => void;
+  shortcut?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  divider?: boolean; // separator before this entry
+  submenu?: boolean; // opens the move-target list instead of running
+}
 
 export interface FileItem {
   id: string;
@@ -111,7 +122,8 @@ export class App implements OnInit {
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
   readonly previewModalOpen = signal<boolean>(false);
-  readonly contextMenu = signal<{ file: FileItem; left: number; top: number } | null>(null);
+  readonly contextMenu = signal<{ title: string; items: FileItem[]; entries: MenuEntry[]; left: number; top: number } | null>(null);
+  readonly uploadInput = viewChild<ElementRef<HTMLInputElement>>('uploadInput');
   readonly selectionRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
   private marqueeStart: { x: number; y: number } | null = null;
   private marqueeSurface: HTMLElement | null = null;
@@ -153,6 +165,10 @@ export class App implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.syncPageWithRoute());
     // loadFiles cancels the previous request, so a stale search never overwrites a newer one.
+    // Scroll events do not bubble, so listen in the capture phase.
+    const closeMenu = () => this.contextMenu.set(null);
+    document.addEventListener('scroll', closeMenu, true);
+    this.destroyRef.onDestroy(() => document.removeEventListener('scroll', closeMenu, true));
     this.searchInput
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.loadFiles());
@@ -525,7 +541,16 @@ export class App implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.contextMenu()) {
+      this.contextMenu.set(null);
+      return;
+    }
     this.clearSelection();
+  }
+
+  @HostListener('window:resize')
+  closeContextMenu(): void {
+    this.contextMenu.set(null);
   }
 
   @HostListener('document:keydown.enter', ['$event'])
@@ -573,26 +598,49 @@ export class App implements OnInit {
     } else if (key === 'delete') {
       handled = !trash && selected.length > 0;
       if (handled) {
-        this.bulk(selected, file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
-          const deleted = done.map(([file]) => file);
-          this.pushUndo(() => this.bulk(deleted, file => this.filesApi.restore(file.id), name => `Unable to restore ${name}. Please try again.`));
-        });
+        this.trashSelected();
       }
     } else if (key === 'f2' && !trash && this.selectedIds().size === 1 && this.selectedFile()) {
       this.startRenameFolder(this.selectedFile()!);
       handled = true;
     } else if (mod && (key === 'c' || key === 'x') && !trash && selected.length > 0) {
-      this.clipboard.set({ mode: key === 'c' ? 'copy' : 'cut', items: selected, sourceFolderId: this.currentFolderId() });
+      this.toClipboard(key === 'c' ? 'copy' : 'cut');
       handled = true;
     } else if (mod && key === 'v' && this.activeNav() === 'my-files' && this.clipboard()) {
       handled = this.paste();
     } else if (mod && key === 'z' && !event.shiftKey && this.undoStack.length > 0) {
-      this.undoStack.pop()!();
+      this.undo();
       handled = true;
     }
     if (handled) {
       event.preventDefault();
     }
+  }
+
+  private selectedFiles(): FileItem[] {
+    return this.files().filter(file => this.selectedIds().has(file.id));
+  }
+
+  private toClipboard(mode: 'copy' | 'cut'): void {
+    this.clipboard.set({ mode, items: this.selectedFiles(), sourceFolderId: this.currentFolderId() });
+  }
+
+  private trashSelected(): void {
+    this.bulk(this.selectedFiles(), file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
+      const deleted = done.map(([file]) => file);
+      this.pushUndo(() => this.bulk(deleted, file => this.filesApi.restore(file.id), name => `Unable to restore ${name}. Please try again.`));
+    });
+  }
+
+  private undo(): void {
+    this.undoStack.pop()!();
+  }
+
+  private copyItems(items: FileItem[], folderId: string | null): void {
+    this.bulk(items, file => this.filesApi.copyFile(file.id, folderId), name => `Unable to copy ${name}. Please try again.`, done => {
+      const copies = done.map(([file, copy]) => ({ id: copy.id, name: file.name }));
+      this.pushUndo(() => this.bulk(copies, file => this.filesApi.delete(file.id), name => `Unable to undo the copy of ${name}. Please try again.`));
+    });
   }
 
   private paste(): boolean {
@@ -606,10 +654,7 @@ export class App implements OnInit {
       this.moveItems(clip.items, folderId, clip.sourceFolderId);
       return true;
     }
-    this.bulk(clip.items, file => this.filesApi.copyFile(file.id, folderId), name => `Unable to copy ${name}. Please try again.`, done => {
-      const copies = done.map(([file, copy]) => ({ id: copy.id, name: file.name }));
-      this.pushUndo(() => this.bulk(copies, file => this.filesApi.delete(file.id), name => `Unable to undo the copy of ${name}. Please try again.`));
-    });
+    this.copyItems(clip.items, folderId);
     return true;
   }
 
@@ -699,15 +744,114 @@ export class App implements OnInit {
 
   showContextMenu(file: FileItem, event: MouseEvent): void {
     event.preventDefault();
+    event.stopPropagation();
+    if (this.activeNav() !== 'trash' && !this.selectedIds().has(file.id)) {
+      this.selectFile(file.id);
+    }
+    const items = this.activeNav() === 'trash' ? [file] : this.items().filter(item => this.selectedIds().has(item.id));
+    this.openMenu(event, file.name, items, this.itemEntries(file));
+  }
 
-    const menuWidth = 192;
-    const menuHeight = 80;
+  // Right-click on empty space in the list or grid; items stop propagation themselves.
+  showBackgroundMenu(event: MouseEvent): void {
+    event.preventDefault();
+    if (this.activeNav() === 'trash') {
+      return;
+    }
+    this.openMenu(event, 'Folder actions', [], [
+      { label: 'New folder', icon: 'create_new_folder', run: () => this.startCreateFolder() },
+      { label: 'Upload files', icon: 'upload_file', run: () => this.uploadInput()?.nativeElement.click() },
+      { label: 'Paste', icon: 'content_paste', shortcut: 'Ctrl+V', divider: true,
+        disabled: !this.clipboard() || this.activeNav() !== 'my-files', run: () => void this.paste() },
+    ]);
+  }
+
+  activateMenuEntry(entry: MenuEntry): void {
+    if (entry.disabled) {
+      return;
+    }
+    if (entry.submenu) {
+      this.contextMenuView.set('move');
+      this.focusMenu();
+      return;
+    }
+    this.contextMenu.set(null);
+    entry.run();
+  }
+
+  moveMenuItems(items: FileItem[], targetId: string | null): void {
+    this.contextMenu.set(null);
+    this.moveItems(items, targetId);
+  }
+
+  onMenuKey(event: KeyboardEvent): void {
+    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (!step || !(event.currentTarget instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])'));
+    const at = buttons.indexOf(document.activeElement as HTMLElement);
+    buttons.at(at < 0 ? (step > 0 ? 0 : -1) : (at + step + buttons.length) % buttons.length)?.focus();
+  }
+
+  private focusMenu(): void {
+    setTimeout(() => document.querySelector<HTMLElement>('[role="menu"] [role="menuitem"]:not([aria-disabled="true"])')?.focus());
+  }
+
+  private openMenu(event: MouseEvent, title: string, items: FileItem[], entries: MenuEntry[]): void {
+    // Sizes mirror the Tailwind classes in app.html: w-60, py-1, 36px rows, 9px separators.
+    const menuWidth = 240;
+    const menuHeight = 8 + entries.length * 36 + entries.filter(entry => entry.divider).length * 9;
     this.contextMenuView.set('actions');
     this.contextMenu.set({
-      file,
+      title,
+      items,
+      entries,
       left: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
       top: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)),
     });
+    this.focusMenu();
+  }
+
+  private itemEntries(file: FileItem): MenuEntry[] {
+    if (this.activeNav() === 'trash') {
+      return [
+        { label: 'Restore', icon: 'restore_from_trash', run: () => this.restoreFile(file) },
+        { label: 'Delete forever', icon: 'delete_forever', danger: true, run: () => this.deleteForever(file) },
+      ];
+    }
+    const selected = this.items().filter(item => this.selectedIds().has(item.id));
+    const docs = selected.filter(item => item.type !== 'folder');
+    const one = selected.length === 1 ? selected[0] : null;
+    const oneFile = one && one.type !== 'folder' ? one : null;
+    const oneFolder = one && one.type === 'folder' ? one : null;
+    const unstar = selected.every(item => item.starred);
+    const entries: (MenuEntry | false | null)[] = [
+      oneFolder && { label: 'Open', icon: 'folder_open', shortcut: 'Enter', run: () => this.openFolder(oneFolder) },
+      oneFile && { label: 'Preview', icon: 'visibility', run: () => this.openPreview() },
+      oneFile && { label: 'Download', icon: 'download', run: () => this.downloadFile(oneFile) },
+      oneFile && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
+      one && { label: 'Rename', icon: 'edit', shortcut: 'F2', divider: true, run: () => this.startRenameFolder(one) },
+      oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.copyItems([oneFile], this.currentFolderId()) },
+      docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.toClipboard('copy') },
+      docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.toClipboard('cut') },
+      { label: 'Move to…', icon: 'drive_file_move', submenu: true, run: () => {} },
+      {
+        label: unstar ? 'Remove from favorites' : 'Add to favorites',
+        icon: unstar ? 'star' : 'star_border',
+        run: () => selected.filter(item => item.starred === unstar).forEach(item => this.toggleFileStar(item.id)),
+      },
+      one && { label: 'Show details', icon: 'info', divider: true, run: () => this.selectFile(one.id) },
+      {
+        label: 'Move to trash', icon: 'delete', shortcut: 'Del', danger: true, divider: !one,
+        run: () => (oneFolder ? this.deleteFile(oneFolder) : this.trashSelected()),
+      },
+    ];
+    const result = entries.filter((entry): entry is MenuEntry => !!entry);
+    // A leading separator would be empty.
+    result[0] = { ...result[0], divider: false };
+    return result;
   }
 
   toggleFileStar(id: string): void {
@@ -982,7 +1126,7 @@ export class App implements OnInit {
         if (this.selectionAnchorId() === file.id) {
           this.selectionAnchorId.set(this.selectedId());
         }
-        if (this.contextMenu()?.file.id === file.id) {
+        if (this.contextMenu()?.items.some(item => item.id === file.id)) {
           this.contextMenu.set(null);
         }
         this.actionBusy.set(false);

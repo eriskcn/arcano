@@ -85,8 +85,90 @@ describe('App', () => {
     const menu = fixture.nativeElement.querySelector('[role="menu"]') as HTMLElement | null;
     expect(event.defaultPrevented).toBe(true);
     expect(menu?.textContent).toContain('Show details');
-    expect(menu?.style.left).toBe(`${Math.max(8, window.innerWidth - 200)}px`);
-    expect(menu?.style.top).toBe(`${Math.max(8, window.innerHeight - 88)}px`);
+    expect(menu?.style.left).toBe(`${Math.max(8, window.innerWidth - 248)}px`);
+    // Height comes from the entry count: 8px padding, 36px per row, 9px per separator.
+    const rows = menu!.querySelectorAll('[role="menuitem"]').length;
+    const separators = menu!.querySelectorAll('[role="separator"]').length;
+    expect(menu?.style.top).toBe(`${Math.max(8, window.innerHeight - (8 + rows * 36 + separators * 9) - 8)}px`);
+  });
+
+  describe('context menu', () => {
+    const api = environment.apiBaseUrl;
+    const open = (target: FileItem | null, nav: 'my-files' | 'trash' = 'my-files') => {
+      const fixture = TestBed.createComponent(App);
+      const app = fixture.componentInstance;
+      const http = TestBed.inject(HttpTestingController);
+      fixture.detectChanges(); // ngOnInit resets the page, so set it afterwards
+      app.page.set('app');
+      app.activeNav.set(nav);
+      app.files.set(sampleFiles);
+      app.folders.set([folderItem('d1', 'Docs')]);
+      const event = new MouseEvent('contextmenu', { clientX: 10, clientY: 10, cancelable: true });
+      if (target) {
+        app.showContextMenu(target, event);
+      } else {
+        app.showBackgroundMenu(event);
+      }
+      fixture.detectChanges();
+      const labels = () => Array.from(fixture.nativeElement.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>).map(el => el.children[1].textContent!.trim());
+      return { fixture, app, http, labels, event };
+    };
+
+    it('shows Open for folders and file actions for files', () => {
+      const folder = open(folderItem('d1', 'Docs')).labels();
+      expect(folder.some(l => l.startsWith('Open'))).toBe(true);
+      expect(folder.some(l => l.startsWith('Download') || l.startsWith('Copy'))).toBe(false);
+
+      const file = open(sampleFiles[0]).labels();
+      expect(file.some(l => l.startsWith('Open'))).toBe(false);
+      for (const label of ['Preview', 'Download', 'Share', 'Rename', 'Make a copy', 'Copy', 'Cut', 'Move to', 'Move to trash']) {
+        expect(file.some(l => l.startsWith(label))).toBe(true);
+      }
+    });
+
+    it('selects an unselected item on right-click', () => {
+      const { app } = open(sampleFiles[2]);
+      expect([...app.selectedIds()]).toEqual(['3']);
+    });
+
+    it('Make a copy posts to the copy endpoint', () => {
+      const { fixture, http } = open(sampleFiles[2]);
+      const item = Array.from(fixture.nativeElement.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>).find(el => el.textContent!.includes('Make a copy'))!;
+
+      item.click();
+
+      const req = http.expectOne(`${api}/Files/3/copy`);
+      expect(req.request.body).toEqual({ folderId: null });
+      req.flush({ id: 'new' }, { status: 201, statusText: 'Created' });
+      http.match(r => r.method === 'GET').forEach(r => r.flush([]));
+    });
+
+    it('background menu pastes the clipboard and prevents the browser menu', () => {
+      const { fixture, app, http, event } = open(null);
+      expect(event.defaultPrevented).toBe(true);
+      const paste = () => Array.from(fixture.nativeElement.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>).find(el => el.textContent!.includes('Paste'))!;
+      expect(paste().getAttribute('aria-disabled')).toBe('true');
+
+      app.clipboard.set({ mode: 'copy', items: [sampleFiles[0]], sourceFolderId: null });
+      app.showBackgroundMenu(new MouseEvent('contextmenu', { cancelable: true }));
+      fixture.detectChanges();
+      paste().click();
+
+      http.expectOne(`${api}/Files/1/copy`).flush({ id: 'new' }, { status: 201, statusText: 'Created' });
+      http.match(r => r.method === 'GET').forEach(r => r.flush([]));
+    });
+
+    it('ignores the background menu in Trash', () => {
+      const { app } = open(null, 'trash');
+      expect(app.contextMenu()).toBeNull();
+    });
+
+    it('closes on Escape without clearing the selection', () => {
+      const { app } = open(sampleFiles[0]);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(app.contextMenu()).toBeNull();
+      expect(app.selectedIds().size).toBe(1);
+    });
   });
 
   it('should star a file through the API and revert when it fails', () => {

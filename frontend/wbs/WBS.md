@@ -49,6 +49,9 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - [x] **4.3.5 Drop feedback — Completed.** Valid folder and breadcrumb targets get a blue ring while a drag is over them. Dropping on a file does nothing.
   - [x] **4.3.6 Drag tests — Completed.** Eleven tests cover the upload drop (background and folder row), file-to-folder move, folder-to-folder move, self-drop, drop on a file, a backend cycle error, and the three breadcrumb drops.
 
+- [x] **4.5 Context menu — Completed (unit-tested, not verified in a browser).** Right-click menu in the style of Google Drive and OneDrive: icons, shortcut hints, dividers; Open or Preview, Download, Share, Rename, Make a copy, Copy, Cut, Move to, favorite, Details, Move to trash. Right-click selects an unselected item and acts on the whole selection where it can. Trash view has Restore and Delete forever. Right-click on empty space offers New folder, Upload files and Paste. Closes on Escape, click, scroll and resize; arrow keys and Enter work.
+  - Limits: Move to trash on a multi-selection skips folders; the Move to submenu is not clamped to the viewport; no background menu when the list is empty; a right-click elsewhere does not close the menu; right-click in Trash does not change the selection and acts on the clicked file only; `moveFile()` in `app.ts` is no longer used by the template (dead code, left in place).
+
 - [~] **4.4 Folder navigation — Built, not verified in a browser (backend 1.7 complete)**
   - Backend tasks are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.7.
   - Folder tree and breadcrumb navigation, create and rename folders, upload into the current folder, and move files between folders.
