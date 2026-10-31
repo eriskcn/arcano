@@ -196,6 +196,25 @@ describe('App', () => {
     });
   });
 
+  it('should star a folder through the API and revert when it fails', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: null, modified: '', starred: false, shared: false }]);
+
+    app.toggleFileStar('f1');
+    expect(app.folders()[0].starred).toBe(true);
+    const star = http.expectOne(`${environment.apiBaseUrl}/Folders/f1/star`);
+    expect([star.request.method, star.request.body]).toEqual(['PUT', { isStarred: true }]);
+    star.flush(null, { status: 204, statusText: 'No Content' });
+    expect(app.folders()[0].starred).toBe(true);
+
+    app.toggleFileStar('f1');
+    http.expectOne(`${environment.apiBaseUrl}/Folders/f1/star`).flush(null, { status: 500, statusText: 'Server Error' });
+    expect(app.folders()[0].starred).toBe(true);
+    expect(app.actionError()).toContain('Unable to update favorites for Images');
+    http.verify();
+  });
+
   it('should star a file through the API and revert when it fails', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
@@ -524,7 +543,7 @@ describe('App', () => {
   it('should open a folder, load its contents, and return to root from the breadcrumb', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
-    const folder = { id: 'f1', name: 'Projects', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' };
+    const folder = { id: 'f1', name: 'Projects', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false };
 
     app.loadFiles();
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
@@ -557,12 +576,12 @@ describe('App', () => {
     const create = http.expectOne(`${environment.apiBaseUrl}/Folders`);
     expect(create.request.method).toBe('POST');
     expect(create.request.body).toEqual({ name: 'Reports', parentId: null });
-    create.flush({ id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' });
+    create.flush({ id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false });
 
     expect(app.folderEditor()).toBeNull();
     http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
     http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([
-      { id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' },
+      { id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false },
     ]);
     expect(app.items().map(item => item.name)).toEqual(['Reports']);
     http.verify();

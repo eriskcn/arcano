@@ -198,6 +198,22 @@ public class FolderServiceTests
         Assert.True(stored.IsDeleted);
     }
 
+    [Fact]
+    public async Task SetStarredAsync_OwnerStars_OtherUserGetsNotFound()
+    {
+        await using var dbContext = CreateDbContext();
+        var owner = CreateService(dbContext, Guid.NewGuid().ToString());
+        var other = CreateService(dbContext, Guid.NewGuid().ToString());
+        var folder = await CreateFolderAsync(owner, "Mine", null);
+
+        var denied = await other.SetStarredAsync(folder.Id, true);
+        Assert.True(denied.IsFailure);
+        Assert.Equal("Folder.NotFound", denied.Error.Code);
+
+        Assert.True((await owner.SetStarredAsync(folder.Id, true)).IsSuccess);
+        Assert.True((await owner.ListFoldersAsync(null)).Value.Single().IsStarred);
+    }
+
     private static async Task<FolderDto> CreateFolderAsync(IFolderService service, string name, Guid? parentId) =>
         (await service.CreateFolderAsync(new FolderRequestDto(name, parentId))).Value;
 

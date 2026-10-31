@@ -140,5 +140,23 @@ public class CleanupService : BackgroundService
 
             logger.LogInformation("Cleanup purged {Count} expired trashed files.", expired.Count);
         }
+
+        // Leaf folders only (no file or child row left, deleted ones included), so no FK is violated; the loop
+        // then reaches parents once their children are gone. LastModifiedAtUtc is the delete time (set on soft delete).
+        while (true)
+        {
+            var emptyFolders = await db.Folders
+                .IgnoreQueryFilters()
+                .Where(f => f.IsDeleted && (f.LastModifiedAtUtc ?? f.CreatedAtUtc) < trashCutoff
+                    && !db.FileMetadatas.IgnoreQueryFilters().Any(x => x.FolderId == f.Id)
+                    && !db.Folders.IgnoreQueryFilters().Any(c => c.ParentId == f.Id))
+                .Take(BatchSize)
+                .ToListAsync(cancellationToken);
+            if (emptyFolders.Count == 0) break;
+
+            db.Folders.RemoveRange(emptyFolders);
+            await db.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Cleanup purged {Count} expired deleted folders.", emptyFolders.Count);
+        }
     }
 }

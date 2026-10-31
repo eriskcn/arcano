@@ -8,6 +8,7 @@ export interface FolderDto {
   name: string;
   parentId: string | null;
   createdAtUtc: string;
+  isStarred: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -26,6 +27,12 @@ export class FoldersService {
   update(id: string, name: string, parentId: string | null): Observable<void> {
     return this.http
       .put<void>(`${this.baseUrl}/${encodeURIComponent(id)}`, { name, parentId })
+      .pipe(map(() => undefined));
+  }
+
+  star(id: string, isStarred: boolean): Observable<void> {
+    return this.http
+      .put<void>(`${this.baseUrl}/${encodeURIComponent(id)}/star`, { isStarred })
       .pipe(map(() => undefined));
   }
 

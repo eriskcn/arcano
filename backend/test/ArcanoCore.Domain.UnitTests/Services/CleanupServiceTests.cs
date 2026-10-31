@@ -59,6 +59,35 @@ public class CleanupServiceTests
         Assert.Equal(new[] { "old1", "old2" }, _storage.Deleted.Order().ToArray());
     }
 
+    private static Folder Folder(string name, Guid? parentId, TimeSpan deletedAge) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = Guid.NewGuid(),
+            Name = name,
+            ParentId = parentId,
+            IsDeleted = true,
+            CreatedAtUtc = DateTime.UtcNow - TimeSpan.FromDays(90),
+            LastModifiedAtUtc = DateTime.UtcNow - deletedAge
+        };
+
+    [Fact]
+    public async Task RunOnce_PurgesOldDeletedFolders_KeepsRecentAndThoseStillReferenced()
+    {
+        var oldParent = Folder("oldParent", null, TimeSpan.FromDays(40));
+        var oldChild = Folder("oldChild", oldParent.Id, TimeSpan.FromDays(40));
+        var withFile = Folder("withFile", null, TimeSpan.FromDays(40));
+        var withRecentFile = File("recentFile", true, TimeSpan.FromDays(1));
+        withRecentFile.FolderId = withFile.Id;
+        _context.Folders.AddRange(oldParent, oldChild, withFile, Folder("recent", null, TimeSpan.FromDays(2)));
+        _context.Files.Add(withRecentFile);
+        await _context.SaveChangesAsync();
+
+        await RunAsync();
+
+        Assert.Equal(new[] { "recent", "withFile" }, _context.Folders.IgnoreQueryFilters().Select(f => f.Name).Order().ToArray());
+    }
+
     [Fact]
     public async Task RunOnce_StorageDeleteFailure_StillRemovesRowsAndContinues()
     {

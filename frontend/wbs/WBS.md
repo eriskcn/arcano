@@ -34,7 +34,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [x] **4.1 Core file listing and actions — Completed (unit-tested, not verified in a browser)**
   - Lists the current user's files; download, rename, favorite, and delete (to the trash) use the secured backend APIs.
   - Favorites, Recent, and Home load the matching server views. The search box searches by name on the server across all folders.
-  - The Trash view lists trashed files with Restore and Delete forever, plus Empty trash. Folders are still starred locally only, because the backend has no folder favorite.
+  - The Trash view lists trashed files with Restore and Delete forever, plus Empty trash. Folder star is now saved by the backend (`PUT api/Folders/{id}/star`, optimistic with revert on failure).
   - Folder navigation, create, rename, and move are tracked in 4.4.
 - [x] **4.2 Keyboard actions — Completed (unit-tested, not verified in a browser)**
   - Ctrl+A selects all; Delete moves selected files to the trash; Shift+Delete deletes forever (Trash view only); Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste files into the current folder; Ctrl+Z undoes the last delete, move or paste (in memory, last 20); F2 renames. Ignored while typing in a field or with a dialog open.
@@ -125,3 +125,4 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
 - [x] **9.11 Phone upload (checked in a browser).** On phones (under 640 px) the floating button (now an upload icon, labelled "Upload files") opens the file picker through the same hidden input as the header Upload button; from 640 px up the header Upload button is used and the floating button is hidden. Checked at 375 and 768 px, including an upload through the input. 1 new spec; 143 specs pass.
 
 - [x] **9.12 Shared view removed.** The "Shared" nav item and filter chip always showed nothing (the flag was never set by the API) and the empty text promised files shared with you, which the backend does not support. Both are removed; share links are created per file from the Share dialog. Trash now sits in the mobile bottom nav.
+- [x] **9.13 Folder star persisted — Completed (unit-tested).** `FolderDto.isStarred` maps to `starred`; `FoldersService.star` is called by the same toggle as files (optimistic, reverts with an error on failure). The Favorites view still lists files only. 2 new specs.

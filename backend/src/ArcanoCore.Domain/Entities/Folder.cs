@@ -7,6 +7,7 @@ namespace ArcanoCore.Domain.Entities;
 public class Folder : BaseEntity<Guid>, IAuditableEntity
 {
     public string Name { get; set; } = string.Empty;
+    public bool IsStarred { get; set; }
 
     // Ownership — FK only
     public Guid OwnerId { get; set; }

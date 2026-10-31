@@ -13,6 +13,7 @@ public interface IFolderService
     Task<Result<FolderDto>> CreateFolderAsync(FolderRequestDto dto, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<FolderDto>>> ListFoldersAsync(Guid? parentId, CancellationToken cancellationToken = default);
     Task<Result<FolderDto>> UpdateFolderAsync(Guid id, FolderRequestDto dto, CancellationToken cancellationToken = default);
+    Task<Result> SetStarredAsync(Guid id, bool isStarred, CancellationToken cancellationToken = default);
     Task<Result> DeleteFolderAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<string>> GetZipNameAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default);

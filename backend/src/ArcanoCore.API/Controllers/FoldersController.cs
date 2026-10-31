@@ -42,6 +42,13 @@ public class FoldersController : ApiControllerBase
         return result.IsFailure ? ToErrorResult(result.Error) : Ok(result.Value);
     }
 
+    [HttpPut("{id:guid}/star")]
+    public async Task<IActionResult> Star(Guid id, [FromBody] StarFolderRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _folderService.SetStarredAsync(id, request.IsStarred, cancellationToken);
+        return result.IsFailure ? ToErrorResult(result.Error) : NoContent();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
@@ -75,6 +82,8 @@ public class FoldersController : ApiControllerBase
 
         return new EmptyResult();
     }
+
+    public record StarFolderRequest(bool IsStarred);
 
     private IActionResult ToErrorResult(Error error) =>
         error.Code == "Folder.NotFound" ? NotFound(error) : BadRequest(error);

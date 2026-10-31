@@ -93,7 +93,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
   type: 'folder',
   size: null,
   modified: formatDate(folder.createdAtUtc),
-  starred: false,
+  starred: folder.isStarred,
   shared: false,
 });
 
@@ -755,17 +755,17 @@ export class App implements OnInit {
     const setStar = (starred: boolean) => (items: FileItem[]): FileItem[] =>
       items.map(file => file.id === id ? { ...file, starred } : file);
     const file = this.files().find(item => item.id === id);
-    if (!file) {
-      // Folders have no backend star yet, so this stays local.
-      this.folders.update(items => items.map(item => item.id === id ? { ...item, starred: !item.starred } : item));
-      return;
-    }
+    const folder = file ? undefined : this.folders().find(item => item.id === id);
+    const target = file ?? folder;
+    if (!target) return;
+    const update = file ? this.files : this.folders;
+    const request = file ? this.filesApi.star(id, !target.starred) : this.foldersApi.star(id, !target.starred);
     this.actionError.set('');
-    this.files.update(setStar(!file.starred));
-    this.filesApi.star(id, !file.starred).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    update.update(setStar(!target.starred));
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       error: () => {
-        this.files.update(setStar(file.starred));
-        this.actionError.set(`Unable to update favorites for ${file.name}. Please try again.`);
+        update.update(setStar(target.starred));
+        this.actionError.set(`Unable to update favorites for ${target.name}. Please try again.`);
       },
     });
   }

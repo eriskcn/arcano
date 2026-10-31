@@ -42,6 +42,9 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
                     if (entry.Entity is FileMetadata && !entry.Properties.Any(p => p.IsModified
                             && p.Metadata.Name is not (nameof(FileMetadata.IsStarred) or nameof(FileMetadata.FolderId))))
                         break;
+                    if (entry.Entity is Folder && !entry.Properties.Any(p => p.IsModified
+                            && p.Metadata.Name is not nameof(Folder.IsStarred)))
+                        break;
                     entry.Entity.LastModifiedAtUtc = DateTime.UtcNow;
                     break;
             }

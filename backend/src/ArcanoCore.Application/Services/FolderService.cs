@@ -79,7 +79,7 @@ public class FolderService : IFolderService
             .AsNoTracking()
             .Where(f => f.OwnerId == ownerId && f.ParentId == parentId)
             .OrderBy(f => f.Name)
-            .Select(f => new FolderDto(f.Id, f.Name, f.ParentId, f.CreatedAtUtc))
+            .Select(f => new FolderDto(f.Id, f.Name, f.ParentId, f.CreatedAtUtc, f.IsStarred))
             .ToListAsync(cancellationToken);
 
         return Result<IReadOnlyList<FolderDto>>.Success(folders);
@@ -118,6 +118,26 @@ public class FolderService : IFolderService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return Result<FolderDto>.Success(ToDto(folder));
+    }
+
+    public async Task<Result> SetStarredAsync(Guid id, bool isStarred, CancellationToken cancellationToken = default)
+    {
+        var ownerId = CurrentOwnerId;
+        if (ownerId == Guid.Empty)
+        {
+            return Result.Failure(new Error("Folder.Unauthorized", "A valid user ID is required."));
+        }
+
+        var folder = await FindOwnedFolderAsync(id, ownerId, cancellationToken);
+        if (folder == null)
+        {
+            return Result.Failure(NotFoundError);
+        }
+
+        folder.IsStarred = isStarred;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Result.Success();
     }
 
     public async Task<Result> DeleteFolderAsync(Guid id, CancellationToken cancellationToken = default)
@@ -324,5 +344,5 @@ public class FolderService : IFolderService
             cancellationToken);
 
     private static FolderDto ToDto(Folder folder) =>
-        new(folder.Id, folder.Name, folder.ParentId, folder.CreatedAtUtc);
+        new(folder.Id, folder.Name, folder.ParentId, folder.CreatedAtUtc, folder.IsStarred);
 }

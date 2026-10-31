@@ -21,6 +21,9 @@ public class FolderConfiguration : IEntityTypeConfiguration<Folder>
         builder.Property(x => x.IsDeleted)
             .HasDefaultValue(false);
 
+        builder.Property(x => x.IsStarred)
+            .HasDefaultValue(false);
+
         builder.HasQueryFilter(x => !x.IsDeleted);
 
         // Owner

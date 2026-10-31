@@ -65,7 +65,7 @@ Done:
 Not done:
 - **No password reset or email verification** (nothing can send email), so a forgotten password needs a manual database reset.
 - **Folders** cannot be copied or shared; no content search.
-- **Shared view removed:** the backend only supports share links you create, so there is no "Shared" nav item or filter; links are created per file. Folder star is local only (not saved by the backend).
+- **Shared view removed:** the backend only supports share links you create, so there is no "Shared" nav item or filter; links are created per file.
 - **Several API instances** are not supported (upload lock and migrations are per process).
 - **Token renewal** still keeps a stolen token usable for up to 24 hours unless the owner signs out everywhere.
 - **The CI workflow** has not run on GitHub yet.
