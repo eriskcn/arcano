@@ -84,6 +84,22 @@ public class UploadServiceTests
         Assert.True(_multipart.Aborted);
     }
 
+    [Fact]
+    public async Task StartAsync_SweepsOwnersStaleSessionsOnly()
+    {
+        var old = DateTime.UtcNow.AddDays(-2);
+        _context.Sessions.AddRange(
+            new UploadSession { Id = Guid.NewGuid(), OwnerId = _ownerId, CreatedAtUtc = old },
+            new UploadSession { Id = Guid.NewGuid(), OwnerId = Guid.NewGuid(), CreatedAtUtc = old },
+            new UploadSession { Id = Guid.NewGuid(), OwnerId = _ownerId });
+        await _context.SaveChangesAsync(CancellationToken.None);
+
+        await CreateService(_ownerId).StartAsync(new UploadStartDto("a.bin", "a/b", 10, null));
+
+        Assert.True(_multipart.Aborted);
+        Assert.Equal(3, _context.Sessions.Count()); // other user's stale + own fresh + the new one
+    }
+
     private UploadService CreateService(Guid userId, Error? quotaError = null) =>
         new(_context, _multipart, new FakeStorage(), new FakeUser(userId.ToString()), new FakeQuota(quotaError));
 

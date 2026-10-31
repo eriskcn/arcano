@@ -11,11 +11,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArcanoCore.Application.Services;
 
-// Chunked uploads on top of S3 multipart. shortcut: abandoned sessions are never cleaned up; add a sweep (and an abort) if they pile up.
+// Chunked uploads on top of S3 multipart. shortcut: abandoned sessions are swept only when their owner starts another upload; add a background sweep if owners never return.
 public class UploadService : IUploadService
 {
     public const long ChunkSize = 8 * 1024 * 1024; // above S3's 5 MiB minimum part size
     private const int MaxParts = 10000; // S3 limit
+    private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
 
     private readonly IApplicationDbContext _dbContext;
     private readonly IMultipartStorage _multipart;
@@ -82,6 +83,7 @@ public class UploadService : IUploadService
 
         try
         {
+            await SweepAbandonedAsync(ownerId, cancellationToken);
             var (key, uploadId) = await _multipart.InitiateAsync(dto.ContentType, cancellationToken);
             var session = new UploadSession
             {
@@ -245,6 +247,32 @@ public class UploadService : IUploadService
         _dbContext.UploadSessions.Remove(session);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return Result.Success();
+    }
+
+    private async Task SweepAbandonedAsync(Guid ownerId, CancellationToken cancellationToken)
+    {
+        var cutoff = DateTime.UtcNow - SessionLifetime;
+        var stale = await _dbContext.UploadSessions
+            .Where(s => s.OwnerId == ownerId && s.CreatedAtUtc < cutoff)
+            .ToListAsync(cancellationToken);
+        foreach (var session in stale)
+        {
+            try
+            {
+                await _multipart.AbortAsync(session.StorageKey, session.StorageUploadId, cancellationToken);
+            }
+            catch (Exception)
+            {
+                // Best effort: the row is removed either way.
+            }
+
+            _dbContext.UploadSessions.Remove(session);
+        }
+
+        if (stale.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private async Task<UploadSession?> FindOwnedSessionAsync(Guid id, CancellationToken cancellationToken)
