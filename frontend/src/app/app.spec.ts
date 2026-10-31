@@ -17,6 +17,24 @@ const sampleFiles: FileItem[] = ['1', '2', '3', '4', '5', '6'].map(id => ({
   shared: false,
 }));
 
+const folderItem = (id: string, name: string): FileItem => ({
+  id,
+  name,
+  type: 'folder',
+  size: null,
+  modified: 'Jul 22, 2026',
+  starred: false,
+  shared: false,
+});
+
+// jsdom has no DragEvent or DataTransfer, so drag events are plain objects with the fields the handlers read.
+const dragEvent = (files: File[] = []): DragEvent =>
+  ({
+    preventDefault: () => {},
+    stopPropagation: () => {},
+    dataTransfer: { files, types: files.length ? ['Files'] : [], setData: () => {} },
+  }) as unknown as DragEvent;
+
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -356,6 +374,205 @@ describe('App', () => {
       { id: 'f2', name: 'Reports', parentId: null, createdAtUtc: '2026-07-22T10:00:00Z' },
     ]);
     expect(app.items().map(item => item.name)).toEqual(['Reports']);
+    http.verify();
+  });
+
+  it('should upload OS files dropped on the explorer into the current folder', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folderPath.set([{ id: 'f1', name: 'Projects' }]);
+
+    app.onDropFiles(dragEvent([new File(['a'], 'a.txt'), new File(['b'], 'b.txt')]));
+    const first = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect(first.request.body.get('folderId')).toBe('f1');
+    first.flush({});
+    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=f1`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders?parentId=f1`).flush([]);
+
+    expect(app.actionBusy()).toBe(false);
+    http.verify();
+  });
+
+  it('should ignore a drop that carries no files', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+
+    app.onDropFiles(dragEvent([]));
+
+    http.verify();
+  });
+
+  it('should move a file dropped on a folder and reload the listing', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+    app.folders.set([folderItem('f1', 'Projects')]);
+
+    app.startDrag(dragEvent(), app.files()[0]);
+    app.dropItems(dragEvent(), 'f1');
+
+    const move = http.expectOne(`${environment.apiBaseUrl}/Files/1/folder`);
+    expect(move.request.method).toBe('PUT');
+    expect(move.request.body).toEqual({ folderId: 'f1' });
+    move.flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.verify();
+  });
+
+  it('should move every selected file when one of them is dragged', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+    app.folders.set([folderItem('f1', 'Projects')]);
+    app.selectFile('1');
+    app.selectFile('2', new MouseEvent('click', { ctrlKey: true }));
+
+    app.startDrag(dragEvent(), app.files()[1]);
+    app.dropItems(dragEvent(), 'f1');
+
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/folder`).flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files/2/folder`).flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.verify();
+  });
+
+  it('should move a folder dropped on another folder with its name and the new parentId', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folders.set([folderItem('f2', 'Reports'), folderItem('f1', 'Projects')]);
+
+    app.startDrag(dragEvent(), app.folders()[0]);
+    app.dropItems(dragEvent(), 'f1');
+
+    const update = http.expectOne(`${environment.apiBaseUrl}/Folders/f2`);
+    expect(update.request.method).toBe('PUT');
+    expect(update.request.body).toEqual({ name: 'Reports', parentId: 'f1' });
+    update.flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    http.verify();
+  });
+
+  it('should not highlight or move a folder dropped onto itself', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folders.set([folderItem('f1', 'Projects')]);
+
+    app.startDrag(dragEvent(), app.folders()[0]);
+    app.dragOverTarget(dragEvent(), 'f1', 'f1');
+    expect(app.dropKey()).toBeNull();
+    app.dropItems(dragEvent(), 'f1');
+
+    http.verify();
+  });
+
+  it('should do nothing when an item is dropped on a file row', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    app.page.set('app');
+    app.files.set(sampleFiles);
+    fixture.detectChanges();
+    app.startDrag(dragEvent(), app.files()[0]);
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('[data-file-id="2"]') as HTMLElement;
+    const dragOver = new Event('dragover', { bubbles: true, cancelable: true });
+    row.dispatchEvent(dragOver);
+    row.dispatchEvent(new Event('drop', { bubbles: true, cancelable: true }));
+
+    expect(dragOver.defaultPrevented).toBe(false);
+    expect(app.dropKey()).toBeNull();
+    http.verify();
+  });
+
+  it('should show the backend cycle error when a folder move is rejected', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folders.set([folderItem('f2', 'Reports'), folderItem('f1', 'Projects')]);
+
+    app.startDrag(dragEvent(), app.folders()[0]);
+    app.dropItems(dragEvent(), 'f1');
+
+    http.expectOne(`${environment.apiBaseUrl}/Folders/f2`).flush(
+      { code: 'Folder.Cycle', message: 'Cycle' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+
+    expect(app.actionError()).toBe('A folder cannot be moved into itself or one of its subfolders.');
+    http.verify();
+  });
+
+  it('should upload OS files dropped on a folder row into that folder, and on the background into the current one', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const reload = (query = '', parent = '') => {
+      http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100${query}`).flush([]);
+      http.expectOne(`${environment.apiBaseUrl}/Folders${parent}`).flush([]);
+    };
+
+    app.dropOnFolder(dragEvent([new File(['a'], 'a.txt')]), folderItem('f9', 'Target'));
+    const toFolder = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect(toFolder.request.body.get('folderId')).toBe('f9');
+    toFolder.flush({});
+    reload();
+
+    app.onDropFiles(dragEvent([new File(['b'], 'b.txt')]));
+    const toRoot = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
+    expect(toRoot.request.body.has('folderId')).toBe(false);
+    toRoot.flush({});
+    reload();
+    http.verify();
+  });
+
+  it('should move a file dropped on the root crumb to folderId null', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folderPath.set([{ id: 'f1', name: 'Projects' }]);
+    app.files.set(sampleFiles);
+
+    app.startDrag(dragEvent(), app.files()[0]);
+    app.dropOnCrumb(dragEvent(), 1);
+
+    const move = http.expectOne(`${environment.apiBaseUrl}/Files/1/folder`);
+    expect(move.request.body).toEqual({ folderId: null });
+    move.flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=f1`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders?parentId=f1`).flush([]);
+    http.verify();
+  });
+
+  it('should move a file dropped on a folder crumb to that folder', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folderPath.set([{ id: 'f1', name: 'Projects' }, { id: 'f2', name: 'Reports' }]);
+    app.files.set(sampleFiles);
+
+    app.startDrag(dragEvent(), app.files()[0]);
+    app.dropOnCrumb(dragEvent(), 2);
+
+    const move = http.expectOne(`${environment.apiBaseUrl}/Files/1/folder`);
+    expect(move.request.body).toEqual({ folderId: 'f1' });
+    move.flush(null);
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100&folderId=f2`).flush([]);
+    http.expectOne(`${environment.apiBaseUrl}/Folders?parentId=f2`).flush([]);
+    http.verify();
+  });
+
+  it('should not send a request when dropped on the crumb of the current folder', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folderPath.set([{ id: 'f1', name: 'Projects' }]);
+    app.files.set(sampleFiles);
+
+    app.startDrag(dragEvent(), app.files()[0]);
+    app.dropOnCrumb(dragEvent(), 2);
+
     http.verify();
   });
 });

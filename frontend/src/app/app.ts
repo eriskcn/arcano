@@ -196,6 +196,8 @@ export class App implements OnInit {
   readonly folderEditor = signal<{ mode: 'create' } | { mode: 'rename'; folder: FileItem } | null>(null);
   readonly folderName = signal<string>('');
   readonly contextMenuView = signal<'actions' | 'move'>('actions');
+  readonly dropKey = signal<string | null>(null);
+  private draggedItems: FileItem[] = [];
   private loadSubscription: Subscription | null = null;
 
   readonly currentFolderId = computed(() => this.folderPath().at(-1)?.id ?? null);
@@ -591,6 +593,137 @@ export class App implements OnInit {
     const input = event.target as HTMLInputElement;
     const selected = Array.from(input.files ?? []);
     input.value = '';
+    this.uploadFiles(selected);
+  }
+
+  onDropFiles(event: DragEvent): void {
+    event.preventDefault();
+    this.dropKey.set(null);
+    this.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
+  }
+
+  // Accept OS file drags only; internal drags carry no files and are handled by the rows.
+  dragOverFiles(event: DragEvent): void {
+    if (event.dataTransfer?.types.includes('Files')) {
+      event.preventDefault();
+    }
+  }
+
+  startDrag(event: DragEvent, file: FileItem): void {
+    const selection = this.selectedIds();
+    this.draggedItems = selection.has(file.id) ? this.items().filter(item => selection.has(item.id)) : [file];
+    event.dataTransfer?.setData('text/plain', this.draggedItems.map(item => item.id).join(','));
+  }
+
+  endDrag(): void {
+    this.draggedItems = [];
+    this.dropKey.set(null);
+  }
+
+  // key identifies the highlighted target; targetId is the folder id, or null for root.
+  dragOverTarget(event: DragEvent, key: string, targetId: string | null): void {
+    if (!this.canDrop(this.draggedItems, targetId)) {
+      return;
+    }
+    event.preventDefault();
+    this.dropKey.set(key);
+  }
+
+  // Wrappers return void: a false return from a template handler would call preventDefault.
+  dragOverFolder(event: DragEvent, folder: FileItem): void {
+    if (folder.type === 'folder') {
+      this.dragOverTarget(event, folder.id, folder.id);
+    }
+  }
+
+  dropOnFolder(event: DragEvent, folder: FileItem): void {
+    if (folder.type !== 'folder') {
+      return;
+    }
+    const osFiles = Array.from(event.dataTransfer?.files ?? []);
+    if (this.draggedItems.length === 0 && osFiles.length > 0) {
+      // Stop the list's own drop handler from uploading the same files into the current folder.
+      event.preventDefault();
+      event.stopPropagation();
+      this.dropKey.set(null);
+      this.uploadFiles(osFiles, folder.id);
+      return;
+    }
+    this.dropItems(event, folder.id);
+  }
+
+  dragOverCrumb(event: DragEvent, index: number): void {
+    if (index > 0) {
+      this.dragOverTarget(event, `crumb${index}`, this.crumbTargetId(index));
+    }
+  }
+
+  dropOnCrumb(event: DragEvent, index: number): void {
+    if (index > 0) {
+      this.dropItems(event, this.crumbTargetId(index));
+    }
+  }
+
+  leaveTarget(key: string): void {
+    if (this.dropKey() === key) {
+      this.dropKey.set(null);
+    }
+  }
+
+  dropItems(event: DragEvent, targetId: string | null): void {
+    const items = this.draggedItems;
+    this.endDrag();
+    if (!this.canDrop(items, targetId)) {
+      return;
+    }
+    event.preventDefault();
+    this.moveItems(items, targetId);
+  }
+
+  isDropTarget(key: string): boolean {
+    return this.dropKey() === key;
+  }
+
+  // Breadcrumb index 1 is the section root; deeper crumbs map to folderPath entries.
+  crumbTargetId(index: number): string | null {
+    return index <= 1 ? null : this.folderPath()[index - 2].id;
+  }
+
+  private canDrop(items: FileItem[], targetId: string | null): boolean {
+    return items.length > 0 && targetId !== this.currentFolderId() && !items.some(item => item.id === targetId);
+  }
+
+  private moveItems(items: FileItem[], targetId: string | null): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    from(items)
+      .pipe(
+        concatMap(item => (item.type === 'folder'
+          ? this.foldersApi.update(item.id, item.name, targetId)
+          : this.filesApi.moveFile(item.id, targetId)
+        ).pipe(
+          catchError(error => {
+            this.actionError.set(this.folderErrorMessage(error, `Unable to move ${item.name}. Please try again.`));
+            return EMPTY;
+          }),
+        )),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        complete: () => {
+          this.actionBusy.set(false);
+          const error = this.actionError();
+          this.loadFiles();
+          this.actionError.set(error);
+        },
+      });
+  }
+
+  private uploadFiles(selected: File[], folderId: string | null = this.currentFolderId()): void {
     if (selected.length === 0 || this.actionBusy()) {
       return;
     }
@@ -599,7 +732,7 @@ export class App implements OnInit {
 
     from(selected)
       .pipe(
-        concatMap(file => this.filesApi.upload(file, this.currentFolderId()).pipe(
+        concatMap(file => this.filesApi.upload(file, folderId).pipe(
           catchError(() => {
             this.actionError.set(`Unable to upload ${file.name}. Please try again.`);
             return EMPTY;

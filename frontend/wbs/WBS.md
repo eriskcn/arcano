@@ -37,8 +37,14 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - Add folder navigation, create/rename/move, and trash only when matching backend contracts exist.
 - [ ] **4.2 Keyboard actions — Not Started**
   - Shortcuts for selection, rename, copy/move, undo, and delete, limited to supported operations.
-- [ ] **4.3 Drag and drop — Not Started**
-  - Upload external files and move internal items when the corresponding API operations are available.
+- [x] **4.3 Drag and drop — Completed (unit-tested, not verified in a browser)**
+  - No backend work was needed: upload with `folderId`, `PUT /api/Files/{id}/folder`, and `PUT /api/Folders/{id}` already exist.
+  - [x] **4.3.1 Drop files to upload — Completed.** Dropping OS files on the list or grid area uploads them into the current folder, using the same sequential path as the Upload button. A drop on a folder row uploads into that folder.
+  - [x] **4.3.2 Drag a file onto a folder — Completed.** Moves the file with `moveFile`. Dragging a selected file moves the whole selection.
+  - [x] **4.3.3 Drop onto the breadcrumb or root — Completed.** Breadcrumb items are drop targets, with root as `folderId` null. Items already in that folder are skipped. Tests cover root, folder, and same-folder drops.
+  - [x] **4.3.4 Drag a folder onto a folder — Completed.** Moves the folder with `FoldersService.update`. A drop on itself is rejected. Backend errors such as `Folder.Cycle` and `Folder.NameTaken` show in the existing action error.
+  - [x] **4.3.5 Drop feedback — Completed.** Valid folder and breadcrumb targets get a blue ring while a drag is over them. Dropping on a file does nothing.
+  - [x] **4.3.6 Drag tests — Completed.** Eleven tests cover the upload drop (background and folder row), file-to-folder move, folder-to-folder move, self-drop, drop on a file, a backend cycle error, and the three breadcrumb drops.
 
 - [~] **4.4 Folder navigation — Built, not verified in a browser (backend 1.7 complete)**
   - Backend tasks are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.7.
