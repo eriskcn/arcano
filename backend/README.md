@@ -4,7 +4,7 @@ Boilerplate ASP.NET Core Web API project targeting .NET 10 based on Clean Archit
 
 ## Project Structure
 - `ArcanoCore.Domain`: Base entities, results, interfaces without dependencies.
-- `ArcanoCore.Application`: DTOs, Business Interfaces, FileService.
+- `ArcanoCore.Application`: DTOs, business interfaces and the File, Folder, Share, Upload, Quota and Account services.
 - `ArcanoCore.Infrastructure`: DbContext, Repositories, Unit of Work, SeaweedStorageService implementing S3.
 - `ArcanoCore.API`: Endpoints, Dependency Injection registration, RFC 7807 Exception Middleware.
 
@@ -20,48 +20,95 @@ To build the API docker image and orchestrate the whole stack (PostgreSQL, Seawe
 docker compose up --build -d
 ```
 
-### 2. Generate and Apply EF Core Migrations
-Ensure EF Core CLI tool is installed:
+### 2. Migrations
+Migrations already exist in `ArcanoCore.Infrastructure` and are applied automatically when the API starts (`Database:MigrateOnStartup`, default `true`).
+
+To add a migration, install the EF Core CLI at the version the projects use (`Microsoft.EntityFrameworkCore` 10.0.4 in Infrastructure):
 ```bash
-dotnet tool install --global dotnet-ef --version 10.0.0-preview.1.25081.1
+dotnet tool install --global dotnet-ef --version 10.0.4
 ```
-*(Note: Use version matching EntityFrameworkCore version in csproj)*
-
-#### From Local Machine:
-Update `ConnectionStrings:DefaultConnection` in `src/ArcanoCore.API/appsettings.Development.json` to reference `localhost`.
-
-Generate a migration:
+Then run, with `Jwt__Secret` set to at least 32 bytes (the API refuses to start without it):
 ```bash
-dotnet ef migrations add InitialCreate --project src/ArcanoCore.Infrastructure/ArcanoCore.Infrastructure.csproj --startup-project src/ArcanoCore.API/ArcanoCore.API.csproj
-```
-
-Apply migration:
-```bash
-dotnet ef database update --project src/ArcanoCore.Infrastructure/ArcanoCore.Infrastructure.csproj --startup-project src/ArcanoCore.API/ArcanoCore.API.csproj
+export Jwt__Secret="$(openssl rand -hex 32)"
+dotnet ef migrations add <Name> --project src/ArcanoCore.Infrastructure --startup-project src/ArcanoCore.API
 ```
 
 ### 3. API Endpoints
-- **Health Check:** `GET http://localhost:5000/health` (anonymous)
-- **Register:** `POST http://localhost:5000/api/Auth/register` (JSON: `email`, `password`)
-- **Login:** `POST http://localhost:5000/api/Auth/login` (JSON: `email`, `password`; returns `token`)
-- **Session:** `GET http://localhost:5000/api/Auth/session` (Bearer token)
+All routes are under `/api` except `/health`. "Bearer" means `Authorization: Bearer <token>` is required; files, folders and shares only act on data owned by the signed-in user.
 
-The file endpoints below require `Authorization: Bearer <token>` and only act on files owned by the signed-in user:
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/health` (checks database and storage; 503 if either fails) | Anonymous |
+| POST | `/api/Auth/register` (`email`, `password`; rate limited) | Anonymous |
+| POST | `/api/Auth/login` (`email`, `password`; returns `token`; rate limited) | Anonymous |
+| GET | `/api/Auth/session` | Bearer |
+| POST | `/api/Auth/refresh` (new token; the session ends 24 hours after sign-in) | Bearer |
+| POST | `/api/Auth/logout` (revokes all of the user's tokens) | Bearer |
+| GET | `/api/Account/storage` (quota and usage) | Bearer |
+| POST | `/api/Account/password` (change password; returns a new token) | Bearer |
+| DELETE | `/api/Account` (delete the account and its data) | Bearer |
+| POST | `/api/Files/upload` (form-data `file`, optional `folderId`) | Bearer |
+| GET | `/api/Files` (query: `skip`, `take` (default 50, max 100), `folderId`, `view`, `q`) | Bearer |
+| GET | `/api/Files/{id}` (download) | Bearer |
+| DELETE | `/api/Files/{id}` (moves to the Trash) | Bearer |
+| PUT | `/api/Files/{id}/name` | Bearer |
+| PUT | `/api/Files/{id}/star` | Bearer |
+| PUT | `/api/Files/{id}/folder` (move) | Bearer |
+| POST | `/api/Files/{id}/copy` | Bearer |
+| GET | `/api/Files/trash` (query: `skip`, `take`) | Bearer |
+| POST | `/api/Files/{id}/restore` | Bearer |
+| DELETE | `/api/Files/{id}/permanent` | Bearer |
+| DELETE | `/api/Files/trash` (empty the Trash) | Bearer |
+| POST | `/api/Folders` | Bearer |
+| GET | `/api/Folders` | Bearer |
+| PUT | `/api/Folders/{id}` | Bearer |
+| DELETE | `/api/Folders/{id}` (contents go to the Trash) | Bearer |
+| GET | `/api/Folders/{id}/download` (zip, at most 5,000 files) | Bearer |
+| POST | `/api/Share` (create a share link) | Bearer |
+| GET | `/api/Share?fileId=` (list links of a file) | Bearer |
+| DELETE | `/api/Share/{id}` (revoke) | Bearer |
+| GET | `/api/Public/{token}/info` (rate limited) | Anonymous |
+| GET | `/api/Public/{token}` (download as attachment; rate limited) | Anonymous |
+| POST | `/api/Uploads` (start a chunked upload) | Bearer |
+| GET | `/api/Uploads/{id}` (status) | Bearer |
+| PUT | `/api/Uploads/{id}/parts/{partNumber}` | Bearer |
+| POST | `/api/Uploads/{id}/complete` | Bearer |
+| DELETE | `/api/Uploads/{id}` (abort) | Bearer |
 
-- **List Files:** `GET http://localhost:5000/api/Files` (optional query: `skip` (default 0), `take` (default 50, max 100))
-- **Upload File:** `POST http://localhost:5000/api/Files/upload` (Form-data: `file` field containing your file)
-- **Download File:** `GET http://localhost:5000/api/Files/{id}`
-- **Delete File:** `DELETE http://localhost:5000/api/Files/{id}`
-
-Uploads are limited to 100 MB (`[RequestSizeLimit(104857600)]`); larger requests are rejected.
+The upload limit is `Storage:MaxUploadBytes` (default 100 MB); larger requests are rejected with 413. Chunked uploads send 8 MiB parts.
 
 ### 4. Configuration
-- `Jwt:Secret` (env `Jwt__Secret`) is required and must be at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`.
-- `Storage:*` points the API at SeaweedFS's S3 gateway. The Compose SeaweedFS service loads its S3 identity from `backend/seaweedfs/s3.json`; the placeholder keys are for local development only.
-- Behind a reverse proxy, set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; leave unset otherwise (X-Forwarded-For is then ignored).
-- Set `Logging` levels in `appsettings.Development.json`; EF Core logging is set to `Warning`.
+Set values in `appsettings.json` or as environment variables (`:` becomes `__`, for example `Jwt__Secret`).
+
+| Key | Default | Notes |
+|---|---|---|
+| `Jwt:Secret` | none | Required, at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`. |
+| `Jwt:Issuer` / `Jwt:Audience` | `ArcanoCore` / `ArcanoCoreUsers` | |
+| `Jwt:ExpiryInMinutes` | `60` | |
+| `Storage:ServiceUrl` | `http://seaweedfs:8333` | SeaweedFS S3 gateway. |
+| `Storage:AccessKey` / `Storage:SecretKey` | `any_key` / `any_secret` | Must match the SeaweedFS identity (`seaweedfs/s3.json` in dev). |
+| `Storage:BucketName` | `arcanocore-bucket` | |
+| `Storage:QuotaBytes` | `5368709120` (5 GiB) | Per-user quota. |
+| `Storage:MaxUploadBytes` | `104857600` (100 MB) | Upload size limit. |
+| `Cors:AllowedOrigins` | `["http://localhost:4200"]` | |
+| `ForwardedHeaders:KnownProxies` | `[]` | Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; when empty, X-Forwarded-For is ignored. |
+| `Database:MigrateOnStartup` | `true` | Applies migrations at startup. |
+| `Auth:AllowRegistration` | `true` | Set `false` to disable sign-up. |
+| `Cleanup:Enabled` | `true` | Background job for old trashed files and abandoned upload sessions. |
+| `Cleanup:IntervalMinutes` | `60` | |
+| `DataProtection:KeysPath` | `/app/keys` in a container, framework default otherwise | Where DataProtection keys are persisted. |
+
+`ConnectionStrings:DefaultConnection` points at the `postgres` Compose host; override it for a local run. Set `Logging` levels in `appsettings.Development.json`; EF Core logging is set to `Warning`.
 
 ### 5. Before deploying
-- Compose publishes Postgres (5432) and SeaweedFS (9333, 8080, 8333) on loopback only; do not expose 5432 or 8333 publicly.
+- The dev Compose file (`backend/docker-compose.yml`) publishes Postgres (5432), SeaweedFS (9333, 8080, 8333) and the API (5000) on loopback only; do not expose 5432 or 8333 publicly. For production use `docker-compose.prod.yml` in the repository root (see `docs/DEPLOY.md`).
 - Set `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `JWT_SECRET` (the first three default to dev values).
 - Replace `seaweedfs/s3.json` with your own identity; its keys must match `S3_ACCESS_KEY`/`S3_SECRET_KEY`.
+
+### 6. Tests
+```bash
+dotnet test ArcanoCore.sln
+```
+Unit tests need nothing. The integration tests in `test/ArcanoCore.IntegrationTests` are skipped unless enabled:
+- `ARCANO_IT_S3=1` runs the S3 tests against SeaweedFS on `localhost:8333` (the dev Compose stack).
+- `ARCANO_IT_PG` runs the PostgreSQL tests; set it to an admin connection string, for example `Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=postgrespassword`. Each test class creates and drops its own `arcano_it_*` database (see `test/ArcanoCore.IntegrationTests/PgFixture.cs`).

@@ -124,15 +124,49 @@ public class AuthControllerTests
         };
     }
 
+    [Fact]
+    public async Task Login_Token_CarriesCurrentSecurityStamp()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager();
+        await controller.Register(new RegisterRequest(Email, Password));
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
+        var token = (string)ok.Value!.GetType().GetProperty("Token")!.GetValue(ok.Value)!;
+
+        var claim = new JwtSecurityTokenHandler().ReadJwtToken(token).Claims.Single(c => c.Type == "sstamp");
+        Assert.Equal((await userManager.FindByEmailAsync(Email))!.SecurityStamp, claim.Value);
+    }
+
+    [Fact]
+    public async Task Logout_RotatesSecurityStamp()
+    {
+        var (controller, userManager) = CreateControllerWithUserManager();
+        await controller.Register(new RegisterRequest(Email, Password));
+        var user = (await userManager.FindByEmailAsync(Email))!;
+        var before = user.SecurityStamp;
+        await SignInAs(controller, userManager, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
+
+        Assert.IsType<NoContentResult>(await controller.Logout());
+
+        Assert.False(string.IsNullOrEmpty(before));
+        Assert.NotEqual(before, (await userManager.FindByEmailAsync(Email))!.SecurityStamp);
+    }
+
     private static AuthController CreateController() => CreateControllerWithUserManager().Controller;
 
     private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager(bool? allowRegistration = null)
+    {
+        var (userManager, configuration) = CreateUserManager(allowRegistration);
+        return (new AuthController(userManager, configuration), userManager);
+    }
+
+    internal static (UserManager<IdentityUser<Guid>> UserManager, IConfiguration Configuration) CreateUserManager(bool? allowRegistration = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDataProtection();
         services.AddSingleton<IUserStore<IdentityUser<Guid>>, InMemoryUserStore>();
-        services.AddIdentityCore<IdentityUser<Guid>>().AddDefaultTokenProviders();
+        services.AddIdentityCore<IdentityUser<Guid>>(o => o.Password.RequiredLength = 8).AddDefaultTokenProviders();
 
         var userManager = services.BuildServiceProvider().GetRequiredService<UserManager<IdentityUser<Guid>>>();
         var configuration = new ConfigurationBuilder()
@@ -143,14 +177,15 @@ public class AuthControllerTests
             })
             .Build();
 
-        return (new AuthController(userManager, configuration), userManager);
+        return (userManager, configuration);
     }
 
-    private sealed class InMemoryUserStore :
+    internal sealed class InMemoryUserStore :
         IUserStore<IdentityUser<Guid>>,
         IUserPasswordStore<IdentityUser<Guid>>,
         IUserEmailStore<IdentityUser<Guid>>,
-        IUserLockoutStore<IdentityUser<Guid>>
+        IUserLockoutStore<IdentityUser<Guid>>,
+        IUserSecurityStampStore<IdentityUser<Guid>>
     {
         private readonly List<IdentityUser<Guid>> _users = new();
 
@@ -267,6 +302,15 @@ public class AuthControllerTests
             user.LockoutEnabled = enabled;
             return Task.CompletedTask;
         }
+
+        public Task SetSecurityStampAsync(IdentityUser<Guid> user, string stamp, CancellationToken cancellationToken)
+        {
+            user.SecurityStamp = stamp;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetSecurityStampAsync(IdentityUser<Guid> user, CancellationToken cancellationToken) =>
+            Task.FromResult(user.SecurityStamp);
 
         public void Dispose()
         {

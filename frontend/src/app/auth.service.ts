@@ -74,6 +74,43 @@ export class AuthService {
       .pipe(map(() => undefined));
   }
 
+  // Other sessions are revoked server-side; the returned token keeps this one signed in.
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<LoginResponse>(`${environment.apiBaseUrl}/Account/password`, { currentPassword, newPassword })
+      .pipe(
+        map(response => {
+          if (!response || typeof response.token !== 'string' || !this.hasValidExpiry(response.token)) {
+            throw new Error('The server returned an invalid response.');
+          }
+          return response.token;
+        }),
+        tap(token => {
+          const email = this.email();
+          this.storeToken(token);
+          this.email.set(email);
+        }),
+        map(() => undefined),
+      );
+  }
+
+  // Revokes every token of the user on the server, then signs out locally.
+  logoutEverywhere(): Observable<void> {
+    return this.http.post<void>(`${environment.apiBaseUrl}/Auth/logout`, null).pipe(
+      tap(() => this.logout()),
+      map(() => undefined),
+    );
+  }
+
+  deleteAccount(password: string): Observable<void> {
+    return this.http
+      .delete<void>(`${environment.apiBaseUrl}/Account`, { body: { password } })
+      .pipe(
+        tap(() => this.logout()),
+        map(() => undefined),
+      );
+  }
+
   logout(): void {
     this.storage()?.removeItem(this.storageKey);
     this.verifiedToken = null;

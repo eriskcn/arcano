@@ -18,5 +18,8 @@ RUN dotnet publish -c Release -o /app/out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/out .
+# DataProtection keys volume; chown so a fresh named volume is writable by the non-root user
+RUN mkdir /app/keys && chown $APP_UID /app/keys
+USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "ArcanoCore.API.dll"]

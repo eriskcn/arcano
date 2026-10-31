@@ -94,4 +94,19 @@ describe('FoldersService', () => {
     request.flush(null, { status: 204, statusText: 'No Content' });
     expect(completed).toBe(true);
   });
+
+  it('should download a folder as a zip blob', () => {
+    const service = TestBed.inject(FoldersService);
+    const http = TestBed.inject(HttpTestingController);
+    let result: Blob | undefined;
+
+    service.download(id).subscribe(response => (result = response));
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/Folders/${id}/download`);
+    expect(request.request.method).toBe('GET');
+    expect(request.request.responseType).toBe('blob');
+    const blob = new Blob(['zip']);
+    request.flush(blob);
+    expect(result).toBe(blob);
+  });
 });

@@ -12,7 +12,12 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
-The client uses `http://localhost:5000/api` by default, matching the backend's local HTTP launch profile. Set `apiBaseUrl` in `src/environments/environment.ts` to the API base URL before building for another environment. Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The backend currently provides no role claims, so the client does not infer or display role-based permissions.
+The client reads the API base URL from `src/environments/`:
+
+- `environment.ts` (development): `http://localhost:5000/api`, matching the backend's local HTTP launch profile.
+- `environment.production.ts` (used by the production build and the nginx image): the same-origin path `/api`.
+
+Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The client renews the token with `POST Auth/refresh` and revokes it on sign-out with `POST Auth/logout`. The backend currently provides no role claims, so the client does not infer or display role-based permissions.
 
 ## Code scaffolding
 
@@ -40,21 +45,17 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 ## Running unit tests
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+`npm test` runs `ng test`, which executes the unit tests with the [Vitest](https://vitest.dev/) test runner:
 
 ```bash
-ng test
+npm test
 ```
 
-## Running end-to-end tests
+There is no end-to-end test target in `angular.json`.
 
-For end-to-end (e2e) testing, run:
+## Production image
 
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+`Dockerfile` builds the app (`npm run build`) and serves `dist/arcano-client/browser` with nginx, using `nginx.conf`. The production build calls the API at `/api` on the same origin, so the nginx configuration proxies `/api` to the backend service; see `../docs/DEPLOY.md` and `../docker-compose.prod.yml`.
 
 ## Additional Resources
 

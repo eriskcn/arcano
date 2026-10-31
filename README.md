@@ -1,11 +1,11 @@
 # Arcano
 
-A personal cloud-storage application monorepo with an ASP.NET Core backend and Angular client. The repository is currently at the foundation stage: backend layers and file API groundwork are in place, while the frontend dashboard and user-facing workflows remain planned work.
+A personal cloud-storage application monorepo with an ASP.NET Core backend and Angular client. The backend API and the Angular client cover the personal-use workflows (sign-in, files and folders, trash, share links, previews, chunked uploads), and a production Compose setup exists. See `REPO_STATUS.md` for what is verified and what is still open.
 
 ## Repository overview
 
 - `backend/`: ASP.NET Core (.NET 10) Web API organized around Domain, Application, Infrastructure, and API layers. PostgreSQL stores metadata; SeaweedFS provides object storage.
-- `frontend/`: Angular 22 client scaffold. File management UI, authentication flows, sharing, and previews are not yet implemented.
+- `frontend/`: Angular 22 client: sign-in and sign-up, a file explorer with folders, drag and drop, trash, share links, previews, chunked uploads, keyboard shortcuts, a right-click menu and an account settings dialog.
 - `REPO_STATUS.md`: current repository-stage assessment, gaps, and recommended next steps.
 - `backend/wbs/WBS.md` and `frontend/wbs/WBS.md`: implementation task tracking.
 
@@ -15,15 +15,22 @@ A personal cloud-storage application monorepo with an ASP.NET Core backend and A
 
 Prerequisites: .NET 10 SDK and Docker with Compose. The API requires `Jwt:Secret` (environment variable `Jwt__Secret`) with at least 32 UTF-8 bytes; export `JWT_SECRET` before using the full-stack Compose setup.
 
-Start PostgreSQL and SeaweedFS, then run the API locally:
+The dev Compose file mounts `backend/seaweedfs/security.toml`, which is gitignored. Create it from the example before `docker compose up`, otherwise Docker creates a directory in its place:
 
 ```bash
 cd backend
+cp seaweedfs/security.toml.example seaweedfs/security.toml
+sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" seaweedfs/security.toml
+```
+
+Start PostgreSQL and SeaweedFS, then run the API locally:
+
+```bash
 docker compose up -d postgres seaweedfs
 dotnet run --project src/ArcanoCore.API
 ```
 
-See [backend/README.md](backend/README.md) for configuration and endpoint details. The backend README also describes running the full stack with Compose.
+Database migrations are applied automatically when the API starts (`Database:MigrateOnStartup`, default `true`). See [backend/README.md](backend/README.md) for configuration and endpoint details. The backend README also describes running the full stack with Compose.
 
 ### Frontend
 
@@ -49,17 +56,15 @@ Set `RUN_DEV_LOG_FILE` to change the log file path.
 
 ## Current status
 
-- Backend file API covers list, upload, download, and delete, scoped to the signed-in user. Uploads are limited to 100 MB; storage/database failure handling is still open in the backend WBS.
-- Frontend file explorer lists, uploads, downloads, and deletes the user's files through the API. Drag-and-drop, folders, sharing, and previews are not yet implemented.
-- The repository includes backend unit-test and frontend spec projects. Run the backend tests with `dotnet test backend/ArcanoCore.sln` and the frontend tests from `frontend/` with `npm test`.
+- Backend: accounts (register, login, token refresh, logout, change password, delete account), files with folders, trash, star, copy and move, share links, chunked and resumable uploads, storage quota, folder zip download, a background cleanup job and a deep `/health` check. The upload limit is configurable (`Storage:MaxUploadBytes`, default 100 MB).
+- Frontend: file explorer with folders, drag and drop, trash, share links, previews (image, text, audio, video), chunked uploads with a progress bar, keyboard shortcuts, a right-click menu and an account settings dialog. Uploading from a phone is not possible yet (see `REPO_STATUS.md`).
+- Tests: backend unit tests, API tests and integration tests (S3 and PostgreSQL), and frontend specs. Run the backend tests with `dotnet test backend/ArcanoCore.sln` and the frontend tests from `frontend/` with `npm test`. See [backend/README.md](backend/README.md#tests) for the integration tests.
 
 ## Before deployment
 
-Review the Compose configuration: it currently includes fixed database and object-storage credentials. Replace these with appropriate secrets and environment-specific configuration before using the stack beyond local development. Postgres and SeaweedFS ports are bound to loopback; set `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `JWT_SECRET` and replace `backend/seaweedfs/s3.json` (see [backend/README.md](backend/README.md#5-before-deploying)).
+For a production setup use `docker-compose.prod.yml`, `.env.production.example` and `scripts/`, as described in [docs/DEPLOY.md](docs/DEPLOY.md). The rest of this section applies to the dev Compose file in `backend/`, which includes fixed database and object-storage credentials. Replace these with appropriate secrets and environment-specific configuration before using the stack beyond local development. Postgres and SeaweedFS ports are bound to loopback; set `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `JWT_SECRET` and replace `backend/seaweedfs/s3.json` (see [backend/README.md](backend/README.md#5-before-deploying)).
 
-> The project documentation and route configuration should be reconciled against the actual API implementation before relying on endpoint names or deployment behavior.
-
-For a fuller assessment and prioritized follow-up work, see [REPO_STATUS.md](REPO_STATUS.md).
+For a fuller assessment and prioritized follow-up work, see [REPO_STATUS.md](REPO_STATUS.md). Deployment steps are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## License
 

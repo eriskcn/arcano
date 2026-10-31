@@ -13,7 +13,6 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [x] **1.1 Desktop-style UI shell — Complete**
   - Sidebar, breadcrumbs, toolbar, file grid/list, and details panel.
   - Responsive sidebar and navigation; file context menus support details and favorite actions.
-  - Quota usage is not displayed because no backend quota contract is available.
 - [x] **1.2 Selection management — Complete**
   - Single, Ctrl-toggle, Shift-range, and Escape-to-clear selection.
   - Pointer-drag marquee selection in list and grid views.
@@ -50,19 +49,19 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - [x] **4.3.6 Drag tests — Completed.** Eleven tests cover the upload drop (background and folder row), file-to-folder move, folder-to-folder move, self-drop, drop on a file, a backend cycle error, and the three breadcrumb drops.
 
 - [x] **4.5 Context menu — Completed (unit-tested; menu, Make a copy and Preview checked in a browser on 2026-10-31).** Right-click menu in the style of Google Drive and OneDrive: icons, shortcut hints, dividers; Open or Preview, Download, Share, Rename, Make a copy, Copy, Cut, Move to, favorite, Details, Move to trash. Right-click selects an unselected item and acts on the whole selection where it can. Trash view has Restore and Delete forever. Right-click on empty space offers New folder, Upload files and Paste. Closes on Escape, click, scroll and resize; arrow keys and Enter work.
-  - Limits: Move to trash on a multi-selection skips folders; the Move to submenu is not clamped to the viewport; no background menu when the list is empty; a right-click elsewhere does not close the menu; right-click in Trash does not change the selection and acts on the clicked file only; `moveFile()` in `app.ts` is no longer used by the template (dead code, left in place).
+  - Limits: Move to trash on a multi-selection skips folders; the Move to submenu is not clamped to the viewport; no background menu when the list is empty; a right-click elsewhere does not close the menu; right-click in Trash does not change the selection and acts on the clicked file only; the unused `moveFile()` in `app.ts` was removed in 9.8.
 
-- [~] **4.4 Folder navigation — Built, not verified in a browser (backend 1.7 complete)**
+- [x] **4.4 Folder navigation — Completed (unit-tested; folder navigation checked in a browser on 2026-10-31, see 9.1 and 9.3; backend 1.7 complete)**
   - Backend tasks are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.7.
   - Folder tree and breadcrumb navigation, create and rename folders, upload into the current folder, and move files between folders.
-  - Wire the existing "Folders" filter chip to real folder data instead of the mock; the chip is not implemented against the API yet.
+  - The "Folders" filter chip (`filterChips` in `app.ts`) filters the loaded items by `type === 'folder'`, so it works on real folder data and applies to the current folder only.
 
-### 5. File Sharing (Planned)
+### 5. File Sharing
 - [x] **5.1 Share-link management — Completed for files (unit-tested, not verified in a browser).** A Share button in the details panel opens a dialog to create a link (never, 1, 7, or 30 days), copy it, and revoke it. Replaces the earlier mock dialog. Password and folder sharing are not included.
 - [x] **5.2 Public share view — Completed (unit-tested, not verified in a browser).** Route `/share/:token` needs no login. It shows the file name and size, a Download button, and an inline preview (image, media, text only), or "This link is invalid or has expired." Download errors show no message yet.
 
-### 6. Media and Document Previews (Planned)
-- Current state: the preview panel shell exists (desktop, toggled from the toolbar) and shows the selected item's details. It does not render file content yet.
+### 6. Media and Document Previews
+- Current state: the side preview panel (desktop, toggled from the toolbar) shows the selected item's details; file content renders in the preview popup (6.1).
 - Approach: fetch the file bytes through the authenticated download endpoint, then show them with a local object URL. No backend change is needed.
 - Constraint: never render uploaded HTML or SVG inline. Uploads come from other users, so inline rendering would run their script in the app's origin. Only images, PDF, text, audio, and video are previewed; everything else shows the download action.
 - [x] **6.1 Preview host — Completed (unit-tested, not verified in a browser).** A Preview button in the details panel opens `app-file-preview` in a popup (`app-modal`) for one selected file. The side panel shows details only. The preview has loading, error, and ready states, cancels stale requests, and revokes object URLs.
@@ -97,8 +96,8 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 6. Responsive layout remains usable on desktop and smaller screens.
 
 ## Status
-- Angular scaffold and desktop UI shell are present; backend-connected workflows have not been verified as complete.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; none are verified in a browser. Admin, keyboard actions, and sharing are not started.
+- The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Only admin (section 3) is not started. Known gap: uploading from a phone is not possible (see 9.10).
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
@@ -110,11 +109,16 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
 ### 9. Browser verification (2026-10-31)
 - [x] **9.1 Main flows checked in a browser — Completed.** Sign-in, folder create, small and 20 MiB chunked upload (hash identical), Make a copy, right-click menu, image preview, share create/open anonymously/revoke, Delete and Ctrl+Z, Ctrl+X/Ctrl+V and Ctrl+Z.
 - [x] **9.2 Escape closes dialogs — Fixed.** Found in the browser: Escape did not close the share or preview dialog and cleared the selection behind it. `ModalComponent` now closes on Escape and the page handler ignores Escape while a dialog is open. 2 new specs.
-- [ ] **9.3 Not yet checked in a browser — Not Started.** Sign-up page, drag and drop, upload progress bar, Shift+Delete and Trash view, audio/video/text preview, marquee selection, mobile layout.
-- [ ] **9.4 Small issues seen — Not Started.** The "Share" button in the details panel is clipped at the right edge; a copied file keeps the same name (Drive adds "Copy of"); a 1-pixel image previews at 1 px.
+- [x] **9.3 Later browser pass — Completed.** Sign-up page, Trash view, drag and drop (real mouse drags were unreliable, but synthetic drag events worked), previews of text, image, audio and video (PDF shows download only), the upload progress bar, marquee selection and the mobile layout were checked. Not re-checked after the fixes in 9.4 and 9.10: the confirmation dialogs, double-click preview and the account settings dialog.
+- [x] **9.4 Small issues seen — Fixed.** The clipped Share button, the floating "+" covering the "Shared" tab, audio files labelled "Document", double-click not opening the preview, the folder page heading, the sign-up error message and the missing delete confirmations were fixed afterwards (see 9.10). The "Copy of" file name is a backend change (backend WBS 1.13 finding 12). Not confirmed fixed: a 1-pixel image previews at 1 px.
 - [x] **9.5 Chunked upload without a file type — Fixed (audit finding 3).** Browsers give an empty type for unknown extensions (`.iso`, `.log`), and the server rejected the upload start with 400. `uploadChunked` now sends `application/octet-stream` when the type is empty. 1 new spec; the server's 400 for an empty type was checked live.
 - [x] **9.6 Token renewal during long uploads — Completed (audit finding 5; unit-tested, API checked live, not checked in a browser).** When the login token has under 10 minutes left, the HTTP interceptor renews it through `POST Auth/refresh` before sending the request; concurrent requests share one renewal, and a failed renewal falls through to the existing 401 handling. Chunked uploads benefit automatically. 4 new specs.
 - [x] **9.7 `AppShell` split by job — Completed (audit finding 8; unit-tested, main flows re-checked in a browser).** `file-actions.service.ts` now holds the clipboard, the undo stack, the bulk, trash, paste and copy actions, and upload (progress, chunked switch, 413 message); `http-errors.ts` holds the shared error parsing; `context-menu.component.ts` holds the right-click menu (clamping, keyboard, move list); `share-dialog.component.ts` holds the share dialog. `app.ts` went from 1,352 to 1,137 lines and `app.html` from 1,006 to 932; 126 specs pass. No behaviour change intended. Still in `app.ts`: sign-in and sign-up pages, explorer loading, folder actions, `moveItems`, selection and marquee, drag and drop, and the shortcut handler; splitting those needs a shared explorer-state store.
 - [x] **9.8 Dead `App.moveFile()` removed (audit finding 11).** Nothing in the template or specs called it; moves go through `moveItems` and the clipboard. 20 lines deleted; 126 specs and the build still pass.
 - [x] **9.9 Production web image (release blocker; verified on a throwaway production stack).** `frontend/Dockerfile` builds the app with `environment.production.ts` (`apiBaseUrl: '/api'`, same origin) and serves it with nginx, which proxies `/api` and `/health` to the API; `auth.interceptor.ts` now compares against `location.origin`. Development still uses `http://localhost:5000/api`. A 90 MB upload through nginx worked. Sign-up shows the server's message when sign-up is disabled. 128 specs pass.
-
+- [x] **9.10 Should-fix round (2026-10-31) — Completed (unit-tested).**
+  - Account settings dialog (change password, sign out everywhere, delete account), opened from Settings in the sidebar.
+  - Confirm dialog for Delete forever, Empty trash and folder delete.
+  - Folder "Download as zip" in the context menu.
+  - Audio files get the audio type and icon; double-click opens the preview; the folder page shows the folder name as its heading; the Share button in the details panel wraps instead of being clipped; the floating "+" sits above the bottom navigation; sign-up shows the server's error message.
+  - Known gap: the floating "+" still has no click handler and the header Upload button is hidden on phones, so uploading from a phone is not possible.

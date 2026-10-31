@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Models;
@@ -13,4 +14,6 @@ public interface IFolderService
     Task<Result<IReadOnlyList<FolderDto>>> ListFoldersAsync(Guid? parentId, CancellationToken cancellationToken = default);
     Task<Result<FolderDto>> UpdateFolderAsync(Guid id, FolderRequestDto dto, CancellationToken cancellationToken = default);
     Task<Result> DeleteFolderAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Result<string>> GetZipNameAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default);
 }

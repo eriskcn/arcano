@@ -138,7 +138,7 @@
             <input
               [type]="showSignUpPassword() ? 'text' : 'password'"
               autocomplete="new-password"
-              minlength="6"
+              minlength="8"
               required
               placeholder="Create a strong password"
               [ngModel]="signUpPassword()"
@@ -358,6 +358,7 @@
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
             [class.justify-center]="sidebarCollapsed()"
             [title]="sidebarCollapsed() ? 'Settings' : ''"
+            (click)="accountOpen.set(true)"
           >
             <span class="material-symbols-rounded text-gray-500" style="font-size: 20px">settings</span>
             <span *ngIf="!sidebarCollapsed()">Settings</span>
@@ -393,7 +394,7 @@
       <!-- Section header -->
       <div class="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-100 flex-shrink-0">
         <div>
-          <h1 class="text-base font-semibold text-gray-900">{{ navLabels[activeNav()] }}</h1>
+          <h1 class="text-base font-semibold text-gray-900">{{ pageTitle() }}</h1>
           <p *ngIf="showFiles()" class="text-xs text-gray-500 mt-0.5">
             {{ selectedIds().size ? selectedIds().size + ' selected · ' : '' }}{{ filteredFiles().length }} items
           </p>
@@ -540,7 +541,7 @@
                 <tr
                   *ngFor="let file of filteredFiles()"
                   (click)="selectFile(file.id)"
-                  (dblclick)="file.type === 'folder' && openFolder(file)"
+                  (dblclick)="openItem(file)"
                   draggable="true"
                   (dragstart)="startDrag($event, file)"
                   (dragend)="endDrag()"
@@ -614,7 +615,7 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               <div
                 *ngFor="let file of filteredFiles()"
-                (dblclick)="file.type === 'folder' && openFolder(file)"
+                (dblclick)="openItem(file)"
                 draggable="true"
                 (dragstart)="startDrag($event, file)"
                 (dragend)="endDrag()"
@@ -706,11 +707,11 @@
             </div>
 
             <!-- Quick actions -->
-            <div class="px-4 mt-4 flex gap-2">
+            <div class="px-4 mt-4 flex flex-wrap gap-2">
               <button
                 *ngIf="file.type !== 'folder' && selectedIds().size === 1"
                 (click)="openPreview()"
-                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+                class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <span class="material-symbols-rounded" style="font-size: 16px">preview</span>
                 Preview
@@ -719,7 +720,7 @@
                 *ngIf="file.type !== 'folder'"
                 (click)="downloadFile(file)"
                 [disabled]="actionBusy()"
-                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
+                class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
               >
                 <span class="material-symbols-rounded text-white" style="font-size: 16px">download</span>
                 Download
@@ -727,7 +728,7 @@
               <button
                 *ngIf="file.type !== 'folder' && selectedIds().size === 1 && activeNav() !== 'trash'"
                 (click)="openShare()"
-                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+                class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <span class="material-symbols-rounded text-gray-500" style="font-size: 16px">share</span>
                 Share
@@ -811,6 +812,18 @@
     </main>
   </div>
 
+  <app-confirm-dialog
+    [open]="!!pendingTrash()"
+    [title]="pendingTrash()?.title ?? ''"
+    [message]="pendingTrash()?.message ?? ''"
+    [confirmLabel]="pendingTrash()?.title ?? ''"
+    [danger]="true"
+    (confirmed)="confirmPendingTrash()"
+    (cancelled)="pendingTrash.set(null)"
+  />
+
+  <app-account-dialog [open]="accountOpen()" (close)="accountOpen.set(false)" (signedOut)="accountOpen.set(false); signOut()" />
+
   <!-- Share Dialog -->
   <app-share-dialog [open]="shareOpen()" [fileId]="selectedFile()?.id ?? null" [fileName]="selectedFile()?.name ?? ''" (close)="closeShare()" />
 
@@ -877,7 +890,7 @@
         </ng-template>
       </div>
       <div class="border-t border-gray-100 px-2 py-3">
-        <button class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 cursor-pointer">
+        <button (click)="accountOpen.set(true)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 cursor-pointer">
           <span class="material-symbols-rounded text-gray-500" style="font-size: 20px">settings</span>
           Settings
         </button>
@@ -912,7 +925,7 @@
   />
 
   <!-- Mobile FAB -->
-  <button class="lg:hidden fixed bottom-6 right-6 z-40 w-14 h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center shadow-lg transition-colors cursor-pointer">
+  <button class="lg:hidden fixed right-6 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 flex items-center justify-center shadow-lg transition-colors cursor-pointer">
     <span class="material-symbols-rounded text-white" style="font-size: 26px">add</span>
   </button>
 

@@ -34,4 +34,8 @@ export class FoldersService {
       .delete<void>(`${this.baseUrl}/${encodeURIComponent(id)}`)
       .pipe(map(() => undefined));
   }
+
+  download(id: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${encodeURIComponent(id)}/download`, { responseType: 'blob' });
+  }
 }

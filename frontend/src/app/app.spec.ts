@@ -90,13 +90,48 @@ describe('App', () => {
     it('shows Open for folders and file actions for files', () => {
       const folder = open(folderItem('d1', 'Docs')).labels();
       expect(folder.some(l => l.startsWith('Open'))).toBe(true);
-      expect(folder.some(l => l.startsWith('Download') || l.startsWith('Copy'))).toBe(false);
+      expect(folder.some(l => l === 'Download' || l.startsWith('Copy'))).toBe(false);
+      expect(folder.some(l => l.startsWith('Download as zip'))).toBe(true);
 
       const file = open(sampleFiles[0]).labels();
       expect(file.some(l => l.startsWith('Open'))).toBe(false);
       for (const label of ['Preview', 'Download', 'Share', 'Rename', 'Make a copy', 'Copy', 'Cut', 'Move to', 'Move to trash']) {
         expect(file.some(l => l.startsWith(label))).toBe(true);
       }
+    });
+
+    it('Download as zip fetches the folder archive', () => {
+      const { app, http } = open(folderItem('d1', 'Docs'));
+      URL.createObjectURL = () => 'blob:zip';
+      URL.revokeObjectURL = () => {};
+
+      app.downloadFolder(folderItem('d1', 'Docs'));
+
+      const req = http.expectOne(`${api}/Folders/d1/download`);
+      expect(req.request.responseType).toBe('blob');
+      req.flush(new Blob(['zip']));
+      expect(app.actionBusy()).toBe(false);
+      expect(app.actionError()).toBe('');
+    });
+
+    it('Download as zip reports an error', () => {
+      const { app, http } = open(folderItem('d1', 'Docs'));
+
+      app.downloadFolder(folderItem('d1', 'Docs'));
+      http.expectOne(`${api}/Folders/d1/download`).flush(new Blob(['x']), { status: 500, statusText: 'Server Error' });
+
+      expect(app.actionError()).toBe('Unable to download Docs. Please try again.');
+    });
+
+    it('deleting a folder asks first and only deletes after confirming', () => {
+      const { app, http } = open(folderItem('d1', 'Docs'));
+
+      app.deleteFolder(folderItem('d1', 'Docs'));
+
+      http.expectNone(`${api}/Folders/d1`);
+      expect(app.pendingTrash()?.message).toBe('Delete Docs and everything in it? Files go to the Trash.');
+      app.confirmPendingTrash();
+      expect(http.expectOne(`${api}/Folders/d1`).request.method).toBe('DELETE');
     });
 
     it('selects an unselected item on right-click', () => {
@@ -250,12 +285,20 @@ describe('App', () => {
     reloadTrash();
 
     app.deleteForever(app.files()[0]);
+    http.verify(); // nothing is sent before the user confirms
+    expect(app.pendingTrash()?.message).toBe('Delete forever? This file cannot be recovered.');
+    app.pendingTrash.set(null); // cancel
+    app.deleteForever(app.files()[0]);
+    app.confirmPendingTrash();
     const forever = http.expectOne(`${environment.apiBaseUrl}/Files/t/permanent`);
     expect(forever.request.method).toBe('DELETE');
     forever.flush(null, noContent);
     reloadTrash();
 
     app.emptyTrash();
+    http.verify();
+    expect(app.pendingTrash()?.message).toBe('Empty trash? All 1 items will be permanently deleted.');
+    app.confirmPendingTrash();
     const empty = http.expectOne(`${environment.apiBaseUrl}/Files/trash`);
     expect(empty.request.method).toBe('DELETE');
     empty.flush(null, noContent);
@@ -636,6 +679,42 @@ describe('App', () => {
     expect(app.signUpError()).toBe('Sign-up is disabled on this server.');
   });
 
+  it('should show the backend message for a rejected sign-up and the generic text otherwise', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const submit = (status: number, body: object) => {
+      app.onSignUpSubmit(new Event('submit'));
+      http.expectOne(`${environment.apiBaseUrl}/Auth/register`).flush(body, { status, statusText: 'x' });
+    };
+
+    submit(400, { code: 'Auth.RegisterFailed', message: 'Passwords must be at least 8 characters.' });
+    expect(app.signUpError()).toBe('Passwords must be at least 8 characters.');
+
+    submit(500, { code: 'X', message: 'boom' });
+    expect(app.signUpError()).toBe('Unable to create your account. Please try again.');
+  });
+
+  it('should classify audio files and open previewable files on double-click', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    expect(app.fileTypeName('audio')).toBe('Audio');
+    const song = { ...sampleFiles[0], contentType: 'audio/wav', fileSize: 10 };
+    const bin = { ...sampleFiles[1], contentType: 'application/octet-stream', fileSize: 10 };
+    app.files.set([song, bin]);
+    app.openItem(bin);
+    expect(app.previewModalOpen()).toBe(false);
+    app.openItem(song);
+    expect(app.previewModalOpen()).toBe(true);
+    expect(app.selectedFile()?.id).toBe(song.id);
+  });
+
+  it('should show the current folder name as the page title', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    expect(app.pageTitle()).toBe('My Files');
+    app.activeNav.set('my-files');
+    app.folderPath.set([{ id: 'f', name: 'Docs' }]);
+    expect(app.pageTitle()).toBe('Docs');
+  });
+
   it('should show the backend cycle error when a folder move is rejected', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
@@ -830,6 +909,8 @@ describe('App', () => {
 
       app.activeNav.set('trash');
       expect(press('Delete', { shiftKey: true }).defaultPrevented).toBe(true);
+      http.verify();
+      app.confirmPendingTrash();
       http.expectOne(`${api}/Files/1/permanent`).flush(null, { status: 204, statusText: 'No Content' });
       settle(http);
     });

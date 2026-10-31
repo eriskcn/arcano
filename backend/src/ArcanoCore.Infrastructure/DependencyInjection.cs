@@ -1,4 +1,5 @@
 using System;
+using System.Security.Claims;
 using System.Text;
 using Amazon.S3;
 using ArcanoCore.Application.Common.Interfaces;
@@ -50,7 +51,7 @@ public static class DependencyInjection
             options.Password.RequireLowercase = false;
             options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequiredLength = 6;
+            options.Password.RequiredLength = 8;
             options.User.RequireUniqueEmail = true;
         })
         .AddRoles<IdentityRole<Guid>>()
@@ -83,6 +84,21 @@ public static class DependencyInjection
                 ValidAudience = jwtSettings["Audience"] ?? "ArcanoCoreUsers",
                 IssuerSigningKey = new SymmetricSecurityKey(key),
                 ClockSkew = TimeSpan.Zero
+            };
+            // Reject tokens whose security stamp no longer matches (logout / password change) or whose user is gone or locked out.
+            // Tokens without the claim (issued before this check existed) are invalid.
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = async context =>
+                {
+                    var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<IdentityUser<Guid>>>();
+                    var stamp = context.Principal?.FindFirstValue(AuthClaims.SecurityStamp);
+                    var user = await userManager.FindByIdAsync(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+                    if (user == null || string.IsNullOrEmpty(stamp) || stamp != user.SecurityStamp || await userManager.IsLockedOutAsync(user))
+                    {
+                        context.Fail("Token is no longer valid.");
+                    }
+                }
             };
         });
 

@@ -1,4 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
@@ -78,28 +83,104 @@ public class FolderServiceTests
     }
 
     [Fact]
-    public async Task DeleteFolderAsync_RejectsFolderWithFiles()
+    public async Task DeleteFolderAsync_TrashesNestedFoldersAndFiles()
+    {
+        var userId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext, userId.ToString());
+        var top = await CreateFolderAsync(service, "Top", null);
+        var mid = await CreateFolderAsync(service, "Mid", top.Id);
+        var leaf = await CreateFolderAsync(service, "Leaf", mid.Id);
+        var sibling = await CreateFolderAsync(service, "Sibling", null);
+        var other = await CreateFolderAsync(CreateService(dbContext, otherId.ToString()), "Other", null);
+        AddFile(dbContext, userId, top.Id, "a");
+        AddFile(dbContext, userId, leaf.Id, "b");
+        AddFile(dbContext, userId, sibling.Id, "c");
+        AddFile(dbContext, otherId, other.Id, "d");
+        await dbContext.SaveChangesAsync();
+
+        var result = await service.DeleteFolderAsync(top.Id);
+
+        Assert.True(result.IsSuccess);
+        var folders = await dbContext.Folders.IgnoreQueryFilters().ToListAsync();
+        Assert.All(folders.Where(f => f.Id == top.Id || f.Id == mid.Id || f.Id == leaf.Id), f => Assert.True(f.IsDeleted));
+        Assert.All(folders.Where(f => f.Id == sibling.Id || f.Id == other.Id), f => Assert.False(f.IsDeleted));
+        var files = await dbContext.FileMetadatas.IgnoreQueryFilters().ToDictionaryAsync(f => f.StorageKey);
+        Assert.True(files["a"].IsDeleted && files["a"].DeletedAtUtc != null);
+        Assert.True(files["b"].IsDeleted && files["b"].DeletedAtUtc != null);
+        Assert.False(files["c"].IsDeleted);
+        Assert.False(files["d"].IsDeleted);
+    }
+
+    [Fact]
+    public async Task WriteZipAsync_WritesTreeWithUniqueNames()
     {
         var userId = Guid.NewGuid();
         await using var dbContext = CreateDbContext();
-        var service = CreateService(dbContext, userId.ToString());
-        var folder = await CreateFolderAsync(service, "Docs", null);
-        dbContext.FileMetadatas.Add(new FileMetadata
+        var storage = new FakeStorage();
+        var service = new FolderService(dbContext, new FolderTestCurrentUser(userId.ToString()), storage);
+        var top = await CreateFolderAsync(service, "Top", null);
+        var sub = await CreateFolderAsync(service, "Sub", top.Id);
+        await CreateFolderAsync(service, "Empty", top.Id);
+        AddFile(dbContext, userId, top.Id, "k1", "a.txt");
+        AddFile(dbContext, userId, top.Id, "k2", "a.txt");
+        AddFile(dbContext, userId, sub.Id, "k3", "../b.txt");
+        var trashed = AddFile(dbContext, userId, top.Id, "k4", "gone.txt");
+        trashed.IsDeleted = true;
+        await dbContext.SaveChangesAsync();
+        storage.Data["k1"] = "one"u8.ToArray();
+        storage.Data["k2"] = "two"u8.ToArray();
+        storage.Data["k3"] = "three"u8.ToArray();
+
+        using var output = new MemoryStream();
+        var result = await service.WriteZipAsync(top.Id, output);
+
+        Assert.True(result.IsSuccess);
+        output.Position = 0;
+        using var zip = new ZipArchive(output);
+        var names = zip.Entries.Select(e => e.FullName).Order().ToList();
+        Assert.Equal(new[] { "Empty/", "Sub/", "Sub/.._b.txt", "a (2).txt", "a.txt" }.Order(), names);
+        using var reader = new StreamReader(zip.GetEntry("Sub/.._b.txt")!.Open());
+        Assert.Equal("three", reader.ReadToEnd());
+    }
+
+    [Fact]
+    public async Task WriteZipAsync_OtherUsersFolder_IsNotFound()
+    {
+        var ownerId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var folder = await CreateFolderAsync(CreateService(dbContext, ownerId.ToString()), "Mine", null);
+        var other = CreateService(dbContext, Guid.NewGuid().ToString());
+
+        var result = await other.WriteZipAsync(folder.Id, new MemoryStream());
+
+        Assert.Equal("Folder.NotFound", result.Error.Code);
+    }
+
+    private static FileMetadata AddFile(ApplicationDbContext dbContext, Guid ownerId, Guid folderId, string key, string name = "f.txt")
+    {
+        var file = new FileMetadata
         {
             Id = Guid.NewGuid(),
-            FileName = "a.txt",
+            FileName = name,
             ContentType = "text/plain",
             FileSize = 1,
-            StorageKey = "a",
-            OwnerId = userId,
-            FolderId = folder.Id
-        });
-        await dbContext.SaveChangesAsync();
+            StorageKey = key,
+            OwnerId = ownerId,
+            FolderId = folderId
+        };
+        dbContext.FileMetadatas.Add(file);
+        return file;
+    }
 
-        var result = await service.DeleteFolderAsync(folder.Id);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("Folder.NotEmpty", result.Error.Code);
+    private sealed class FakeStorage : IStorageService
+    {
+        public Dictionary<string, byte[]> Data { get; } = new();
+        public Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Stream>(new MemoryStream(Data.GetValueOrDefault(key) ?? []));
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     [Fact]
@@ -129,7 +210,7 @@ public class FolderServiceTests
     }
 
     private static FolderService CreateService(ApplicationDbContext dbContext, string? userId) =>
-        new(dbContext, new FolderTestCurrentUser(userId));
+        new(dbContext, new FolderTestCurrentUser(userId), new FakeStorage());
 
     private sealed class FolderTestCurrentUser(string? userId) : ICurrentUser
     {

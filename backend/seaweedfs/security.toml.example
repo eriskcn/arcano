@@ -1,0 +1,3 @@
+[jwt.filer_signing]
+key = "CHANGE_ME"
+expires_after_seconds = 10

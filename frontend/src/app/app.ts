@@ -14,9 +14,12 @@ import { AuthService } from './auth.service';
 import { FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
 import { ShareDialogComponent } from './share-dialog.component';
+import { AccountDialogComponent } from './account-dialog.component';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
 import { QuotaMeterComponent } from './shared/components/quota-meter.component';
+import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
+import { previewKind } from './preview/preview-kind';
 
 export type Page = 'signin' | 'signup' | 'app';
 export type ViewMode = 'list' | 'grid';
@@ -36,7 +39,7 @@ export interface MenuEntry {
 export interface FileItem {
   id: string;
   name: string;
-  type: 'folder' | 'document' | 'image' | 'video' | 'archive' | 'spreadsheet' | 'pdf';
+  type: 'folder' | 'document' | 'image' | 'video' | 'audio' | 'archive' | 'spreadsheet' | 'pdf';
   size: string | null;
   modified: string;
   starred: boolean;
@@ -62,6 +65,7 @@ const fileTypeFromContentType = (contentType: string): FileItem['type'] => {
   const type = contentType.toLowerCase();
   if (type.startsWith('image/')) return 'image';
   if (type.startsWith('video/')) return 'video';
+  if (type.startsWith('audio/')) return 'audio';
   if (type === 'application/pdf') return 'pdf';
   if (type.includes('spreadsheet') || type.includes('excel')) return 'spreadsheet';
   if (/zip|x-tar|x-rar|x-7z|compressed|archive/.test(type)) return 'archive';
@@ -96,7 +100,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, ModalComponent, QuotaMeterComponent],
+  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, AccountDialogComponent, ModalComponent, QuotaMeterComponent, ConfirmDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   providers: [FileActionsService],
@@ -269,12 +273,15 @@ export class App implements OnInit {
     return [...base, ...this.folderPath().map(folder => folder.name)];
   });
 
+  readonly pageTitle = computed(() => this.folderPath().at(-1)?.name ?? this.navLabels[this.activeNav()]);
+
   fileIcon(type: FileItem['type']): string {
     const map: Record<FileItem['type'], string> = {
       folder: 'folder',
       document: 'description',
       image: 'image',
       video: 'movie',
+      audio: 'music_note',
       archive: 'folder_zip',
       spreadsheet: 'table_chart',
       pdf: 'picture_as_pdf',
@@ -288,6 +295,7 @@ export class App implements OnInit {
       document: 'text-blue-500',
       image: 'text-violet-500',
       video: 'text-rose-500',
+      audio: 'text-teal-500',
       archive: 'text-orange-500',
       spreadsheet: 'text-emerald-500',
       pdf: 'text-red-500',
@@ -301,6 +309,7 @@ export class App implements OnInit {
       document: 'bg-blue-50',
       image: 'bg-violet-50',
       video: 'bg-rose-50',
+      audio: 'bg-teal-50',
       archive: 'bg-orange-50',
       spreadsheet: 'bg-emerald-50',
       pdf: 'bg-red-50',
@@ -314,6 +323,7 @@ export class App implements OnInit {
       document: 'Document',
       image: 'Image',
       video: 'Video',
+      audio: 'Audio',
       archive: 'ZIP Archive',
       spreadsheet: 'Excel Spreadsheet',
       pdf: 'PDF Document',
@@ -332,6 +342,15 @@ export class App implements OnInit {
     if (changed) {
       this.folderPath.set([]);
       this.loadFiles();
+    }
+  }
+
+  openItem(file: FileItem): void {
+    if (file.type === 'folder') {
+      this.openFolder(file);
+    } else if (previewKind(file.contentType ?? '', file.fileSize ?? 0) !== 'none') {
+      this.selectFile(file.id);
+      this.openPreview();
     }
   }
 
@@ -399,6 +418,11 @@ export class App implements OnInit {
   }
 
   deleteFolder(folder: FileItem): void {
+    this.contextMenu.set(null);
+    this.confirmTrash('Delete folder', `Delete ${folder.name} and everything in it? Files go to the Trash.`, () => this.runDeleteFolder(folder));
+  }
+
+  private runDeleteFolder(folder: FileItem): void {
     if (this.actionBusy()) {
       return;
     }
@@ -471,7 +495,8 @@ export class App implements OnInit {
         this.authBusy.set(false);
         const body = errorBody(error);
         this.signUpError.set(
-          body?.code === 'Auth.RegistrationDisabled' && typeof body.message === 'string'
+          (body?.code === 'Auth.RegistrationDisabled' || (error instanceof HttpErrorResponse && error.status === 400)) &&
+            typeof body?.message === 'string'
             ? body.message
             : this.authErrorMessage(error, 'Unable to create your account. Please try again.'),
         );
@@ -528,7 +553,7 @@ export class App implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.shareOpen() || this.previewModalOpen()) {
+    if (this.shareOpen() || this.previewModalOpen() || this.pendingTrash()) {
       return; // the modal closes itself
     }
     if (this.contextMenu()) {
@@ -559,7 +584,7 @@ export class App implements OnInit {
   onShortcut(event: KeyboardEvent): void {
     const target = event.target;
     if (
-      this.page() !== 'app' || this.shareOpen() || this.previewModalOpen() || this.folderEditor() ||
+      this.page() !== 'app' || this.shareOpen() || this.previewModalOpen() || this.pendingTrash() || this.folderEditor() ||
       (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
     ) {
       return;
@@ -583,7 +608,11 @@ export class App implements OnInit {
     } else if (key === 'delete' && event.shiftKey) {
       handled = trash && selected.length > 0;
       if (handled) {
-        this.actions.bulk(selected, file => this.filesApi.deletePermanent(file.id), name => `Unable to delete ${name}. Please try again.`);
+        this.confirmTrash(
+          'Delete forever',
+          selected.length === 1 ? 'Delete forever? This file cannot be recovered.' : `Delete forever? These ${selected.length} items cannot be recovered.`,
+          () => this.actions.bulk(selected, file => this.filesApi.deletePermanent(file.id), name => `Unable to delete ${name}. Please try again.`),
+        );
       }
     } else if (key === 'delete') {
       handled = !trash && selected.length > 0;
@@ -703,6 +732,7 @@ export class App implements OnInit {
       oneFolder && { label: 'Open', icon: 'folder_open', shortcut: 'Enter', run: () => this.openFolder(oneFolder) },
       oneFile && { label: 'Preview', icon: 'visibility', run: () => this.openPreview() },
       oneFile && { label: 'Download', icon: 'download', run: () => this.downloadFile(oneFile) },
+      oneFolder && { label: 'Download as zip', icon: 'folder_zip', run: () => this.downloadFolder(oneFolder) },
       oneFile && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
       one && { label: 'Rename', icon: 'edit', shortcut: 'F2', divider: true, run: () => this.startRenameFolder(one) },
       oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.actions.copyItems([oneFile], this.currentFolderId()) },
@@ -948,6 +978,30 @@ export class App implements OnInit {
     });
   }
 
+  downloadFolder(folder: FileItem): void {
+    if (this.actionBusy()) {
+      return;
+    }
+    this.actionBusy.set(true);
+    this.actionError.set('');
+
+    this.foldersApi.download(folder.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${folder.name}.zip`;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        this.actionBusy.set(false);
+      },
+      error: () => {
+        this.actionBusy.set(false);
+        this.actionError.set(`Unable to download ${folder.name}. Please try again.`);
+      },
+    });
+  }
+
   deleteFile(file: FileItem): void {
     if (file.type === 'folder') {
       this.deleteFolder(file);
@@ -986,11 +1040,26 @@ export class App implements OnInit {
   }
 
   deleteForever(file: FileItem): void {
-    this.trashAction(this.filesApi.deletePermanent(file.id), `Unable to delete ${file.name}. Please try again.`);
+    this.confirmTrash('Delete forever', 'Delete forever? This file cannot be recovered.', () =>
+      this.trashAction(this.filesApi.deletePermanent(file.id), `Unable to delete ${file.name}. Please try again.`));
   }
 
   emptyTrash(): void {
-    this.trashAction(this.filesApi.emptyTrash(), 'Unable to empty the trash. Please try again.');
+    this.confirmTrash('Empty trash', `Empty trash? All ${this.files().length} items will be permanently deleted.`, () =>
+      this.trashAction(this.filesApi.emptyTrash(), 'Unable to empty the trash. Please try again.'));
+  }
+
+  // Destructive trash actions run only after the user confirms in the dialog.
+  readonly pendingTrash = signal<{ title: string; message: string; run: () => void } | null>(null);
+
+  private confirmTrash(title: string, message: string, run: () => void): void {
+    this.pendingTrash.set({ title, message, run });
+  }
+
+  confirmPendingTrash(): void {
+    const pending = this.pendingTrash();
+    this.pendingTrash.set(null);
+    pending?.run();
   }
 
   private trashAction(request: Observable<void>, failure: string): void {
@@ -1045,8 +1114,8 @@ export class App implements OnInit {
         return 'Enter a valid folder name.';
       case 'Folder.Cycle':
         return 'A folder cannot be moved into itself or one of its subfolders.';
-      case 'Folder.NotEmpty':
-        return 'Only empty folders can be deleted. Move or delete their contents first.';
+      case 'Folder.TooLarge':
+        return 'This folder has too many files to download as a zip.';
       default:
         return fallback;
     }
@@ -1119,4 +1188,6 @@ export class App implements OnInit {
   closeShare(): void {
     this.shareOpen.set(false);
   }
+
+  readonly accountOpen = signal<boolean>(false);
 }

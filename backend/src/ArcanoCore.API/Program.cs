@@ -3,6 +3,8 @@ using ArcanoCore.Application;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Infrastructure;
 using ArcanoCore.Infrastructure.Data;
+using ArcanoCore.Infrastructure.Jobs;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Threading.RateLimiting;
@@ -83,6 +85,13 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = maxUploadBytes);
 builder.Services.AddApplication(builder.Configuration.GetValue<long?>("Storage:QuotaBytes") ?? StorageQuotaService.DefaultLimitBytes);
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Persist DataProtection keys in containers (volume mounted at /app/keys); outside containers use the framework default.
+var keysPath = builder.Configuration["DataProtection:KeysPath"]
+    ?? (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true" ? "/app/keys" : null);
+if (keysPath != null)
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+builder.Services.AddCleanupJob(builder.Configuration);
 
 var app = builder.Build();
 

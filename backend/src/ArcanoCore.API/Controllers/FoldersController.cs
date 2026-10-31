@@ -5,7 +5,9 @@ using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -45,6 +47,33 @@ public class FoldersController : ApiControllerBase
     {
         var result = await _folderService.DeleteFolderAsync(id, cancellationToken);
         return result.IsFailure ? ToErrorResult(result.Error) : NoContent();
+    }
+
+    [HttpGet("{id:guid}/download")]
+    public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
+    {
+        // Validate and cap before the response starts, so errors can still be returned as JSON.
+        var name = await _folderService.GetZipNameAsync(id, cancellationToken);
+        if (name.IsFailure)
+        {
+            return ToErrorResult(name.Error);
+        }
+
+        // Nothing is written before the cap/ownership checks pass, so a failure can still return JSON.
+        // shortcut: ZipArchive writes synchronously and Kestrel forbids that by default; this blocks one thread per
+        // download, so use a streaming zip writer if many large zips run at once.
+        HttpContext.Features.Get<IHttpBodyControlFeature>()!.AllowSynchronousIO = true;
+        Response.ContentType = "application/zip";
+        Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = name.Value }.ToString();
+        var result = await _folderService.WriteZipAsync(id, Response.Body, cancellationToken);
+        if (result.IsFailure)
+        {
+            Response.ContentType = null;
+            Response.Headers.ContentDisposition = default;
+            return ToErrorResult(result.Error);
+        }
+
+        return new EmptyResult();
     }
 
     private IActionResult ToErrorResult(Error error) =>

@@ -181,4 +181,45 @@ describe('AuthService', () => {
       request.flush({});
     });
   });
+
+  describe('account methods', () => {
+    it('changePassword stores the returned token', () => {
+      const auth = TestBed.inject(AuthService);
+      const http = TestBed.inject(HttpTestingController);
+      const token = createToken();
+
+      auth.changePassword('old-password', 'new-password').subscribe();
+      const request = http.expectOne(`${environment.apiBaseUrl}/Account/password`);
+      expect(request.request.body).toEqual({ currentPassword: 'old-password', newPassword: 'new-password' });
+      request.flush({ token });
+
+      expect(auth.token()).toBe(token);
+    });
+
+    it('logoutEverywhere calls the server then clears the token', () => {
+      const token = createToken();
+      sessionStorage.setItem('arcano.auth.token', token);
+      const auth = TestBed.inject(AuthService);
+      const http = TestBed.inject(HttpTestingController);
+
+      auth.logoutEverywhere().subscribe();
+      http.expectOne(`${environment.apiBaseUrl}/Auth/logout`).flush(null, { status: 204, statusText: 'No Content' });
+
+      expect(auth.token()).toBeNull();
+    });
+
+    it('deleteAccount sends the password and clears the token', () => {
+      sessionStorage.setItem('arcano.auth.token', createToken());
+      const auth = TestBed.inject(AuthService);
+      const http = TestBed.inject(HttpTestingController);
+
+      auth.deleteAccount('secret-pass').subscribe();
+      const request = http.expectOne(`${environment.apiBaseUrl}/Account`);
+      expect(request.request.method).toBe('DELETE');
+      expect(request.request.body).toEqual({ password: 'secret-pass' });
+      request.flush(null, { status: 204, statusText: 'No Content' });
+
+      expect(auth.token()).toBeNull();
+    });
+  });
 });

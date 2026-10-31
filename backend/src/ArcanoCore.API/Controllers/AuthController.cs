@@ -1,8 +1,6 @@
 using System;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Claims;
-using System.Text;
 using System.Threading.Tasks;
 using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +8,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.IdentityModel.Tokens;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -19,7 +16,7 @@ public class AuthController : ApiControllerBase
     // Hash of a random string; verified against when the email is unknown so login timing does not reveal existing accounts.
     private static readonly string DummyPasswordHash = new PasswordHasher<IdentityUser<Guid>>().HashPassword(new IdentityUser<Guid>(), Guid.NewGuid().ToString());
 
-    private const string SessionStartClaim = "session_start";
+    private const string SessionStartClaim = JwtTokens.SessionStartClaim;
     // Longest a login may keep renewing its token, so a stolen token cannot live forever.
     private static readonly TimeSpan MaxSessionAge = TimeSpan.FromHours(24);
 
@@ -124,7 +121,7 @@ public class AuthController : ApiControllerBase
         await _userManager.ResetAccessFailedCountAsync(user);
 
         // 4. Generate JWT Token
-        var token = GenerateJwtToken(user, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
         return Ok(new { Token = token });
     }
@@ -134,6 +131,20 @@ public class AuthController : ApiControllerBase
     public IActionResult Session()
     {
         return Ok(new { Email = User.FindFirstValue(ClaimTypes.Email) });
+    }
+
+    // Rotates the user's SecurityStamp, which revokes every token issued to this user (all sessions), see JwtBearer OnTokenValidated.
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var user = await _userManager.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+        if (user != null)
+        {
+            await _userManager.UpdateSecurityStampAsync(user);
+        }
+
+        return NoContent();
     }
 
     [Authorize]
@@ -153,35 +164,7 @@ public class AuthController : ApiControllerBase
             return Unauthorized(new Error("Auth.SessionExpired", "Session expired."));
         }
 
-        return Ok(new { Token = GenerateJwtToken(user, sessionStart) });
-    }
-
-    private string GenerateJwtToken(IdentityUser<Guid> user, long sessionStart)
-    {
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email!),
-            new Claim(ClaimTypes.Name, user.UserName!),
-            new Claim(SessionStartClaim, sessionStart.ToString(), ClaimValueTypes.Integer64)
-        };
-
-        var jwtSettings = _configuration.GetSection("Jwt");
-        // Validated at startup in DependencyInjection.AddInfrastructure.
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Secret"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var expiryMinutes = double.TryParse(jwtSettings["ExpiryInMinutes"], out var parsedMinutes) ? parsedMinutes : 60;
-
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"] ?? "ArcanoCore",
-            audience: jwtSettings["Audience"] ?? "ArcanoCoreUsers",
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return Ok(new { Token = JwtTokens.Create(_configuration, user, sessionStart) });
     }
 }
 
