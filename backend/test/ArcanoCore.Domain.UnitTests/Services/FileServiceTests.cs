@@ -460,6 +460,38 @@ public class FileServiceTests
     }
 
     [Fact]
+    public async Task ListTrashAsync_PurgesLegacyItemsWithNullDeletedAt()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+        var legacy = Trashed(userId, "legacy.txt", DateTime.UtcNow);
+        legacy.DeletedAtUtc = null;
+        legacy.LastModifiedAtUtc = DateTime.UtcNow.AddDays(-31);
+        dbContext.FileMetadatas.Add(legacy);
+        await dbContext.SaveChangesAsync(CancellationToken.None);
+        var storage = new TestStorage();
+
+        var result = await CreateListService(dbContext, userId.ToString(), storage).ListTrashAsync(0, 50);
+
+        Assert.Empty(result.Value);
+        Assert.Equal(1, storage.DeleteCalls);
+    }
+
+    [Fact]
+    public async Task UploadFileAsync_NameOrContentTypeTooLong_FailsBeforeUpload()
+    {
+        var storage = new TestStorage();
+        var service = CreateService(new TestDbContext(), storage, Guid.NewGuid());
+
+        var name = await service.UploadFileAsync(new FileUploadDto(new MemoryStream([1]), new string('a', 256), "text/plain", 1));
+        var type = await service.UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "f.txt", new string('a', 101), 1));
+
+        Assert.Equal("File.NameTooLong", name.Error.Code);
+        Assert.Equal("File.ContentTypeTooLong", type.Error.Code);
+        Assert.Equal(0, storage.UploadCalls);
+    }
+
+    [Fact]
     public async Task RestoreFileAsync_RestoresFileToItsFolder()
     {
         var userId = Guid.NewGuid();

@@ -35,7 +35,10 @@ public class ShareService : IShareService
             return Result<ShareLinkDto>.Failure(new Error("File.NotFound", "File metadata not found."));
         }
 
-        if (dto.ExpiresAtUtc != null && dto.ExpiresAtUtc <= DateTime.UtcNow)
+        var expiresAtUtc = dto.ExpiresAtUtc is { } e
+            ? e.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(e, DateTimeKind.Utc) : e.ToUniversalTime()
+            : (DateTime?)null;
+        if (expiresAtUtc != null && expiresAtUtc <= DateTime.UtcNow)
         {
             return Result<ShareLinkDto>.Failure(new Error("Share.InvalidExpiry", "Expiry must be in the future."));
         }
@@ -46,7 +49,7 @@ public class ShareService : IShareService
             Token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant(),
             FileMetadataId = dto.FileId,
             CreatedById = CurrentOwnerId,
-            ExpiresAtUtc = dto.ExpiresAtUtc
+            ExpiresAtUtc = expiresAtUtc
         };
         _dbContext.SharedLinks.Add(link);
         await _dbContext.SaveChangesAsync(cancellationToken);

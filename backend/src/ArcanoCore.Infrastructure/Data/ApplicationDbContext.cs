@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
@@ -37,6 +38,10 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
                     entry.Entity.CreatedAtUtc = DateTime.UtcNow;
                     break;
                 case EntityState.Modified:
+                    // Starring/moving a file must not change its place in the "recent" view.
+                    if (entry.Entity is FileMetadata && !entry.Properties.Any(p => p.IsModified
+                            && p.Metadata.Name is not (nameof(FileMetadata.IsStarred) or nameof(FileMetadata.FolderId))))
+                        break;
                     entry.Entity.LastModifiedAtUtc = DateTime.UtcNow;
                     break;
             }

@@ -24,9 +24,19 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            _logger.LogDebug("Request was aborted by the client.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "An unhandled exception occurred: {Message}", ex.Message);
+            if (context.Response.HasStarted)
+            {
+                _logger.LogWarning("The response has already started; cannot write the error response.");
+                return;
+            }
+
             await HandleExceptionAsync(context, ex);
         }
     }

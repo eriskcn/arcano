@@ -41,6 +41,16 @@ public class FileService : IFileService
             return Result<FileResponseDto>.Failure(new Error("File.Empty", "File content cannot be empty."));
         }
 
+        if (dto.FileName.Length > 255)
+        {
+            return Result<FileResponseDto>.Failure(new Error("File.NameTooLong", "File name cannot exceed 255 characters."));
+        }
+
+        if (dto.ContentType.Length > 100)
+        {
+            return Result<FileResponseDto>.Failure(new Error("File.ContentTypeTooLong", "Content type cannot exceed 100 characters."));
+        }
+
         var ownerId = CurrentOwnerId;
         if (ownerId == Guid.Empty)
         {
@@ -241,7 +251,7 @@ public class FileService : IFileService
         var cutoff = DateTime.UtcNow.AddDays(-30);
         var expired = await _dbContext.FileMetadatas
             .IgnoreQueryFilters()
-            .Where(f => f.OwnerId == ownerId && f.IsDeleted && f.DeletedAtUtc != null && f.DeletedAtUtc < cutoff)
+            .Where(f => f.OwnerId == ownerId && f.IsDeleted && (f.DeletedAtUtc ?? f.LastModifiedAtUtc ?? f.CreatedAtUtc) < cutoff)
             .ToListAsync(cancellationToken);
         foreach (var file in expired)
         {
@@ -331,14 +341,23 @@ public class FileService : IFileService
         {
             _dbContext.FileMetadatas.Remove(file);
             await _dbContext.SaveChangesAsync(cancellationToken);
-            // The row is already gone if the storage delete fails; the orphaned object is accepted.
-            await _storageService.DeleteAsync(file.StorageKey, cancellationToken);
-            return Result.Success();
         }
         catch (Exception)
         {
+            // shortcut: a failed save leaves the entity tracked as Deleted (no Entry API on IApplicationDbContext), so a retry in the same scope fails again; add detach support if that matters.
             return Result.Failure(new Error("File.DeleteFailed", "Delete failed. Please try again."));
         }
+
+        try
+        {
+            await _storageService.DeleteAsync(file.StorageKey, cancellationToken);
+        }
+        catch (Exception)
+        {
+            // The row is already gone, so a storage failure only orphans the object; do not fail the user.
+        }
+
+        return Result.Success();
     }
 
     public async Task<Result> MoveFileAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default)

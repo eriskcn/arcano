@@ -49,7 +49,7 @@ public class SeaweedStorageService : IStorageService
     {
         await EnsureBucketExistsAsync(cancellationToken);
 
-        string storageKey = $"{Guid.NewGuid()}_{fileName}";
+        string storageKey = Guid.NewGuid().ToString();
 
         var uploadRequest = new TransferUtilityUploadRequest
         {

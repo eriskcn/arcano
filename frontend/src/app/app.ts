@@ -824,7 +824,8 @@ export class App implements OnInit {
         anchor.href = url;
         anchor.download = file.name;
         anchor.click();
-        URL.revokeObjectURL(url);
+        // Deferred: some browsers start reading the URL after click() returns.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
         this.actionBusy.set(false);
       },
       error: () => {
@@ -923,10 +924,13 @@ export class App implements OnInit {
     }
   }
 
-  private fileErrorMessage(error: unknown, fallback: string): string {
+  private errorBody(error: unknown): { code?: unknown; description?: unknown; detail?: unknown; title?: unknown; message?: unknown } | null {
     const body: unknown = error instanceof HttpErrorResponse ? error.error : null;
-    const code = typeof body === 'object' && body !== null && 'code' in body ? body.code : null;
-    switch (code) {
+    return typeof body === 'object' && body !== null ? (body as NonNullable<ReturnType<App['errorBody']>>) : null;
+  }
+
+  private fileErrorMessage(error: unknown, fallback: string): string {
+    switch (this.errorBody(error)?.code) {
       case 'Storage.QuotaExceeded':
         return 'Not enough storage space.';
       case 'File.InvalidName':
@@ -937,9 +941,7 @@ export class App implements OnInit {
   }
 
   private folderErrorMessage(error: unknown, fallback: string): string {
-    const body: unknown = error instanceof HttpErrorResponse ? error.error : null;
-    const code = typeof body === 'object' && body !== null && 'code' in body ? body.code : null;
-    switch (code) {
+    switch (this.errorBody(error)?.code) {
       case 'Folder.NameTaken':
         return 'A folder with this name already exists here.';
       case 'Folder.InvalidName':
@@ -1065,7 +1067,9 @@ export class App implements OnInit {
   }
 
   private shareErrorMessage(err: unknown, fallback: string): string {
-    const body = err instanceof HttpErrorResponse ? err.error : null;
-    return (typeof body === 'string' && body) || body?.detail || body?.title || body?.message || fallback;
+    const raw = err instanceof HttpErrorResponse ? err.error : null;
+    const body = this.errorBody(err);
+    const text = [body?.description, body?.detail, body?.title, body?.message].find(v => typeof v === 'string' && v);
+    return (typeof raw === 'string' && raw) || (text as string | undefined) || fallback;
   }
 }

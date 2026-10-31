@@ -24,6 +24,19 @@ public class ShareServiceTests
     }
 
     [Fact]
+    public async Task CreateLinkAsync_UnspecifiedKindExpiry_IsTreatedAsUtc()
+    {
+        var file = AddFile(_ownerId);
+        var expiry = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(1), DateTimeKind.Unspecified);
+
+        var result = await CreateService(_ownerId).CreateLinkAsync(new ShareLinkRequestDto(file.Id, expiry));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(DateTimeKind.Utc, result.Value.ExpiresAtUtc!.Value.Kind);
+        Assert.Equal(expiry.Ticks, result.Value.ExpiresAtUtc.Value.Ticks);
+    }
+
+    [Fact]
     public async Task CreateLinkAsync_PastExpiry_Fails()
     {
         var file = AddFile(_ownerId);

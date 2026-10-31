@@ -61,11 +61,7 @@ public class FilesController : ApiControllerBase
         var result = await _fileService.DownloadFileAsync(id, cancellationToken);
         if (result.IsFailure)
         {
-            if (result.Error.Code == "File.NotFound")
-            {
-                return NotFound(result.Error);
-            }
-            return BadRequest(result.Error);
+            return ToError(result.Error);
         }
 
         var (content, contentType, fileName) = result.Value;
@@ -73,20 +69,8 @@ public class FilesController : ApiControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
-    {
-        var result = await _fileService.DeleteFileAsync(id, cancellationToken);
-        if (result.IsFailure)
-        {
-            if (result.Error.Code == "File.NotFound")
-            {
-                return NotFound(result.Error);
-            }
-            return BadRequest(result.Error);
-        }
-
-        return NoContent();
-    }
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken) =>
+        ToNoContent(await _fileService.DeleteFileAsync(id, cancellationToken));
 
     [HttpPut("{id:guid}/name")]
     public async Task<IActionResult> Rename(Guid id, [FromBody] RenameFileRequest request, CancellationToken cancellationToken) =>
@@ -124,30 +108,14 @@ public class FilesController : ApiControllerBase
         ToNoContent(await _fileService.EmptyTrashAsync(cancellationToken));
 
     [HttpPut("{id:guid}/folder")]
-    public async Task<IActionResult> MoveFolder(Guid id, [FromBody] MoveFileRequest request, CancellationToken cancellationToken)
-    {
-        var result = await _fileService.MoveFileAsync(id, request.FolderId, cancellationToken);
-        if (result.IsFailure)
-        {
-            if (result.Error.Code == "File.NotFound")
-            {
-                return NotFound(result.Error);
-            }
-            return BadRequest(result.Error);
-        }
+    public async Task<IActionResult> MoveFolder(Guid id, [FromBody] MoveFileRequest request, CancellationToken cancellationToken) =>
+        ToNoContent(await _fileService.MoveFileAsync(id, request.FolderId, cancellationToken));
 
-        return NoContent();
-    }
+    private IActionResult ToNoContent(ArcanoCore.Domain.Common.Result result) =>
+        result.IsFailure ? ToError(result.Error) : NoContent();
 
-    private IActionResult ToNoContent(ArcanoCore.Domain.Common.Result result)
-    {
-        if (result.IsFailure)
-        {
-            return result.Error.Code == "File.NotFound" ? NotFound(result.Error) : BadRequest(result.Error);
-        }
-
-        return NoContent();
-    }
+    private IActionResult ToError(ArcanoCore.Domain.Common.Error error) =>
+        error.Code == "File.NotFound" ? NotFound(error) : BadRequest(error);
 
     public record RenameFileRequest(string Name);
 

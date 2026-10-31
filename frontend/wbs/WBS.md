@@ -68,6 +68,12 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 - [x] **6.5 Text/code viewer — Completed for plain text.** Text, Markdown, CSV, and JSON show the first 100 KB with a truncation note. Code-specific highlighting is not included.
 - [x] **6.6 Preview tests — Completed.** Covers the type rules, blocked HTML and SVG, the size cap, PDF (no request), request cancellation, the error state, and object URL revocation.
 
+### 7. Code Review Findings (2026-10-31 whole-project review)
+- Source: `/code-review` of the whole project on 2026-10-31. Findings were not verified. Numbers match the review; backend items are in [backend/wbs/WBS.md](../../backend/wbs/WBS.md) section 1.10.
+- [x] **7.1 Item 8: download error and revoke timing — Completed (unit-tested, not verified in a browser).** `share-page.component.ts` `download()` has no error handler, so a failed shared download shows nothing. It and `app.ts` `downloadFile` revoke the object URL right after `click()`, which some browsers treat as a cancel. **Fixed:** A failed shared download shows "Download failed. Please try again.", and the object URL is revoked after 1 s in both places.
+- [x] **7.2 Item 9: share error messages — Completed (unit-tested, not verified in a browser).** `shareErrorMessage` in `app.ts` reads `detail`, `title` and `message`, but the backend sends `{code, description}`, so messages such as "Expiry must be in the future." never show. **Fixed:** `description` is read first.
+- [x] **7.3 Item 10 (frontend part): duplicated error parsing — Completed (unit-tested, not verified in a browser).** `fileErrorMessage`, `folderErrorMessage` and `shareErrorMessage` repeat the same error-code extraction. This is a cleanup, not a bug. **Fixed:** One `errorBody()` helper in `app.ts`.
+
 ## Dependencies
 - The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.
 - Core file workflows depend on backend authorization and ownership enforcement.

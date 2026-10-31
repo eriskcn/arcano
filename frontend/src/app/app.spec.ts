@@ -348,6 +348,7 @@ describe('App', () => {
   });
 
   it('should download a file through an object URL and revoke it', () => {
+    vi.useFakeTimers();
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
@@ -359,7 +360,10 @@ describe('App', () => {
 
     expect(create).toHaveBeenCalled();
     expect(click).toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
     expect(revoke).toHaveBeenCalledWith('blob:test');
+    vi.useRealTimers();
     http.verify();
   });
 
@@ -747,5 +751,19 @@ describe('App', () => {
     app.createShareLink();
     http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ title: 'Expiry must be in the future.' }, { status: 400, statusText: 'Bad Request' });
     expect(app.shareError()).toBe('Expiry must be in the future.');
+  });
+
+  it('should prefer the backend error description in the share dialog', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.files.set(sampleFiles);
+    app.selectedId.set('1');
+
+    app.openShare();
+    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share`).flush([]);
+    app.createShareLink();
+    http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ code: 'Share.Past', description: 'Expiry is in the past.', title: 'x' }, { status: 400, statusText: 'Bad Request' });
+    expect(app.shareError()).toBe('Expiry is in the past.');
   });
 });

@@ -29,7 +29,10 @@ describe('SharePageComponent', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it('shows the file and previews it when ready', () => {
     const fixture = create();
@@ -50,6 +53,7 @@ describe('SharePageComponent', () => {
   });
 
   it('downloads via a temporary object URL and revokes it', () => {
+    vi.useFakeTimers();
     const fixture = create();
     http.expectOne(`${base}/info`).flush({ fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 10 });
     fixture.detectChanges();
@@ -57,6 +61,18 @@ describe('SharePageComponent', () => {
     fixture.componentInstance.download();
     http.expectOne(base).flush(new Blob(['x']));
     expect(click).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test');
+  });
+
+  it('shows an error when the download fails', () => {
+    const fixture = create();
+    http.expectOne(`${base}/info`).flush({ fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 10 });
+    fixture.detectChanges();
+    fixture.componentInstance.download();
+    http.expectOne(base).flush(null, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Download failed. Please try again.');
   });
 });
