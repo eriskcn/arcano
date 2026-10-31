@@ -97,7 +97,7 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 
 ## Status
 - The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Only admin (section 3) is not started. Known gap: uploading from a phone is not possible (see 9.10).
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Only admin (section 3) is not started. Uploading from a phone works (9.11).
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
@@ -121,4 +121,6 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
   - Confirm dialog for Delete forever, Empty trash and folder delete.
   - Folder "Download as zip" in the context menu.
   - Audio files get the audio type and icon; double-click opens the preview; the folder page shows the folder name as its heading; the Share button in the details panel wraps instead of being clipped; the floating "+" sits above the bottom navigation; sign-up shows the server's error message.
-  - Known gap: the floating "+" still has no click handler and the header Upload button is hidden on phones, so uploading from a phone is not possible.
+  - The phone upload gap noted here was closed in 9.11.
+- [x] **9.11 Phone upload (checked in a browser).** On phones (under 640 px) the floating button (now an upload icon, labelled "Upload files") opens the file picker through the same hidden input as the header Upload button; from 640 px up the header Upload button is used and the floating button is hidden. Checked at 375 and 768 px, including an upload through the input. 1 new spec; 143 specs pass.
+

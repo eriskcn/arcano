@@ -27,7 +27,7 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 ## What is verified
 
 - **Backend:** builds; 116 domain tests and 14 API tests pass. 25 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
-- **Frontend:** 142 unit tests pass; the production build succeeds.
+- **Frontend:** 143 unit tests pass; the production build succeeds.
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off; change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (earlier today):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser.
 
@@ -35,9 +35,10 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 Fixed (unit-tested): the clipped Share button, the floating "+" covering the "Shared" tab, audio files labelled "Document", double-click now opens the preview, the folder page heading, the sign-up error message (the server's message is shown), and confirmations for Delete forever, Empty trash and folder delete.
 
+Also fixed: **uploading from a phone** (the floating button on phones now opens the file picker; from tablet width up the header Upload button is used). Checked in a browser at 375 and 768 px, including an upload through the same input.
+
 Still open:
-1. **Uploading from a phone is not possible:** the header Upload button is hidden on small screens and the floating "+" has no click handler.
-2. **Dragging with a real mouse** onto a folder worked once and then failed on later tries, although synthetic drag events always worked. This may be a limit of the automation tool; check by hand.
+1. **Dragging with a real mouse** onto a folder worked once and then failed on later tries, although synthetic drag events always worked. This may be a limit of the automation tool; check by hand.
 
 ## Release blockers (2026-10-31): now addressed, verified on a throwaway production stack
 

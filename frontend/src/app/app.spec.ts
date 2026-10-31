@@ -139,6 +139,16 @@ describe('App', () => {
       expect([...app.selectedIds()]).toEqual(['3']);
     });
 
+    it('the phone upload button opens the file picker', () => {
+      const { fixture } = open(null);
+      const picker = fixture.nativeElement.querySelector('input[type="file"]') as HTMLInputElement;
+      const clicked = vi.spyOn(picker, 'click');
+
+      (fixture.nativeElement.querySelector('button[aria-label="Upload files"]') as HTMLButtonElement).click();
+
+      expect(clicked).toHaveBeenCalledTimes(1);
+    });
+
     it('Make a copy posts to the copy endpoint', () => {
       const { fixture, http } = open(sampleFiles[2]);
       const item = Array.from(fixture.nativeElement.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>).find(el => el.textContent!.includes('Make a copy'))!;
