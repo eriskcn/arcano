@@ -121,6 +121,22 @@ describe('App', () => {
       expect(app.actionError()).toBe('');
     });
 
+    it('details panel offers Download as zip for a selected folder', () => {
+      const { fixture, app, http } = open(null);
+      URL.createObjectURL = () => 'blob:zip';
+      URL.revokeObjectURL = () => {};
+      app.selectedId.set('d1');
+      app.selectedIds.set(new Set(['d1']));
+      fixture.detectChanges();
+
+      const button = Array.from(fixture.nativeElement.querySelectorAll('aside button') as NodeListOf<HTMLButtonElement>)
+        .find(b => b.textContent!.includes('Download as zip'))!;
+      expect(button).toBeTruthy();
+      button.click();
+
+      expect(http.expectOne(`${api}/Folders/d1/download`).request.method).toBe('GET');
+    });
+
     it('Download as zip reports an error', () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
 

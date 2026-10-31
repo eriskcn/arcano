@@ -726,6 +726,15 @@
                 Download
               </button>
               <button
+                *ngIf="file.type === 'folder' && selectedIds().size === 1 && activeNav() !== 'trash'"
+                (click)="downloadFolder(file)"
+                [disabled]="actionBusy()"
+                class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
+              >
+                <span class="material-symbols-rounded text-white" style="font-size: 16px">folder_zip</span>
+                Download as zip
+              </button>
+              <button
                 *ngIf="file.type !== 'folder' && selectedIds().size === 1 && activeNav() !== 'trash'"
                 (click)="openShare()"
                 class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"

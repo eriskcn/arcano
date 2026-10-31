@@ -26,8 +26,8 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend:** builds; 116 domain tests and 14 API tests pass. 25 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
-- **Frontend:** 143 unit tests pass; the production build succeeds.
+- **Backend:** builds; 118 domain tests and 16 API tests pass. 25 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
+- **Frontend:** 147 unit tests pass; the production build succeeds.
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off; change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (earlier today):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser.
 
@@ -76,7 +76,7 @@ File versioning, folder sharing, per-user quotas, admin features, PDF preview, c
 
 ## Documentation
 
-The README files and both WBS files were brought up to date after the release-blocker and should-fix work (route table, configuration table, migrations, tests, environments, status sections). One inconsistency left in the code, not the docs: `ArcanoCore.Application.csproj` still references an EF Core preview package (`10.0.0-preview.1.25081.1`) while the other projects use 10.0.4.
+The README files and both WBS files were brought up to date after the release-blocker and should-fix work (route table, configuration table, migrations, tests, environments, status sections). All projects now use the released 10.0.4 packages (`ArcanoCore.Application.csproj` was moved off the two preview packages).
 
 ## Not verified
 

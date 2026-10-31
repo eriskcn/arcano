@@ -126,3 +126,4 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
 
 - [x] **9.12 Shared view removed.** The "Shared" nav item and filter chip always showed nothing (the flag was never set by the API) and the empty text promised files shared with you, which the backend does not support. Both are removed; share links are created per file from the Share dialog. Trash now sits in the mobile bottom nav.
 - [x] **9.13 Folder star persisted — Completed (unit-tested).** `FolderDto.isStarred` maps to `starred`; `FoldersService.star` is called by the same toggle as files (optimistic, reverts with an error on failure). The Favorites view still lists files only. 2 new specs.
+- [x] **9.14 Folder zip in the details panel — Completed (unit-tested).** Selecting a single folder shows "Download as zip" in the details panel, calling the same `downloadFolder` as the context menu (busy and error handling shared). File Download is unchanged. 1 new spec.

@@ -108,34 +108,6 @@ public class AccountControllerTests
         Assert.Equal(0, await userManager.GetAccessFailedCountAsync(user));
     }
 
-    [Fact]
-    public async Task Delete_WhenUserDeleteFails_LeavesDataIntact()
-    {
-        var (controller, userManager, accounts) = await Setup();
-        var failing = new FailingDeleteUserManager(userManager);
-        var user = (await userManager.FindByEmailAsync(Email))!;
-        var failingController = new AccountController(new FakeQuota(), accounts, new FakeCurrentUser(user.Id.ToString()), failing, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
-        {
-            ControllerContext = controller.ControllerContext
-        };
-
-        var bad = Assert.IsType<BadRequestObjectResult>(await failingController.Delete(new DeleteAccountRequest(Password), default));
-
-        Assert.Equal("Account.DeleteFailed", Assert.IsType<Error>(bad.Value).Code);
-        Assert.False(accounts.Deleted);
-    }
-
-    private sealed class FailingDeleteUserManager(UserManager<IdentityUser<Guid>> inner) : UserManager<IdentityUser<Guid>>(
-        new AuthControllerTests.InMemoryUserStore(), null, inner.PasswordHasher, inner.UserValidators, inner.PasswordValidators, inner.KeyNormalizer, inner.ErrorDescriber, null, null)
-    {
-        public override Task<IdentityResult> DeleteAsync(IdentityUser<Guid> user) => Task.FromResult(IdentityResult.Failed());
-        public override Task<IdentityUser<Guid>?> FindByIdAsync(string userId) => inner.FindByIdAsync(userId);
-        public override Task<bool> IsLockedOutAsync(IdentityUser<Guid> user) => inner.IsLockedOutAsync(user);
-        public override Task<bool> CheckPasswordAsync(IdentityUser<Guid> user, string password) => inner.CheckPasswordAsync(user, password);
-        public override Task<IdentityResult> ResetAccessFailedCountAsync(IdentityUser<Guid> user) => inner.ResetAccessFailedCountAsync(user);
-        public override Task<IdentityResult> AccessFailedAsync(IdentityUser<Guid> user) => inner.AccessFailedAsync(user);
-    }
-
     private static async Task<(AccountController Controller, UserManager<IdentityUser<Guid>> UserManager, FakeAccountService Accounts)> Setup()
     {
         var (userManager, configuration) = AuthControllerTests.CreateUserManager();

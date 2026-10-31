@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -23,22 +22,19 @@ public class AccountController : ApiControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly UserManager<IdentityUser<Guid>> _userManager;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<AccountController>? _logger;
 
     public AccountController(
         IStorageQuotaService quotaService,
         IAccountService accountService,
         ICurrentUser currentUser,
         UserManager<IdentityUser<Guid>> userManager,
-        IConfiguration configuration,
-        ILogger<AccountController>? logger = null)
+        IConfiguration configuration)
     {
         _quotaService = quotaService;
         _accountService = accountService;
         _currentUser = currentUser;
         _userManager = userManager;
         _configuration = configuration;
-        _logger = logger;
     }
 
     // Counts failures toward lockout like sign-in; a locked account gets the plain wrong-password response so lockout is not revealed.
@@ -118,22 +114,12 @@ public class AccountController : ApiControllerBase
             return BadRequest(new Error("Account.PasswordIncorrect", "Password is incorrect."));
         }
 
-        // User first: if this fails nothing is lost; S3 object deletion cannot be rolled back.
-        var userId = user.Id;
+        // Data first: the owner foreign keys are Restrict, so the user row cannot go while files, folders or links remain.
+        await _accountService.DeleteUserDataAsync(user.Id, cancellationToken);
         var result = await _userManager.DeleteAsync(user);
         if (!result.Succeeded)
         {
             return BadRequest(new Error("Account.DeleteFailed", "Could not delete the account. Please try again."));
-        }
-
-        try
-        {
-            await _accountService.DeleteUserDataAsync(userId, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // shortcut: the account is already gone, so a data-deletion failure leaves orphan rows/objects that nothing removes; add a cleanup sweep for ownerless data.
-            _logger?.LogError(ex, "Account {UserId} deleted but its data could not be fully removed.", userId);
         }
 
         return NoContent();
