@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -16,6 +17,9 @@ public class UploadService : IUploadService
 {
     public const long ChunkSize = 8 * 1024 * 1024; // above S3's 5 MiB minimum part size
     private const int MaxParts = 10000; // S3 limit
+    private const int MaxOpenSessions = 3;
+    // Held only while a session is started, so concurrent starts cannot slip past the session cap.
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> StartLocks = new();
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(24);
 
     private readonly IApplicationDbContext _dbContext;
@@ -74,16 +78,24 @@ public class UploadService : IUploadService
             return Fail<UploadStartedDto>("Folder.NotFound", "Folder not found.");
         }
 
-        // Early check so an over-quota upload is refused before any data is sent; complete checks again.
-        var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, dto.FileSize, cancellationToken);
-        if (quotaResult.IsFailure)
-        {
-            return Result<UploadStartedDto>.Failure(quotaResult.Error);
-        }
-
+        var startLock = StartLocks.GetOrAdd(ownerId, _ => new SemaphoreSlim(1, 1));
+        await startLock.WaitAsync(cancellationToken);
         try
         {
             await SweepAbandonedAsync(ownerId, cancellationToken);
+            var open = await _dbContext.UploadSessions.Where(s => s.OwnerId == ownerId).ToListAsync(cancellationToken);
+            if (open.Count >= MaxOpenSessions)
+            {
+                return Fail<UploadStartedDto>("Upload.TooManyOpen", "Too many uploads in progress. Finish or cancel one first.");
+            }
+
+            // Early check so an over-quota upload is refused before any data is sent; open sessions count as already reserved. Complete checks again.
+            var quotaResult = await _quotaService.EnsureWithinQuotaAsync(ownerId, open.Sum(s => s.FileSize) + dto.FileSize, cancellationToken);
+            if (quotaResult.IsFailure)
+            {
+                return Result<UploadStartedDto>.Failure(quotaResult.Error);
+            }
+
             var (key, uploadId) = await _multipart.InitiateAsync(dto.ContentType, cancellationToken);
             var session = new UploadSession
             {
@@ -103,6 +115,10 @@ public class UploadService : IUploadService
         catch (Exception)
         {
             return Fail<UploadStartedDto>("File.UploadFailed", "Upload failed. Please try again.");
+        }
+        finally
+        {
+            startLock.Release();
         }
     }
 

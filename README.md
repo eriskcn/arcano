@@ -55,7 +55,7 @@ Set `RUN_DEV_LOG_FILE` to change the log file path.
 
 ## Before deployment
 
-Review the Compose configuration: it currently includes fixed database and object-storage credentials. Replace these with appropriate secrets and environment-specific configuration before using the stack beyond local development.
+Review the Compose configuration: it currently includes fixed database and object-storage credentials. Replace these with appropriate secrets and environment-specific configuration before using the stack beyond local development. Postgres and SeaweedFS ports are bound to loopback; set `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `JWT_SECRET` and replace `backend/seaweedfs/s3.json` (see [backend/README.md](backend/README.md#5-before-deploying)).
 
 > The project documentation and route configuration should be reconciled against the actual API implementation before relying on endpoint names or deployment behavior.
 

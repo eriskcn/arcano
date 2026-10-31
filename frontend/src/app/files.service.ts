@@ -96,7 +96,7 @@ export class FilesService {
     return this.http
       .post<{ id: string; chunkSize: number }>(url, {
         fileName: file.name,
-        contentType: file.type,
+        contentType: file.type || 'application/octet-stream', // browsers give '' for unknown extensions
         fileSize: file.size,
         folderId: folderId ?? null,
       })

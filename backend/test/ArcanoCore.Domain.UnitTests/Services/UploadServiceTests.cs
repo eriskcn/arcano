@@ -100,8 +100,36 @@ public class UploadServiceTests
         Assert.Equal(3, _context.Sessions.Count()); // other user's stale + own fresh + the new one
     }
 
-    private UploadService CreateService(Guid userId, Error? quotaError = null) =>
-        new(_context, _multipart, new FakeStorage(), new FakeUser(userId.ToString()), new FakeQuota(quotaError));
+    [Fact]
+    public async Task StartAsync_FourthOpenSession_FailsButOtherUserCanStart()
+    {
+        var service = CreateService(_ownerId);
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.True((await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null))).IsSuccess);
+        }
+
+        var fourth = await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null));
+        var other = await CreateService(Guid.NewGuid()).StartAsync(new UploadStartDto("a.bin", "a/b", 10, null));
+
+        Assert.Equal("Upload.TooManyOpen", fourth.Error.Code);
+        Assert.True(other.IsSuccess);
+    }
+
+    [Fact]
+    public async Task StartAsync_QuotaCheckIncludesOpenSessionsBytes()
+    {
+        var quota = new FakeQuota(null);
+        var service = CreateService(_ownerId, quota: quota);
+        await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null));
+
+        await service.StartAsync(new UploadStartDto("b.bin", "a/b", 25, null));
+
+        Assert.Equal(35, quota.LastAdditionalBytes);
+    }
+
+    private UploadService CreateService(Guid userId, Error? quotaError = null, FakeQuota? quota = null) =>
+        new(_context, _multipart, new FakeStorage(), new FakeUser(userId.ToString()), quota ?? new FakeQuota(quotaError));
 
     private sealed class FakeUser(string userId) : ICurrentUser
     {
@@ -111,8 +139,13 @@ public class UploadServiceTests
 
     private sealed class FakeQuota(Error? error) : IStorageQuotaService
     {
-        public Task<Result> EnsureWithinQuotaAsync(Guid ownerId, long additionalBytes, CancellationToken cancellationToken = default) =>
-            Task.FromResult(error is null ? Result.Success() : Result.Failure(error));
+        public long LastAdditionalBytes { get; private set; }
+
+        public Task<Result> EnsureWithinQuotaAsync(Guid ownerId, long additionalBytes, CancellationToken cancellationToken = default)
+        {
+            LastAdditionalBytes = additionalBytes;
+            return Task.FromResult(error is null ? Result.Success() : Result.Failure(error));
+        }
 
         public Task<StorageUsageDto> GetUsageAsync(Guid ownerId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new StorageUsageDto(0, long.MaxValue));

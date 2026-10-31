@@ -244,6 +244,12 @@ describe('FilesService', () => {
       return { http, seen, state };
     };
 
+    it('should send application/octet-stream when the browser gives no file type', () => {
+      const http = TestBed.inject(HttpTestingController);
+      TestBed.inject(FilesService).uploadChunked(new File(['a'], 'disk.iso', { type: '' }), null).subscribe();
+      expect(http.expectOne(url).request.body.contentType).toBe('application/octet-stream');
+    });
+
     it('should upload chunks sequentially then complete', async () => {
       const { http, seen, state } = start();
       for (const [n, size] of [[1, 10], [2, 10], [3, 5]]) {

@@ -59,3 +59,8 @@ Uploads are limited to 100 MB (`[RequestSizeLimit(104857600)]`); larger requests
 - `Jwt:Secret` (env `Jwt__Secret`) is required and must be at least 32 UTF-8 bytes. Compose reads it from `JWT_SECRET`.
 - `Storage:*` points the API at SeaweedFS's S3 gateway. The Compose SeaweedFS service loads its S3 identity from `backend/seaweedfs/s3.json`; the placeholder keys are for local development only.
 - Set `Logging` levels in `appsettings.Development.json`; EF Core logging is set to `Warning`.
+
+### 5. Before deploying
+- Compose publishes Postgres (5432) and SeaweedFS (9333, 8080, 8333) on loopback only; do not expose 5432 or 8333 publicly.
+- Set `POSTGRES_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` and `JWT_SECRET` (the first three default to dev values).
+- Replace `seaweedfs/s3.json` with your own identity; its keys must match `S3_ACCESS_KEY`/`S3_SECRET_KEY`.

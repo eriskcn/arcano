@@ -25,8 +25,8 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 
 ## What is verified
 
-- **Backend:** builds with no errors; 100 domain tests and 3 auth tests pass.
-- **Frontend:** 111 unit tests pass; the production build succeeds.
+- **Backend:** builds with no errors; 102 domain tests and 3 auth tests pass.
+- **Frontend:** 112 unit tests pass; the production build succeeds.
 - **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified
@@ -39,7 +39,7 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 ## Gaps and risks
 
 1. **A dev JWT signing key is still in git history.** `appsettings.Development.json` is still tracked. Rotate the key if used anywhere real, and decide whether to untrack the file.
-2. **Compose credentials are fixed** for local development. Replace them before any deployment.
+2. **Compose credentials are dev defaults.** Postgres and SeaweedFS ports are now loopback-only and the passwords and S3 keys can be set by environment variables, but SeaweedFS still uses the static `seaweedfs/s3.json` identity. Replace it before any deployment.
 3. **The upload lock and quota race fix work on a single API instance only.** The lock is in process.
 4. **Chunked upload limits:** no resume after a page reload; abandoned uploads of owners who never return are not swept; `MaxUploadBytes` does not cap chunked files (bounded by quota and about 80 GB).
 5. **Review item 1 is partly fixed:** a failed save in trash purge can leave an entity tracked. Item 10 (`CurrentOwnerId` copies) remains.
