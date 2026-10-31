@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpEventType, provideHttpClient } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
@@ -63,33 +63,6 @@ describe('App', () => {
     expect(app.userInitial()).toBe('?');
     app.userEmail.set('person@arcano.test');
     expect(app.userInitial()).toBe('P');
-  });
-
-  it('should show a file context menu within the viewport', async () => {
-    const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance;
-    app.files.set(sampleFiles);
-    const file = app.files()[0];
-    fixture.detectChanges();
-    const event = new MouseEvent('contextmenu', {
-      clientX: window.innerWidth,
-      clientY: window.innerHeight,
-      cancelable: true,
-    });
-
-    app.page.set('app');
-    app.showContextMenu(file, event);
-    fixture.detectChanges();
-    await fixture.whenStable();
-
-    const menu = fixture.nativeElement.querySelector('[role="menu"]') as HTMLElement | null;
-    expect(event.defaultPrevented).toBe(true);
-    expect(menu?.textContent).toContain('Show details');
-    expect(menu?.style.left).toBe(`${Math.max(8, window.innerWidth - 248)}px`);
-    // Height comes from the entry count: 8px padding, 36px per row, 9px per separator.
-    const rows = menu!.querySelectorAll('[role="menuitem"]').length;
-    const separators = menu!.querySelectorAll('[role="separator"]').length;
-    expect(menu?.style.top).toBe(`${Math.max(8, window.innerHeight - (8 + rows * 36 + separators * 9) - 8)}px`);
   });
 
   describe('context menu', () => {
@@ -472,96 +445,6 @@ describe('App', () => {
     http.verify();
   });
 
-  it('should upload selected files then reload the list', () => {
-    const app = TestBed.createComponent(App).componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const input = document.createElement('input');
-    input.type = 'file';
-    Object.defineProperty(input, 'files', {
-      value: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')],
-    });
-
-    app.onUploadSelected({ target: input } as unknown as Event);
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
-    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
-    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
-    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
-
-    expect(app.actionBusy()).toBe(false);
-    expect(app.actionError()).toBe('');
-    http.verify();
-  });
-
-  it('should report a failed upload and continue', () => {
-    const app = TestBed.createComponent(App).componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const input = document.createElement('input');
-    input.type = 'file';
-    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
-
-    app.onUploadSelected({ target: input } as unknown as Event);
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('no', { status: 400, statusText: 'Bad Request' });
-    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
-
-    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
-    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
-
-    expect(app.actionError()).toContain('Unable to upload a.txt');
-    http.verify();
-  });
-
-  it('should show upload progress, then clear it when done', () => {
-    const app = TestBed.createComponent(App).componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const input = document.createElement('input');
-    input.type = 'file';
-    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')] });
-
-    app.onUploadSelected({ target: input } as unknown as Event);
-    const first = http.expectOne(`${environment.apiBaseUrl}/Files/upload`);
-    first.event({ type: HttpEventType.UploadProgress, loaded: 1, total: 4 });
-    expect(app.uploadState()).toEqual({ name: 'a.txt', index: 1, total: 2, percent: 25 });
-    first.flush({});
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush({});
-    expect(app.uploadState()).toBeNull();
-    http.match(() => true);
-  });
-
-  it('should show a too-large message when the server answers 413', () => {
-    const app = TestBed.createComponent(App).componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const input = document.createElement('input');
-    input.type = 'file';
-    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
-
-    app.onUploadSelected({ target: input } as unknown as Event);
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush('', { status: 413, statusText: 'Payload Too Large' });
-    http.match(() => true);
-
-    expect(app.actionError()).toBe('File is too large.');
-  });
-
-  it('should show the quota message when an upload exceeds the storage limit', () => {
-    const app = TestBed.createComponent(App).componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    const input = document.createElement('input');
-    input.type = 'file';
-    Object.defineProperty(input, 'files', { value: [new File(['a'], 'a.txt')] });
-
-    app.onUploadSelected({ target: input } as unknown as Event);
-    http.expectOne(`${environment.apiBaseUrl}/Files/upload`).flush(
-      { code: 'Storage.QuotaExceeded', message: 'Not enough storage space.' },
-      { status: 400, statusText: 'Bad Request' },
-    );
-    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush([]);
-    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
-    http.expectOne(`${environment.apiBaseUrl}/Account/storage`).flush({ usedBytes: 0, limitBytes: 10 });
-
-    expect(app.actionError()).toBe('Not enough storage space.');
-    http.verify();
-  });
-
   it('should show folders instead of the empty state when only folders exist', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
@@ -824,60 +707,6 @@ describe('App', () => {
     app.dropOnCrumb(dragEvent(), 2);
 
     http.verify();
-  });
-
-  it('should open the share dialog, create and revoke a link', () => {
-    const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    app.files.set(sampleFiles);
-    app.selectedId.set('1');
-
-    app.openShare();
-    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share` && r.params.get('fileId') === '1').flush([]);
-    expect(app.shareOpen()).toBe(true);
-
-    app.shareExpiryDays.set(7);
-    app.createShareLink();
-    const create = http.expectOne(`${environment.apiBaseUrl}/Share`);
-    expect(create.request.body.fileId).toBe('1');
-    expect(create.request.body.expiresAtUtc).not.toBeNull();
-    const link = { id: 'l1', fileId: '1', token: 'tok', expiresAtUtc: null, createdAtUtc: '2026-07-22T10:00:00Z' };
-    create.flush(link);
-    expect(app.shareLinks()).toEqual([link]);
-
-    app.revokeShareLink(link);
-    http.expectOne(`${environment.apiBaseUrl}/Share/l1`).flush(null);
-    expect(app.shareLinks()).toEqual([]);
-    http.verify();
-  });
-
-  it('should show backend errors in the share dialog', () => {
-    const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    app.files.set(sampleFiles);
-    app.selectedId.set('1');
-
-    app.openShare();
-    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share`).flush([]);
-    app.createShareLink();
-    http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ title: 'Expiry must be in the future.' }, { status: 400, statusText: 'Bad Request' });
-    expect(app.shareError()).toBe('Expiry must be in the future.');
-  });
-
-  it('should prefer the backend error description in the share dialog', () => {
-    const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance;
-    const http = TestBed.inject(HttpTestingController);
-    app.files.set(sampleFiles);
-    app.selectedId.set('1');
-
-    app.openShare();
-    http.expectOne(r => r.url === `${environment.apiBaseUrl}/Share`).flush([]);
-    app.createShareLink();
-    http.expectOne(`${environment.apiBaseUrl}/Share`).flush({ code: 'Share.Past', description: 'Expiry is in the past.', title: 'x' }, { status: 400, statusText: 'Bad Request' });
-    expect(app.shareError()).toBe('Expiry is in the past.');
   });
 
   describe('keyboard shortcuts', () => {

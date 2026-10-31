@@ -26,7 +26,7 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 ## What is verified
 
 - **Backend:** builds with no errors; 105 domain tests and 6 auth tests pass.
-- **Frontend:** 116 unit tests pass; the production build succeeds.
+- **Frontend:** 126 unit tests pass; the production build succeeds.
 - **Live API checks (local stack):** sign-up/sign-in, upload, download, cross-user 404, quota, 413 on oversize, share links, and a 30 MB chunked upload (resume, bad-part rejection, matching SHA-256, abort).
 
 ## What is not verified
@@ -34,7 +34,7 @@ Planned, not built: admin features, folder sharing, share-link passwords, PDF pr
 - **Checked in a browser (2026-10-31, built-in browser, local stack):** sign-in, create folder, upload (small and a 20 MiB chunked file, hash identical on download), Make a copy, right-click menu, image preview, share link create/open anonymously/revoke, Delete + Ctrl+Z, Ctrl+X/Ctrl+V into a folder + Ctrl+Z. One bug found and fixed: Escape did not close dialogs and cleared the selection behind them.
 - **Not checked in a browser:** sign-up page, drag and drop, upload progress bar (localhost is too fast to see it), Shift+Delete and Trash view, audio/video/text preview in the app, marquee selection, mobile layout.
 - The abandoned-session sweep has only a unit test, not a run against SeaweedFS.
-- The backend has no integration tests for the database and storage paths.
+- The backend has one integration test project for the real S3 upload path (`ARCANO_IT_S3=1`, 3 tests); there are none for PostgreSQL or the HTTP layer.
 
 ## Gaps and risks
 

@@ -7,10 +7,13 @@ import { NavigationEnd, Router } from '@angular/router';
 import { EMPTY, Observable, Subject, Subscription, catchError, concatMap, debounceTime, distinctUntilChanged, filter, forkJoin, from, of, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 import { AccountService } from './account.service';
+import { ContextMenuComponent, ContextMenuModel } from './context-menu.component';
+import { FileActionsService } from './file-actions.service';
+import { errorBody, fileErrorMessage } from './http-errors';
 import { AuthService } from './auth.service';
 import { FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
-import { ShareLinkDto, ShareService } from './share.service';
+import { ShareDialogComponent } from './share-dialog.component';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
 import { QuotaMeterComponent } from './shared/components/quota-meter.component';
@@ -93,21 +96,33 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, FilePreviewComponent, ModalComponent, QuotaMeterComponent],
+  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, ModalComponent, QuotaMeterComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  providers: [FileActionsService],
 })
 export class App implements OnInit {
   readonly appName = environment.appName;
   private readonly auth = inject(AuthService);
   private readonly filesApi = inject(FilesService);
   private readonly foldersApi = inject(FoldersService);
-  private readonly shareApi = inject(ShareService);
   private readonly accountApi = inject(AccountService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly actions = inject(FileActionsService);
   readonly userEmail = this.auth.email;
   readonly userInitial = computed(() => this.userEmail()?.trim().charAt(0).toUpperCase() || '?');
+
+  constructor() {
+    this.actions.bind({
+      files: () => this.files(),
+      selectedIds: () => this.selectedIds(),
+      currentFolderId: () => this.currentFolderId(),
+      reload: () => this.loadFiles(),
+      refreshStorage: () => this.refreshStorage(),
+      move: (items, targetId, origin) => this.moveItems(items, targetId, origin),
+    });
+  }
 
   // Navigation & View State
   readonly page = signal<Page>('signin');
@@ -122,15 +137,13 @@ export class App implements OnInit {
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
   readonly previewModalOpen = signal<boolean>(false);
-  readonly contextMenu = signal<{ title: string; items: FileItem[]; entries: MenuEntry[]; left: number; top: number } | null>(null);
+  readonly contextMenu = signal<ContextMenuModel | null>(null);
   readonly uploadInput = viewChild<ElementRef<HTMLInputElement>>('uploadInput');
   readonly selectionRect = signal<{ left: number; top: number; width: number; height: number } | null>(null);
   private marqueeStart: { x: number; y: number } | null = null;
   private marqueeSurface: HTMLElement | null = null;
   private marqueeBaseSelection = new Set<string>();
   // In-memory clipboard for files (folders are never copied) and a capped undo stack.
-  readonly clipboard = signal<{ mode: 'copy' | 'cut'; items: FileItem[]; sourceFolderId: string | null } | null>(null);
-  private undoStack: (() => void)[] = [];
 
   // Auth Form State
   readonly signInEmail = signal<string>('');
@@ -145,18 +158,7 @@ export class App implements OnInit {
   readonly signUpPassword = signal<string>('');
   readonly showSignUpPassword = signal<boolean>(false);
 
-  // Share Dialog State
   readonly shareOpen = signal<boolean>(false);
-  readonly shareLinks = signal<ShareLinkDto[]>([]);
-  readonly shareExpiryDays = signal<number | null>(null);
-  readonly shareBusy = signal<boolean>(false);
-  readonly shareError = signal<string>('');
-  readonly shareExpiryOptions: { label: string; days: number | null }[] = [
-    { label: 'Never', days: null },
-    { label: '1 day', days: 1 },
-    { label: '7 days', days: 7 },
-    { label: '30 days', days: 30 },
-  ];
 
   ngOnInit(): void {
     this.syncPageWithRoute();
@@ -212,16 +214,16 @@ export class App implements OnInit {
   readonly files = signal<FileItem[]>([]);
   readonly filesLoading = signal<boolean>(false);
   readonly filesError = signal<string>('');
-  readonly actionError = signal<string>('');
-  readonly uploadState = signal<{ name: string; index: number; total: number; percent: number } | null>(null);
-  readonly actionBusy = signal<boolean>(false);
+  readonly actionError = this.actions.actionError;
+  readonly uploadState = this.actions.uploadState;
+  readonly actionBusy = this.actions.actionBusy;
+  readonly clipboard = this.actions.clipboard;
 
   // Folder navigation: folders of the current folder, the path to it, and the create/rename editor.
   readonly folders = signal<FileItem[]>([]);
   readonly folderPath = signal<{ id: string; name: string }[]>([]);
   readonly folderEditor = signal<{ mode: 'create' } | { mode: 'rename'; folder: FileItem } | null>(null);
   readonly folderName = signal<string>('');
-  readonly contextMenuView = signal<'actions' | 'move'>('actions');
   readonly dropKey = signal<string | null>(null);
   private draggedItems: FileItem[] = [];
   private loadSubscription: Subscription | null = null;
@@ -389,7 +391,7 @@ export class App implements OnInit {
       },
       error: error => {
         this.actionBusy.set(false);
-        this.actionError.set(this.fileErrorMessage(error, this.folderErrorMessage(error, editor.mode === 'rename'
+        this.actionError.set(fileErrorMessage(error, this.folderErrorMessage(error, editor.mode === 'rename'
           ? `Unable to rename ${editor.folder.name}. Please try again.`
           : 'Unable to create the folder. Please try again.')));
       },
@@ -596,112 +598,28 @@ export class App implements OnInit {
     } else if (key === 'delete' && event.shiftKey) {
       handled = trash && selected.length > 0;
       if (handled) {
-        this.bulk(selected, file => this.filesApi.deletePermanent(file.id), name => `Unable to delete ${name}. Please try again.`);
+        this.actions.bulk(selected, file => this.filesApi.deletePermanent(file.id), name => `Unable to delete ${name}. Please try again.`);
       }
     } else if (key === 'delete') {
       handled = !trash && selected.length > 0;
       if (handled) {
-        this.trashSelected();
+        this.actions.trashSelected();
       }
     } else if (key === 'f2' && !trash && this.selectedIds().size === 1 && this.selectedFile()) {
       this.startRenameFolder(this.selectedFile()!);
       handled = true;
     } else if (mod && (key === 'c' || key === 'x') && !trash && selected.length > 0) {
-      this.toClipboard(key === 'c' ? 'copy' : 'cut');
+      this.actions.toClipboard(key === 'c' ? 'copy' : 'cut');
       handled = true;
     } else if (mod && key === 'v' && this.activeNav() === 'my-files' && this.clipboard()) {
-      handled = this.paste();
-    } else if (mod && key === 'z' && !event.shiftKey && this.undoStack.length > 0) {
-      this.undo();
+      handled = this.actions.paste();
+    } else if (mod && key === 'z' && !event.shiftKey && this.actions.canUndo) {
+      this.actions.undo();
       handled = true;
     }
     if (handled) {
       event.preventDefault();
     }
-  }
-
-  private selectedFiles(): FileItem[] {
-    return this.files().filter(file => this.selectedIds().has(file.id));
-  }
-
-  private toClipboard(mode: 'copy' | 'cut'): void {
-    this.clipboard.set({ mode, items: this.selectedFiles(), sourceFolderId: this.currentFolderId() });
-  }
-
-  private trashSelected(): void {
-    this.bulk(this.selectedFiles(), file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
-      const deleted = done.map(([file]) => file);
-      this.pushUndo(() => this.bulk(deleted, file => this.filesApi.restore(file.id), name => `Unable to restore ${name}. Please try again.`));
-    });
-  }
-
-  private undo(): void {
-    this.undoStack.pop()!();
-  }
-
-  private copyItems(items: FileItem[], folderId: string | null): void {
-    this.bulk(items, file => this.filesApi.copyFile(file.id, folderId), name => `Unable to copy ${name}. Please try again.`, done => {
-      const copies = done.map(([file, copy]) => ({ id: copy.id, name: file.name }));
-      this.pushUndo(() => this.bulk(copies, file => this.filesApi.delete(file.id), name => `Unable to undo the copy of ${name}. Please try again.`));
-    });
-  }
-
-  private paste(): boolean {
-    const clip = this.clipboard()!;
-    const folderId = this.currentFolderId();
-    if (clip.mode === 'cut') {
-      if (clip.sourceFolderId === folderId) {
-        return false;
-      }
-      this.clipboard.set(null);
-      this.moveItems(clip.items, folderId, clip.sourceFolderId);
-      return true;
-    }
-    this.copyItems(clip.items, folderId);
-    return true;
-  }
-
-  private pushUndo(undo: () => void): void {
-    this.undoStack = [...this.undoStack, undo].slice(-20);
-  }
-
-  // Runs op for each item in order, reports failures through actionError, then reloads like upload does.
-  private bulk<R>(
-    items: { id: string; name: string }[],
-    op: (item: { id: string; name: string }) => Observable<R>,
-    failure: (name: string) => string,
-    done?: (succeeded: [{ id: string; name: string }, R][]) => void,
-  ): void {
-    if (this.actionBusy()) {
-      return;
-    }
-    this.actionBusy.set(true);
-    this.actionError.set('');
-    const succeeded: [{ id: string; name: string }, R][] = [];
-
-    from(items)
-      .pipe(
-        concatMap(item => op(item).pipe(
-          tap(result => succeeded.push([item, result])),
-          catchError(error => {
-            this.actionError.set(this.fileErrorMessage(error, failure(item.name)));
-            return EMPTY;
-          }),
-        )),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        complete: () => {
-          this.actionBusy.set(false);
-          const error = this.actionError();
-          this.loadFiles();
-          this.actionError.set(error);
-          this.refreshStorage();
-          if (succeeded.length > 0) {
-            done?.(succeeded);
-          }
-        },
-      });
   }
 
   beginMarquee(event: PointerEvent): void {
@@ -765,19 +683,11 @@ export class App implements OnInit {
       { label: 'New folder', icon: 'create_new_folder', run: () => this.startCreateFolder() },
       { label: 'Upload files', icon: 'upload_file', run: () => this.uploadInput()?.nativeElement.click() },
       { label: 'Paste', icon: 'content_paste', shortcut: 'Ctrl+V', divider: true,
-        disabled: !this.clipboard() || this.activeNav() !== 'my-files', run: () => void this.paste() },
+        disabled: !this.clipboard() || this.activeNav() !== 'my-files', run: () => void this.actions.paste() },
     ]);
   }
 
-  activateMenuEntry(entry: MenuEntry): void {
-    if (entry.disabled) {
-      return;
-    }
-    if (entry.submenu) {
-      this.contextMenuView.set('move');
-      this.focusMenu();
-      return;
-    }
+  runMenuEntry(entry: MenuEntry): void {
     this.contextMenu.set(null);
     entry.run();
   }
@@ -787,34 +697,8 @@ export class App implements OnInit {
     this.moveItems(items, targetId);
   }
 
-  onMenuKey(event: KeyboardEvent): void {
-    const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
-    if (!step || !(event.currentTarget instanceof HTMLElement)) {
-      return;
-    }
-    event.preventDefault();
-    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])'));
-    const at = buttons.indexOf(document.activeElement as HTMLElement);
-    buttons.at(at < 0 ? (step > 0 ? 0 : -1) : (at + step + buttons.length) % buttons.length)?.focus();
-  }
-
-  private focusMenu(): void {
-    setTimeout(() => document.querySelector<HTMLElement>('[role="menu"] [role="menuitem"]:not([aria-disabled="true"])')?.focus());
-  }
-
   private openMenu(event: MouseEvent, title: string, items: FileItem[], entries: MenuEntry[]): void {
-    // Sizes mirror the Tailwind classes in app.html: w-60, py-1, 36px rows, 9px separators.
-    const menuWidth = 240;
-    const menuHeight = 8 + entries.length * 36 + entries.filter(entry => entry.divider).length * 9;
-    this.contextMenuView.set('actions');
-    this.contextMenu.set({
-      title,
-      items,
-      entries,
-      left: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
-      top: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)),
-    });
-    this.focusMenu();
+    this.contextMenu.set({ title, items, entries, x: event.clientX, y: event.clientY });
   }
 
   private itemEntries(file: FileItem): MenuEntry[] {
@@ -836,9 +720,9 @@ export class App implements OnInit {
       oneFile && { label: 'Download', icon: 'download', run: () => this.downloadFile(oneFile) },
       oneFile && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
       one && { label: 'Rename', icon: 'edit', shortcut: 'F2', divider: true, run: () => this.startRenameFolder(one) },
-      oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.copyItems([oneFile], this.currentFolderId()) },
-      docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.toClipboard('copy') },
-      docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.toClipboard('cut') },
+      oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.actions.copyItems([oneFile], this.currentFolderId()) },
+      docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.actions.toClipboard('copy') },
+      docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.actions.toClipboard('cut') },
       { label: 'Move to…', icon: 'drive_file_move', submenu: true, run: () => {} },
       {
         label: unstar ? 'Remove from favorites' : 'Add to favorites',
@@ -848,7 +732,7 @@ export class App implements OnInit {
       one && { label: 'Show details', icon: 'info', divider: true, run: () => this.selectFile(one.id) },
       {
         label: 'Move to trash', icon: 'delete', shortcut: 'Del', danger: true, divider: !one,
-        run: () => (oneFolder ? this.deleteFile(oneFolder) : this.trashSelected()),
+        run: () => (oneFolder ? this.deleteFile(oneFolder) : this.actions.trashSelected()),
       },
     ];
     const result = entries.filter((entry): entry is MenuEntry => !!entry);
@@ -880,13 +764,13 @@ export class App implements OnInit {
     const input = event.target as HTMLInputElement;
     const selected = Array.from(input.files ?? []);
     input.value = '';
-    this.uploadFiles(selected);
+    this.actions.uploadFiles(selected);
   }
 
   onDropFiles(event: DragEvent): void {
     event.preventDefault();
     this.dropKey.set(null);
-    this.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
+    this.actions.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
   }
 
   // Accept OS file drags only; internal drags carry no files and are handled by the rows.
@@ -933,7 +817,7 @@ export class App implements OnInit {
       event.preventDefault();
       event.stopPropagation();
       this.dropKey.set(null);
-      this.uploadFiles(osFiles, folder.id);
+      this.actions.uploadFiles(osFiles, folder.id);
       return;
     }
     this.dropItems(event, folder.id);
@@ -1009,38 +893,8 @@ export class App implements OnInit {
           this.loadFiles();
           this.actionError.set(error);
           if (record && moved.length > 0) {
-            this.pushUndo(() => this.moveItems(moved, origin, targetId, false));
+            this.actions.pushUndo(() => this.moveItems(moved, origin, targetId, false));
           }
-        },
-      });
-  }
-
-  private uploadFiles(selected: File[], folderId: string | null = this.currentFolderId()): void {
-    if (selected.length === 0 || this.actionBusy()) {
-      return;
-    }
-    this.actionBusy.set(true);
-    this.actionError.set('');
-
-    from(selected)
-      .pipe(
-        concatMap((file, index) => (file.size > 8 * 1024 * 1024 ? this.filesApi.uploadChunked(file, folderId) : this.filesApi.upload(file, folderId)).pipe(
-          tap(percent => this.uploadState.set({ name: file.name, index: index + 1, total: selected.length, percent })),
-          catchError(error => {
-            this.actionError.set(this.fileErrorMessage(error, `Unable to upload ${file.name}. Please try again.`));
-            return EMPTY;
-          }),
-        )),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        complete: () => {
-          this.actionBusy.set(false);
-          this.uploadState.set(null);
-          const error = this.actionError();
-          this.loadFiles();
-          this.actionError.set(error);
-          this.refreshStorage();
         },
       });
   }
@@ -1198,27 +1052,8 @@ export class App implements OnInit {
     }
   }
 
-  private errorBody(error: unknown): { code?: unknown; description?: unknown; detail?: unknown; title?: unknown; message?: unknown } | null {
-    const body: unknown = error instanceof HttpErrorResponse ? error.error : null;
-    return typeof body === 'object' && body !== null ? (body as NonNullable<ReturnType<App['errorBody']>>) : null;
-  }
-
-  private fileErrorMessage(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse && error.status === 413) {
-      return 'File is too large.';
-    }
-    switch (this.errorBody(error)?.code) {
-      case 'Storage.QuotaExceeded':
-        return 'Not enough storage space.';
-      case 'File.InvalidName':
-        return 'Enter a valid file name.';
-      default:
-        return fallback;
-    }
-  }
-
   private folderErrorMessage(error: unknown, fallback: string): string {
-    switch (this.errorBody(error)?.code) {
+    switch (errorBody(error)?.code) {
       case 'Folder.NameTaken':
         return 'A folder with this name already exists here.';
       case 'Folder.InvalidName':
@@ -1294,59 +1129,9 @@ export class App implements OnInit {
       return;
     }
     this.shareOpen.set(true);
-    this.shareLinks.set([]);
-    this.shareError.set('');
-    this.shareApi.list(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: links => this.shareLinks.set(links),
-      error: err => this.shareError.set(this.shareErrorMessage(err, 'Unable to load share links.')),
-    });
   }
 
   closeShare(): void {
     this.shareOpen.set(false);
-  }
-
-  createShareLink(): void {
-    const file = this.selectedFile();
-    if (!file || this.shareBusy()) {
-      return;
-    }
-    const days = this.shareExpiryDays();
-    const expiresAtUtc = days === null ? null : new Date(Date.now() + days * 86_400_000).toISOString();
-    this.shareBusy.set(true);
-    this.shareError.set('');
-    this.shareApi.create(file.id, expiresAtUtc).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: link => {
-        this.shareLinks.update(links => [link, ...links]);
-        this.shareBusy.set(false);
-      },
-      error: err => {
-        this.shareBusy.set(false);
-        this.shareError.set(this.shareErrorMessage(err, 'Unable to create share link.'));
-      },
-    });
-  }
-
-  revokeShareLink(link: ShareLinkDto): void {
-    this.shareError.set('');
-    this.shareApi.revoke(link.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => this.shareLinks.update(links => links.filter(l => l.id !== link.id)),
-      error: err => this.shareError.set(this.shareErrorMessage(err, 'Unable to revoke share link.')),
-    });
-  }
-
-  copyShareLink(link: ShareLinkDto): void {
-    navigator.clipboard.writeText(this.shareApi.linkFor(link.token)).catch(() => {});
-  }
-
-  shareLinkUrl(token: string): string {
-    return this.shareApi.linkFor(token);
-  }
-
-  private shareErrorMessage(err: unknown, fallback: string): string {
-    const raw = err instanceof HttpErrorResponse ? err.error : null;
-    const body = this.errorBody(err);
-    const text = [body?.description, body?.detail, body?.title, body?.message].find(v => typeof v === 'string' && v);
-    return (typeof raw === 'string' && raw) || (text as string | undefined) || fallback;
   }
 }
