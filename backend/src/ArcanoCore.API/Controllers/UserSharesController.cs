@@ -7,12 +7,14 @@ using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Net.Http.Headers;
 
 namespace ArcanoCore.API.Controllers;
 
 // Owner side of user-to-user sharing.
 [Authorize]
+[EnableRateLimiting("user-api")]
 public class UserSharesController : ApiControllerBase
 {
     private readonly IUserShareService _shares;
@@ -22,6 +24,7 @@ public class UserSharesController : ApiControllerBase
         _shares = shares;
     }
 
+    [EnableRateLimiting("user-share-create")]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] UserShareRequestDto dto, CancellationToken cancellationToken)
     {
@@ -47,6 +50,7 @@ public class UserSharesController : ApiControllerBase
 
 // Recipient side. File() with a file name sends Content-Disposition: attachment, like FilesController.
 [Authorize]
+[EnableRateLimiting("user-api")]
 public class SharedController : ApiControllerBase
 {
     private readonly IUserShareService _shares;

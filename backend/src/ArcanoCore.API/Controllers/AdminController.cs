@@ -11,6 +11,7 @@ using ArcanoCore.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,7 @@ namespace ArcanoCore.API.Controllers;
 
 // Admin-only user and key management. There is deliberately no endpoint that reads another user's files.
 [Authorize(Policy = AdminPolicy.Name)]
+[EnableRateLimiting("user-api")]
 public class AdminController : ApiControllerBase
 {
     private const int DefaultKeyDays = 7;

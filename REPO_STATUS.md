@@ -88,7 +88,7 @@ Not verified: the UI in a browser, S3 object removal when a member is deleted, a
 - **Downloads:** owner and public downloads support HTTP Range (206 checked against real SeaweedFS in an integration test).
 - **Uploads:** failed multipart aborts keep the session and cleanup retries them; a retried `complete` after success returns the existing file; cancellation is no longer misreported.
 - **Audit log:** `Audit {Event} actor= target=` lines in the API log for key, user and quota actions; no table, no key material.
-- Not verified: the new UI and flows in a browser (a browser pass is running; the maintainer will add its result); controller HTTP status mapping has no controller tests; no rate limit on `/api/Shared` and `/api/UserShares`; the share zip over real Kestrel; the bootstrap audit line; whether the new tests fail before the change.
+- Not verified: the new UI and flows in a browser (a browser pass is running; the maintainer will add its result); HTTP status mapping of UserShares/Shared is covered by stub-service unit tests (Admin and Auth key paths were already in GroupModeTests); no rate limit on `/api/Shared` and `/api/UserShares`; the share zip over real Kestrel; the bootstrap audit line; whether the new tests fail before the change.
 
 ## Documentation
 

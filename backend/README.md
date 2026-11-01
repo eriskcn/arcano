@@ -79,7 +79,7 @@ All routes are under `/api` except `/health`. "Bearer" means `Authorization: Bea
 | DELETE | `/api/Share/{id}` (revoke) | Bearer |
 | GET | `/api/Public/{token}/info` (rate limited) | Anonymous |
 | GET | `/api/Public/{token}` (download as attachment; supports HTTP Range; rate limited) | Anonymous |
-| POST | `/api/UserShares` (share a file or folder read-only with a registered user by email; 400 `UserShare.InvalidRecipient` for yourself, unknown or disabled email) | Bearer |
+| POST | `/api/UserShares` (share a file or folder read-only with a registered user by email; 400 `UserShare.InvalidRecipient` for yourself, unknown or disabled email; rate limited, 20 per minute per user) | Bearer |
 | GET | `/api/UserShares?fileId=` or `?folderId=` (who an item is shared with) | Bearer |
 | DELETE | `/api/UserShares/{id}` (owner or recipient) | Bearer |
 | GET | `/api/Shared` (incoming shares) | Bearer |
@@ -115,6 +115,7 @@ Set values in `appsettings.json` or as environment variables (`:` becomes `__`, 
 | `Storage:MaxUploadBytes` | `104857600` (100 MB) | Upload size limit. |
 | `Cors:AllowedOrigins` | `["http://localhost:4200"]` | |
 | `ForwardedHeaders:KnownProxies` | `[]` | Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; when empty, X-Forwarded-For is ignored. |
+| (rate limits) | fixed | Sign-in/up 10/min per IP; `/api/Public` info 60 and download 20/min per IP; `/api/UserShares`, `/api/Shared`, `/api/Admin` 120/min per user (429 over the limit). Not configurable. |
 | `Database:MigrateOnStartup` | `true` | Applies migrations at startup. |
 | `Auth:BootstrapAdminEmail` | empty | Upgrades only: if users exist but none is an admin, this user is promoted at startup. Without it a warning is logged. |
 | `Cleanup:Enabled` | `true` | Background job: abandoned upload sessions older than 24 h, trashed files older than 30 days, and soft-deleted folders older than 30 days once empty. |
