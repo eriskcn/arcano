@@ -68,4 +68,4 @@ For a fuller assessment and prioritized follow-up work, see [REPO_STATUS.md](REP
 
 ## License
 
-See the [backend license](backend/LICENSE) and [frontend license](frontend/LICENSE).
+[GNU General Public License v2.0 only](LICENSE) (`GPL-2.0-only`), the same license as the Linux kernel.
