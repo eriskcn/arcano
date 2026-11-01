@@ -1223,6 +1223,9 @@ export class App implements OnInit {
     if (error.status === 0) {
       return 'Unable to connect to the server. Check your connection and try again.';
     }
+    if (error.status === 429) {
+      return 'Too many attempts. Wait a minute and try again.';
+    }
     if (error.status === 401) {
       return 'Invalid email or password.';
     }

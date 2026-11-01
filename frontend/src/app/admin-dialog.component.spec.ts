@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { AdminDialogComponent } from './admin-dialog.component';
+import { AuthService } from './auth.service';
 import { environment } from '../environments/environment';
 
 describe('AdminDialogComponent', () => {
@@ -128,13 +129,101 @@ describe('AdminDialogComponent', () => {
   });
 
   it('explains the last-admin error', () => {
-    const { dialog, http } = setup();
+    const { dialog, http, reload } = setup();
     dialog.toggleDisabled(alice);
     http.expectOne(`${base}/users/u1/disable`).flush(
       { code: 'Admin.LastAdmin', message: 'x' },
       { status: 409, statusText: 'Conflict' },
     );
+    reload();
     expect(dialog.error()).toBe('The last admin cannot be deleted or disabled.');
     expect(dialog.busy()).toBe(false);
+  });
+
+  const badInput = (input: HTMLInputElement) => {
+    Object.defineProperty(input, 'validity', { value: { badInput: true }, configurable: true });
+    input.dispatchEvent(new Event('input'));
+  };
+
+  it('reloads the lists after a failed action and still shows the error', () => {
+    const { dialog, http } = setup();
+    dialog.toggleDisabled(bob);
+    http.expectOne(`${base}/users/u2/enable`).flush({ code: 'Admin.UserNotFound', message: 'User not found.' }, { status: 404, statusText: 'x' });
+    http.expectOne(`${base}/users`).flush([alice]);
+    http.expectOne(`${base}/keys`).flush([key]);
+    expect(dialog.users().length).toBe(1);
+    expect(dialog.error()).toBe('User not found.');
+  });
+
+  it('ignores a list response that a newer load has superseded', () => {
+    const { dialog, http } = setup();
+    dialog.revoke({ ...key, type: 'Join' });
+    http.expectOne(`${base}/keys/k1`).flush(null, { status: 204, statusText: 'No Content' });
+    const first = http.match(`${base}/users`);
+    http.match(`${base}/keys`).forEach(r => r.flush([key]));
+    dialog.toggleDisabled(bob);
+    http.expectOne(`${base}/users/u2/enable`).flush(null, { status: 204, statusText: 'No Content' });
+    const second = http.match(`${base}/users`);
+    http.match(`${base}/keys`).forEach(r => r.flush([key]));
+    second[0].flush([alice]);
+    first[0].flush([alice, bob]);
+    expect(dialog.users().length).toBe(1);
+  });
+
+  it('blocks Save on unparsable quota text instead of clearing the quota', () => {
+    const { fixture, dialog, http, el } = setup();
+    dialog.editQuota(bob);
+    fixture.detectChanges();
+    badInput(el.querySelector('input[name="quota"]') as HTMLInputElement);
+    dialog.quotaInput.set(null);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-quota-error]')).not.toBeNull();
+    expect((el.querySelector('form button[type="submit"]') as HTMLButtonElement).disabled).toBe(true);
+    dialog.saveQuota(bob);
+    http.expectNone(`${base}/users/u2/quota`);
+  });
+
+  it('blocks the join key on unparsable quota text and on expiry outside 1-30 days', () => {
+    const { fixture, dialog, http, el } = setup();
+    expect(el.textContent).toContain('Empty expiry = 7 days');
+    badInput(el.querySelector('input[name="joinQuota"]') as HTMLInputElement);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-join-quota-error]')).not.toBeNull();
+    dialog.createJoinKey();
+    http.expectNone(`${base}/keys`);
+    dialog.joinQuotaBad.set(false);
+
+    for (const days of [0, 31, 1.5]) {
+      dialog.joinDays.set(days);
+      dialog.createJoinKey();
+      http.expectNone(`${base}/keys`);
+    }
+    fixture.detectChanges();
+    expect(el.querySelector('[data-join-days-error]')).not.toBeNull();
+    dialog.joinDays.set(30);
+    dialog.createJoinKey();
+    expect(http.expectOne(`${base}/keys`).request.body).toEqual({ type: 'Join', quotaBytes: null, expiresInDays: 30 });
+  });
+
+  it('clears the plain key when the dialog closes', () => {
+    const { fixture, dialog, http } = setup();
+    dialog.createKey({ type: 'Reset', userId: 'u2' });
+    http.expectOne(`${base}/keys`).flush({ id: 'k3', key: 'r', type: 'Reset', expiresAtUtc: null }, { status: 201, statusText: 'Created' });
+    http.expectOne(`${base}/keys`).flush([]);
+    expect(dialog.newKey()).not.toBeNull();
+    fixture.componentRef.setInput('open', false);
+    fixture.detectChanges();
+    expect(dialog.newKey()).toBeNull();
+  });
+
+  it('warns when the signed-in admin targets their own account', () => {
+    const { fixture, dialog, el } = setup();
+    TestBed.inject(AuthService).email.set('Alice@x.test');
+    fixture.detectChanges();
+    const rows = el.querySelectorAll('[data-member]');
+    expect(rows[0].querySelector('[data-self-warning]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-self-warning]')).toBeNull();
+    expect(dialog.isSelf(alice)).toBe(true);
+    expect(dialog.isSelf(bob)).toBe(false);
   });
 });

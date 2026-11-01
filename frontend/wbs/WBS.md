@@ -24,14 +24,14 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
   - No role-specific UI is exposed because the current token has no role claims; API authorization remains authoritative.
 - [x] **2.2 User profile and quota — Completed (unit-tested, not verified in a browser)**
   - The signed-in email is displayed from the authenticated token. The sidebar storage box shows used and limit from `GET /api/Account/storage` and refreshes after upload, delete, restore, permanent delete, and empty trash. A quota error on upload shows "Not enough storage space."
+- [x] **2.3 Sign-up and reset with a key — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Sign-up page asks for the key (not required for the first account on a fresh server); a reset page takes a reset key and a new password. Replaces the "Sign-up is disabled" message with the `Auth.InviteInvalid` message. Route `/reset`, reached from the sign-in link "Have a reset key?". The key field is shown unless `GET Auth/setup` says `requiresKey: false`; if that call fails the field stays visible.
 
-### 3. Admin Storage and User Management (Built against the agreed API contract; unit-tested, not run against the real backend or in a browser)
+### 3. Admin Storage and User Management (unit-tested; API contract verified end to end; not browser-tested)
 Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a solo user never needs it.
-- [x] **3.1 Admin dialog: user list — Completed (unit-tested).** Users with used storage and quota, disabled state. `admin-dialog.component.ts` + `admin.service.ts`; the Admin sidebar entry shows only when `AuthService.isAdmin` (role claim) is true.
-- [x] **3.2 User quota management — Completed (unit-tested).** Edit a user's quota.
-- [x] **3.3 User lifecycle controls — Completed (unit-tested).** Disable, enable and delete a user (with confirmation; the last admin is protected by the API).
-- [x] **3.4 Invite and reset keys — Completed (unit-tested).** Generate a join key (with the member's quota and expiry) or a reset key for a user, show it once with a copy button, list open keys and revoke them.
-- [x] **2.3 Sign-up and reset with a key — Completed (unit-tested).** Sign-up page asks for the key (not required for the first account on a fresh server); a reset page takes a reset key and a new password. Replaces the "Sign-up is disabled" message with the `Auth.InviteInvalid` message. Route `/reset`, reached from the sign-in link "Have a reset key?". The key field is shown unless `GET Auth/setup` says `requiresKey: false`; if that call fails the field stays visible.
+- [x] **3.1 Admin dialog: user list — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Users with used storage and quota, disabled state. `admin-dialog.component.ts` + `admin.service.ts`; the Admin sidebar entry shows only when `AuthService.isAdmin` (role claim) is true.
+- [x] **3.2 User quota management — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Edit a user's quota.
+- [x] **3.3 User lifecycle controls — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Disable, enable and delete a user (with confirmation; the last admin is protected by the API).
+- [x] **3.4 Invite and reset keys — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Generate a join key (with the member's quota and expiry) or a reset key for a user, show it once with a copy button, list open keys and revoke them.
 
 ### 4. File Explorer Workflows
 - [x] **4.1 Core file listing and actions — Completed (unit-tested, not verified in a browser)**
@@ -100,7 +100,7 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 
 ## Status
 - The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (167 specs in 18 files) but were not run against the real backend or in a browser. Uploading from a phone works (9.11). Current test count: 147 specs in 16 files at the v0.1.0 tag.
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (174 specs in 18 files); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
@@ -130,3 +130,5 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
 - [x] **9.12 Shared view removed.** The "Shared" nav item and filter chip always showed nothing (the flag was never set by the API) and the empty text promised files shared with you, which the backend does not support. Both are removed; share links are created per file from the Share dialog. Trash now sits in the mobile bottom nav.
 - [x] **9.13 Folder star persisted — Completed (unit-tested).** `FolderDto.isStarred` maps to `starred`; `FoldersService.star` is called by the same toggle as files (optimistic, reverts with an error on failure). The Favorites view still lists files only. 2 new specs.
 - [x] **9.14 Folder zip in the details panel — Completed (unit-tested).** Selecting a single folder shows "Download as zip" in the details panel, calling the same `downloadFolder` as the context menu (busy and error handling shared). File Download is unchanged. 1 new spec.
+- [x] **9.15 Group mode UI follow-ups (2026-11-01) — Completed (unit-tested, 174 specs; not browser-tested)**
+  - 429 message; reload after a failed admin action; a bad quota input blocks Save; expiry bounds and hints; key cleared on close; self-disable/delete warning; reset form mobile styling.

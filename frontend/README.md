@@ -25,6 +25,7 @@ Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endp
 - Folder star is persisted (the Favorites view still lists files only).
 - On phones (under 640 px) a floating upload button opens the file picker.
 - Sign-up asks for an invite key (hidden on a fresh server, where the first account becomes the admin); `/reset` takes a reset key and a new password.
+- The first account on a fresh server is the admin.
 - Admin dialog (admins only, from the sidebar): members with usage, quota edit, disable/enable, delete; generate join keys and member reset keys (shown once, with copy) and revoke open keys.
 - The "Shared" view was removed; share links are created per file from the Share dialog.
 

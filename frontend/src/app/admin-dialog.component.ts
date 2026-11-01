@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { AdminKey, AdminService, AdminUser, CreatedKey, NewKey } from './admin.service';
+import { AuthService } from './auth.service';
 import { errorBody } from './http-errors';
 import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
 import { ModalComponent } from './shared/components/modal.component';
@@ -33,10 +34,12 @@ const GB = 1024 ** 3;
                 <span *ngIf="user.quotaBytes === null">(server default)</span>
               </p>
               <form *ngIf="editingId() === user.id" class="flex flex-wrap items-center gap-2" (ngSubmit)="saveQuota(user)">
-                <input type="number" min="0" step="any" name="quota" placeholder="GB (empty = server default)" aria-label="Quota in GB" class="flex-1 min-w-0 rounded-xl border border-gray-200 px-3 py-1.5 text-sm" [ngModel]="quotaInput()" (ngModelChange)="quotaInput.set($event)" />
-                <button type="submit" [disabled]="busy()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">Save</button>
+                <input type="number" min="0" step="any" name="quota" placeholder="GB (empty = server default)" aria-label="Quota in GB" class="flex-1 min-w-0 rounded-xl border border-gray-200 px-3 py-1.5 text-sm" [ngModel]="quotaInput()" (ngModelChange)="quotaInput.set($event)" (input)="quotaBad.set($any($event.target).validity.badInput)" />
+                <button type="submit" [disabled]="busy() || quotaInvalid()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">Save</button>
                 <button type="button" (click)="editingId.set(null)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">Cancel</button>
+                <p *ngIf="quotaInvalid()" class="w-full text-xs text-red-600" data-quota-error>Enter a quota of 0 or more GB, or leave it empty.</p>
               </form>
+              <p *ngIf="isSelf(user)" class="text-xs font-medium text-amber-700" data-self-warning>This is your account. Disabling or deleting it will lock you out.</p>
               <div class="flex flex-wrap gap-2">
                 <button type="button" (click)="editQuota(user)" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">Edit quota</button>
                 <button type="button" (click)="toggleDisabled(user)" [disabled]="busy()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">{{ user.isDisabled ? 'Enable' : 'Disable' }}</button>
@@ -50,10 +53,13 @@ const GB = 1024 ** 3;
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-gray-900">Invite keys</h3>
           <form class="grid grid-cols-2 gap-2 sm:grid-cols-3" (ngSubmit)="createJoinKey()">
-            <input type="number" min="0" step="any" name="joinQuota" placeholder="Quota (GB)" aria-label="Quota in GB" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="joinQuota()" (ngModelChange)="joinQuota.set($event)" />
-            <input type="number" min="1" step="1" name="joinDays" placeholder="Expires in (days)" aria-label="Expiry in days" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="joinDays()" (ngModelChange)="joinDays.set($event)" />
-            <button type="submit" [disabled]="busy()" class="col-span-2 sm:col-span-1 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-default">Generate join key</button>
+            <input type="number" min="0" step="any" name="joinQuota" placeholder="Quota (GB)" aria-label="Quota in GB" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="joinQuota()" (ngModelChange)="joinQuota.set($event)" (input)="joinQuotaBad.set($any($event.target).validity.badInput)" />
+            <input type="number" min="1" max="30" step="1" name="joinDays" placeholder="Expires in (days)" aria-label="Expiry in days" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="joinDays()" (ngModelChange)="joinDays.set($event)" (input)="joinDaysBad.set($any($event.target).validity.badInput)" />
+            <button type="submit" [disabled]="busy() || joinQuotaInvalid() || joinDaysInvalid()" class="col-span-2 sm:col-span-1 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-default">Generate join key</button>
           </form>
+          <p class="text-xs text-gray-500">Empty quota = server default. Empty expiry = 7 days (1 to 30 allowed).</p>
+          <p *ngIf="joinQuotaInvalid()" class="text-xs text-red-600" data-join-quota-error>Enter a quota of 0 or more GB, or leave it empty.</p>
+          <p *ngIf="joinDaysInvalid()" class="text-xs text-red-600" data-join-days-error>Expiry must be a whole number of days from 1 to 30.</p>
 
           <div *ngIf="newKey() as created" class="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2" data-new-key>
             <p class="text-xs font-medium text-amber-800">New {{ created.type.toLowerCase() }} key. Copy it now: it cannot be shown again.</p>
@@ -83,7 +89,7 @@ const GB = 1024 ** 3;
     <app-confirm-dialog
       [open]="!!pendingDelete()"
       title="Delete member"
-      [message]="'Delete ' + (pendingDelete()?.email ?? '') + ' and all their files? This cannot be undone.'"
+      [message]="'Delete ' + (pendingDelete()?.email ?? '') + ' and all their files? This cannot be undone.' + (pendingDelete() && isSelf(pendingDelete()!) ? ' This is your own account: you will be signed out.' : '')"
       confirmLabel="Delete"
       [danger]="true"
       (confirmed)="confirmDelete()"
@@ -93,6 +99,9 @@ const GB = 1024 ** 3;
 })
 export class AdminDialogComponent {
   private readonly admin = inject(AdminService);
+  private readonly auth = inject(AuthService);
+  private usersSeq = 0;
+  private keysSeq = 0;
 
   readonly open = input.required<boolean>();
   readonly close = output<void>();
@@ -109,25 +118,45 @@ export class AdminDialogComponent {
   readonly newKey = signal<CreatedKey | null>(null);
   readonly copied = signal(false);
   readonly copyFailed = signal(false);
+  // The number input yields null for unparsable text, so the browser's badInput flag is tracked separately.
+  readonly quotaBad = signal(false);
+  readonly joinQuotaBad = signal(false);
+  readonly joinDaysBad = signal(false);
+  readonly quotaInvalid = computed(() => this.quotaBad() || this.gbToBytes(this.quotaInput()) === undefined);
+  readonly joinQuotaInvalid = computed(() => this.joinQuotaBad() || this.gbToBytes(this.joinQuota()) === undefined);
+  readonly joinDaysInvalid = computed(() => {
+    const value = this.joinDays();
+    if (this.joinDaysBad()) {
+      return true;
+    }
+    if (value === null || value === '') {
+      return false;
+    }
+    const days = Number(value);
+    return !(Number.isInteger(days) && days >= 1 && days <= 30);
+  });
 
   constructor() {
     effect(() => {
       if (this.open()) {
         this.newKey.set(null);
+        this.error.set('');
         this.load();
+      } else {
+        this.newKey.set(null);
       }
     });
   }
 
   editQuota(user: AdminUser): void {
     this.quotaInput.set(user.quotaBytes === null ? null : user.quotaBytes / GB);
+    this.quotaBad.set(false);
     this.editingId.set(user.id);
   }
 
   saveQuota(user: AdminUser): void {
     const gb = this.gbToBytes(this.quotaInput());
-    if (gb === undefined) {
-      this.error.set('Enter a quota of 0 or more GB, or leave it empty for the server default.');
+    if (gb === undefined || this.quotaBad()) {
       return;
     }
     this.run(this.admin.setQuota(user.id, gb), () => this.editingId.set(null));
@@ -148,8 +177,7 @@ export class AdminDialogComponent {
   createJoinKey(): void {
     const quotaBytes = this.gbToBytes(this.joinQuota());
     const days = this.joinDays() === null || this.joinDays() === '' ? null : Number(this.joinDays());
-    if (quotaBytes === undefined || (days !== null && !(days >= 1))) {
-      this.error.set('Enter a quota of 0 or more GB and an expiry of 1 or more days, or leave them empty.');
+    if (this.joinQuotaInvalid() || this.joinDaysInvalid()) {
       return;
     }
     this.createKey({ type: 'Join', quotaBytes, expiresInDays: days });
@@ -174,6 +202,10 @@ export class AdminDialogComponent {
     this.run(this.admin.revokeKey(key.id));
   }
 
+  isSelf(user: AdminUser): boolean {
+    return user.email.toLowerCase() === this.auth.email()?.toLowerCase();
+  }
+
   async copyKey(key: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(key);
@@ -194,13 +226,20 @@ export class AdminDialogComponent {
   }
 
   private load(): void {
-    this.error.set('');
-    this.admin.users().subscribe({ next: users => this.users.set(users), error: (error: unknown) => this.fail(error) });
+    const seq = ++this.usersSeq;
+    this.admin.users().subscribe({
+      next: users => seq === this.usersSeq && this.users.set(users),
+      error: (error: unknown) => seq === this.usersSeq && this.fail(error),
+    });
     this.loadKeys();
   }
 
   private loadKeys(): void {
-    this.admin.keys().subscribe({ next: keys => this.keys.set(keys), error: (error: unknown) => this.fail(error) });
+    const seq = ++this.keysSeq;
+    this.admin.keys().subscribe({
+      next: keys => seq === this.keysSeq && this.keys.set(keys),
+      error: (error: unknown) => seq === this.keysSeq && this.fail(error),
+    });
   }
 
   private run(request: Observable<void>, onDone: () => void = () => {}): void {
@@ -212,7 +251,11 @@ export class AdminDialogComponent {
         onDone();
         this.load();
       },
-      error: (error: unknown) => this.fail(error),
+      error: (error: unknown) => {
+        this.fail(error);
+        // The row may be stale (e.g. already deleted), so refresh and keep the error visible.
+        this.load();
+      },
     });
   }
 

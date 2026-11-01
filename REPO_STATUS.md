@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
-**Assessment date:** 2026-10-31
-**Repository state:** the `v0.1.0` tag (commit `7374246`) on `main`.
+**Assessment date:** 2026-11-01
+**Repository state:** group mode is on `main` after `v0.1.0`. The `v0.1.0` tag (commit `7374246`) is the earlier personal-use cut.
 
 ## Overview
 
@@ -26,9 +26,9 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend:** builds; 125 domain tests and 27 API tests pass. 28 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
-- **Frontend:** 147 unit tests pass; the production build succeeds.
-- **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off; change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
+- **Backend:** builds; 125 domain tests and 34 API tests pass. 28 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
+- **Frontend:** 174 unit tests in 18 files pass; the production build succeeds.
+- **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off (historical: before group mode, see below); change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (earlier today):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser.
 
 ## Browser-pass bugs: fixed, and what is left
@@ -48,7 +48,7 @@ Verified by bringing up `docker-compose.prod.yml` with throwaway secrets (projec
 2. **Production setup:** `docker-compose.prod.yml` publishes only the `web` service (nginx: serves the app and proxies `/api` and `/health` on the same origin, so no CORS and no hard-coded API address). Checked through nginx: a 90 MB single upload and a 20 MiB chunked upload both download with matching hashes, the public rate limit returns 429, and the app shell and deep links load. **TLS is not included:** put a TLS-terminating proxy or load balancer in front of `web` (see `docs/DEPLOY.md`).
 3. **Credentials:** the production compose has no defaults for `POSTGRES_PASSWORD`, `JWT_SECRET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` or `PUBLIC_ORIGIN`; `scripts/gen-s3-config.sh` writes the SeaweedFS identity from the S3 keys and refuses the dev defaults. The old dev JWT key is still in git history (not rewritten); production must use a fresh `JWT_SECRET`.
 4. **Backups:** `scripts/backup.sh` and `scripts/restore.sh` were run for real: a backup, then a restore that removed a file added after the backup and kept the older files, which still downloaded. The check found and fixed a bug (the scripts did not pass the env file). Backups stay on the same host until you copy them off; there is no automatic schedule (cron example in `docs/DEPLOY.md`).
-5. **Sign-up (changed by group mode, backend 1.16):** `Auth:AllowRegistration` is gone. The first account on an empty install becomes admin; after that sign-up needs a single-use invite key from an admin (403 `Auth.InviteInvalid` otherwise). Backend tested (unit and real PostgreSQL); not yet run on a production stack, and the admin UI is the frontend agent's work.
+5. **Sign-up (changed by group mode, backend 1.16):** `Auth:AllowRegistration` is gone. The first account on an empty install becomes admin; after that sign-up needs a single-use invite key from an admin (403 `Auth.InviteInvalid` otherwise). Backend tested (unit and real PostgreSQL); not yet run on a production stack; the admin UI is built and unit-tested; not browser-tested.
 
 Still not covered: real TLS in front, `web` behind a real proxy, a restore of the file volume while uploads are running (use `backup.sh --stop-api` for a consistent pair), and the Kerberos library warning in the API image log (harmless: no Kerberos is used).
 
@@ -63,7 +63,7 @@ Done:
 - **Bugs this round's production run found:** the folder zip returned a truncated archive on the real server (Kestrel forbids the synchronous writes `ZipArchive` makes; the unit tests used a `MemoryStream`, which allows them), now fixed by allowing synchronous IO for that one response; and one Postgres test sorted culture-sensitively.
 
 Not done:
-- **No password reset or email verification** (nothing can send email), so a forgotten password needs a manual database reset.
+- **No email verification** (nothing can send email). Forgotten passwords are reset with an admin-issued Reset key (`POST api/Auth/reset`).
 - **Folders** cannot be copied or shared; no content search.
 - **Shared view removed:** the backend only supports share links you create, so there is no "Shared" nav item or filter; links are created per file.
 - **Several API instances** are not supported (upload lock and migrations are per process).
@@ -72,7 +72,15 @@ Not done:
 
 ## Later
 
-File versioning, folder sharing, per-user quotas, admin features, PDF preview, content search, resume of an upload after a page reload, running more than one API instance (the upload lock is in process), structured logging.
+File versioning, folder sharing, PDF preview, content search, resume of an upload after a page reload, running more than one API instance (the upload lock is in process), structured logging.
+
+## Group mode
+
+The first sign-up on an empty install becomes admin; after that sign-up needs a single-use invite key. Admins issue invite and Reset keys, set per-user quotas, and disable, enable or delete users.
+
+Verified end to end on the API against a throwaway PostgreSQL database (all scenarios, including disable, Reset key, the last-admin guard and rate limits).
+
+Not verified: the UI in a browser, S3 object removal when a member is deleted, and multi-instance operation.
 
 ## Documentation
 

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
 namespace ArcanoCore.API.Controllers;
@@ -116,6 +117,12 @@ public class AccountController : ApiControllerBase
         if (!await VerifyPasswordAsync(user, request?.Password))
         {
             return BadRequest(new Error("Account.PasswordIncorrect", "Password is incorrect."));
+        }
+
+        // Same rule as AdminController, except a last admin who is the only user left may leave (nobody to lock out).
+        if (await _dbContext.IsLastActiveAdminAsync(_userManager, user) && await _dbContext.UserProfiles.AnyAsync(p => p.UserId != user.Id, cancellationToken))
+        {
+            return Conflict(new Error("Admin.LastAdmin", "The last active admin cannot be deleted or disabled."));
         }
 
         // Data first: the owner foreign keys are Restrict, so the user row cannot go while files, folders or links remain.
