@@ -39,11 +39,20 @@ All routes are under `/api` except `/health`. "Bearer" means `Authorization: Bea
 | Method | Path | Auth |
 |---|---|---|
 | GET | `/health` (checks database and storage; 503 if either fails) | Anonymous |
-| POST | `/api/Auth/register` (`email`, `password`; rate limited) | Anonymous |
-| POST | `/api/Auth/login` (`email`, `password`; returns `token`; rate limited) | Anonymous |
+| GET | `/api/Auth/setup` (`{requiresKey}`; false only while there are no users) | Anonymous |
+| POST | `/api/Auth/register` (`email`, `password`, `inviteKey`; the first account needs no key and becomes admin, later ones need a Join key, else 403 `Auth.InviteInvalid`; rate limited) | Anonymous |
+| POST | `/api/Auth/reset` (`key`, `newPassword`; Reset key, 204; old tokens stop working; rate limited) | Anonymous |
+| POST | `/api/Auth/login` (`email`, `password`; returns `token`, which carries `role: Admin` for admins; rate limited) | Anonymous |
 | GET | `/api/Auth/session` | Bearer |
 | POST | `/api/Auth/refresh` (new token; the session ends 24 hours after sign-in) | Bearer |
 | POST | `/api/Auth/logout` (revokes all of the user's tokens) | Bearer |
+| GET | `/api/Admin/users` (id, email, isAdmin, isDisabled, usedBytes, quotaBytes, effectiveQuotaBytes, createdAtUtc) | Admin |
+| PUT | `/api/Admin/users/{id}/quota` (`quotaBytes`, null = server default) | Admin |
+| POST | `/api/Admin/users/{id}/disable`, `/enable` | Admin |
+| DELETE | `/api/Admin/users/{id}` (data first, then the user; 409 `Admin.LastAdmin` for the last active admin) | Admin |
+| GET | `/api/Admin/keys` (open keys) | Admin |
+| POST | `/api/Admin/keys` (`type` Join or Reset, `quotaBytes`, `userId` for Reset, `expiresInDays` default 7, max 30; the plain key is returned only here) | Admin |
+| DELETE | `/api/Admin/keys/{id}` (revoke) | Admin |
 | GET | `/api/Account/storage` (quota and usage) | Bearer |
 | POST | `/api/Account/password` (change password; returns a new token; rate limited) | Bearer |
 | DELETE | `/api/Account` (delete the account and its data; rate limited) | Bearer |
@@ -89,12 +98,12 @@ Set values in `appsettings.json` or as environment variables (`:` becomes `__`, 
 | `Storage:ServiceUrl` | `http://seaweedfs:8333` | SeaweedFS S3 gateway. |
 | `Storage:AccessKey` / `Storage:SecretKey` | `any_key` / `any_secret` | Must match the SeaweedFS identity (`seaweedfs/s3.json` in dev). |
 | `Storage:BucketName` | `arcanocore-bucket` | |
-| `Storage:QuotaBytes` | `5368709120` (5 GiB) | Per-user quota. |
+| `Storage:QuotaBytes` | `5368709120` (5 GiB) | Default per-user quota; an admin can set a different one per user. |
 | `Storage:MaxUploadBytes` | `104857600` (100 MB) | Upload size limit. |
 | `Cors:AllowedOrigins` | `["http://localhost:4200"]` | |
 | `ForwardedHeaders:KnownProxies` | `[]` | Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; when empty, X-Forwarded-For is ignored. |
 | `Database:MigrateOnStartup` | `true` | Applies migrations at startup. |
-| `Auth:AllowRegistration` | `true` | Set `false` to disable sign-up. |
+| `Auth:BootstrapAdminEmail` | empty | Upgrades only: if users exist but none is an admin, this user is promoted at startup. Without it a warning is logged. |
 | `Cleanup:Enabled` | `true` | Background job: abandoned upload sessions older than 24 h, trashed files older than 30 days, and soft-deleted folders older than 30 days once empty. |
 | `Cleanup:IntervalMinutes` | `60` | |
 | `DataProtection:KeysPath` | `/app/keys` in a container, framework default otherwise | Where DataProtection keys are persisted. |

@@ -80,7 +80,10 @@
         </button>
       </form>
 
-      <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+      <div class="mt-6 pt-5 border-t border-gray-100 text-center space-y-2">
+        <p class="text-sm text-gray-500">
+          <button type="button" (click)="navigateToPage('reset')" class="font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer">Have a reset key?</button>
+        </p>
         <p class="text-sm text-gray-500">
           Don't have an account?
           <button type="button" (click)="navigateToPage('signup')" class="font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer">
@@ -156,6 +159,23 @@
           </div>
         </div>
 
+        <div *ngIf="requiresKey(); else firstAccount">
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Invite key</label>
+          <input
+            type="text"
+            autocomplete="off"
+            required
+            placeholder="Paste your invite key"
+            [ngModel]="signUpKey()"
+            (ngModelChange)="signUpKey.set($event)"
+            name="inviteKey"
+            class="w-full px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all placeholder:text-gray-400 text-gray-900"
+          />
+        </div>
+        <ng-template #firstAccount>
+          <p class="text-xs text-gray-500">This server has no accounts yet. The first account becomes the admin.</p>
+        </ng-template>
+
         <div *ngIf="signUpError()" role="alert" class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100">
           <span class="material-symbols-rounded text-red-500 flex-shrink-0" style="font-size: 16px">error</span>
           <p class="text-xs text-red-600 font-medium">{{ signUpError() }}</p>
@@ -185,6 +205,37 @@
             Sign in
           </button>
         </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<!-- AUTH: RESET PASSWORD -->
+<!-- ═════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="page() === 'reset'" class="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+  <div class="relative w-full max-w-sm">
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+      <h1 class="text-xl font-bold text-gray-900 mb-1">Reset password</h1>
+      <p class="text-sm text-gray-500 mb-6">Enter the reset key from your admin and choose a new password</p>
+
+      <form (submit)="onResetSubmit($event)" class="space-y-4">
+        <input type="text" name="resetKey" autocomplete="off" placeholder="Reset key" aria-label="Reset key" [ngModel]="resetKey()" (ngModelChange)="resetKey.set($event)" class="w-full px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+        <input type="password" name="resetPassword" autocomplete="new-password" placeholder="New password (8+ characters)" aria-label="New password" [ngModel]="resetPassword()" (ngModelChange)="resetPassword.set($event)" class="w-full px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+        <input type="password" name="resetConfirm" autocomplete="new-password" placeholder="Confirm new password" aria-label="Confirm new password" [ngModel]="resetConfirm()" (ngModelChange)="resetConfirm.set($event)" class="w-full px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+
+        <div *ngIf="resetError()" role="alert" class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100">
+          <span class="material-symbols-rounded text-red-500 flex-shrink-0" style="font-size: 16px">error</span>
+          <p class="text-xs text-red-600 font-medium">{{ resetError() }}</p>
+        </div>
+
+        <button type="submit" [disabled]="authBusy()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm cursor-pointer">
+          {{ authBusy() ? 'Resetting…' : 'Reset password' }}
+        </button>
+      </form>
+
+      <div class="mt-6 pt-5 border-t border-gray-100 text-center">
+        <button type="button" (click)="navigateToPage('signin')" class="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer">Back to sign in</button>
       </div>
     </div>
   </div>
@@ -354,6 +405,16 @@
 
         <!-- Bottom -->
         <div class="border-t border-gray-100 px-2 py-3 space-y-0.5">
+          <button
+            *ngIf="isAdmin()"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
+            [class.justify-center]="sidebarCollapsed()"
+            [title]="sidebarCollapsed() ? 'Admin' : ''"
+            (click)="adminOpen.set(true)"
+          >
+            <span class="material-symbols-rounded text-gray-500" style="font-size: 20px">admin_panel_settings</span>
+            <span *ngIf="!sidebarCollapsed()">Admin</span>
+          </button>
           <button
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
             [class.justify-center]="sidebarCollapsed()"
@@ -833,6 +894,7 @@
     (cancelled)="pendingTrash.set(null)"
   />
 
+  <app-admin-dialog *ngIf="isAdmin()" [open]="adminOpen()" (close)="adminOpen.set(false)" />
   <app-account-dialog [open]="accountOpen()" (close)="accountOpen.set(false)" (signedOut)="accountOpen.set(false); signOut()" />
 
   <!-- Share Dialog -->
@@ -901,6 +963,10 @@
         </ng-template>
       </div>
       <div class="border-t border-gray-100 px-2 py-3">
+        <button *ngIf="isAdmin()" (click)="adminOpen.set(true)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 cursor-pointer">
+          <span class="material-symbols-rounded text-gray-500" style="font-size: 20px">admin_panel_settings</span>
+          Admin
+        </button>
         <button (click)="accountOpen.set(true)" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 cursor-pointer">
           <span class="material-symbols-rounded text-gray-500" style="font-size: 20px">settings</span>
           Settings

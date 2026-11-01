@@ -68,6 +68,49 @@ describe('AuthService', () => {
     expect(auth.token()).toBeNull();
   });
 
+  it('should send the invite key only when given', () => {
+    const auth = TestBed.inject(AuthService);
+    const http = TestBed.inject(HttpTestingController);
+
+    auth.register('a@b.co', 'secret123', 'k1').subscribe();
+    expect(http.expectOne(`${environment.apiBaseUrl}/Auth/register`).request.body).toEqual({ email: 'a@b.co', password: 'secret123', inviteKey: 'k1' });
+  });
+
+  it('should call setup and reset', () => {
+    const auth = TestBed.inject(AuthService);
+    const http = TestBed.inject(HttpTestingController);
+    let requiresKey: boolean | undefined;
+
+    auth.setup().subscribe(setup => (requiresKey = setup.requiresKey));
+    const setup = http.expectOne(`${environment.apiBaseUrl}/Auth/setup`);
+    expect(setup.request.method).toBe('GET');
+    setup.flush({ requiresKey: false });
+    expect(requiresKey).toBe(false);
+
+    auth.reset('rk', 'new-password').subscribe();
+    const reset = http.expectOne(`${environment.apiBaseUrl}/Auth/reset`);
+    expect(reset.request.method).toBe('POST');
+    expect(reset.request.body).toEqual({ key: 'rk', newPassword: 'new-password' });
+    reset.flush(null, { status: 204, statusText: 'No Content' });
+  });
+
+  it('should read isAdmin from the role claim', () => {
+    localStorage.setItem('arcano.auth.token', createToken({ role: 'Admin' }));
+    expect(TestBed.inject(AuthService).isAdmin()).toBe(true);
+  });
+
+  it('should read isAdmin from the long role claim, a role list, and be false otherwise', () => {
+    const auth = TestBed.inject(AuthService);
+    const set = (claims: Record<string, unknown>) => {
+      auth.token.set(createToken(claims));
+      return auth.isAdmin();
+    };
+    expect(set({ 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role': 'Admin' })).toBe(true);
+    expect(set({ role: ['User', 'Admin'] })).toBe(true);
+    expect(set({ role: 'User' })).toBe(false);
+    expect(set({})).toBe(false);
+  });
+
   it('should migrate a legacy sessionStorage token to localStorage', () => {
     const token = createToken();
     sessionStorage.setItem('arcano.auth.token', token);

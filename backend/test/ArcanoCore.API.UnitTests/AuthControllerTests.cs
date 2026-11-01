@@ -6,6 +6,9 @@ using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.API.Controllers;
+using ArcanoCore.Application.Services;
+using ArcanoCore.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -32,19 +35,6 @@ public class AuthControllerTests
         Assert.Equal(200, ok.StatusCode);
         var token = ok.Value!.GetType().GetProperty("Token")!.GetValue(ok.Value) as string;
         Assert.False(string.IsNullOrEmpty(token));
-    }
-
-    [Fact]
-    public async Task Register_WhenDisabled_Returns403AndCreatesNoUser()
-    {
-        var (controller, userManager) = CreateControllerWithUserManager(allowRegistration: false);
-
-        var result = await controller.Register(new RegisterRequest(Email, Password));
-
-        var forbidden = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(403, forbidden.StatusCode);
-        Assert.Equal("Auth.RegistrationDisabled", Assert.IsType<ArcanoCore.Domain.Common.Error>(forbidden.Value).Code);
-        Assert.Null(await userManager.FindByEmailAsync(Email));
     }
 
     [Fact]
@@ -154,13 +144,23 @@ public class AuthControllerTests
 
     private static AuthController CreateController() => CreateControllerWithUserManager().Controller;
 
-    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager(bool? allowRegistration = null)
+    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithUserManager()
     {
-        var (userManager, configuration) = CreateUserManager(allowRegistration);
-        return (new AuthController(userManager, configuration), userManager);
+        var env = CreateEnv();
+        return (env.Controller, env.UserManager);
     }
 
-    internal static (UserManager<IdentityUser<Guid>> UserManager, IConfiguration Configuration) CreateUserManager(bool? allowRegistration = null)
+    internal sealed record Env(AuthController Controller, UserManager<IdentityUser<Guid>> UserManager, IConfiguration Configuration, ApplicationDbContext Db, InviteKeyService Keys);
+
+    internal static Env CreateEnv()
+    {
+        var (userManager, configuration) = CreateUserManager();
+        var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var keys = new InviteKeyService(db);
+        return new Env(new AuthController(userManager, configuration, db, keys), userManager, configuration, db, keys);
+    }
+
+    internal static (UserManager<IdentityUser<Guid>> UserManager, IConfiguration Configuration) CreateUserManager()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -172,8 +172,7 @@ public class AuthControllerTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Jwt:Secret"] = "test-secret-key-that-is-at-least-32-bytes-long",
-                ["Auth:AllowRegistration"] = allowRegistration?.ToString()
+                ["Jwt:Secret"] = "test-secret-key-that-is-at-least-32-bytes-long"
             })
             .Build();
 

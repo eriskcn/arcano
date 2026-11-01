@@ -15,13 +15,14 @@ import { FILES_PAGE_SIZE, FileDto, FilesService, FilesView } from './files.servi
 import { FolderDto, FoldersService } from './folders.service';
 import { ShareDialogComponent } from './share-dialog.component';
 import { AccountDialogComponent } from './account-dialog.component';
+import { AdminDialogComponent } from './admin-dialog.component';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
 import { QuotaMeterComponent } from './shared/components/quota-meter.component';
 import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
 import { previewKind } from './preview/preview-kind';
 
-export type Page = 'signin' | 'signup' | 'app';
+export type Page = 'signin' | 'signup' | 'reset' | 'app';
 export type ViewMode = 'list' | 'grid';
 export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'trash';
 
@@ -100,7 +101,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, AccountDialogComponent, ModalComponent, QuotaMeterComponent, ConfirmDialogComponent],
+  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, AccountDialogComponent, AdminDialogComponent, ModalComponent, QuotaMeterComponent, ConfirmDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   providers: [FileActionsService],
@@ -161,6 +162,14 @@ export class App implements OnInit {
   readonly signUpEmail = signal<string>('');
   readonly signUpPassword = signal<string>('');
   readonly showSignUpPassword = signal<boolean>(false);
+  // Shown until the server says this is a fresh install (or the check fails: the server decides anyway).
+  readonly requiresKey = signal<boolean>(true);
+  readonly signUpKey = signal<string>('');
+
+  readonly resetKey = signal<string>('');
+  readonly resetPassword = signal<string>('');
+  readonly resetConfirm = signal<string>('');
+  readonly resetError = signal<string>('');
 
   readonly shareOpen = signal<boolean>(false);
 
@@ -483,10 +492,11 @@ export class App implements OnInit {
     this.signUpError.set('');
     this.signUpSuccess.set('');
 
-    this.auth.register(this.signUpEmail().trim(), this.signUpPassword()).subscribe({
+    this.auth.register(this.signUpEmail().trim(), this.signUpPassword(), this.requiresKey() ? this.signUpKey().trim() : undefined).subscribe({
       next: () => {
         this.authBusy.set(false);
         this.signUpPassword.set('');
+        this.signUpKey.set('');
         this.signUpSuccess.set('Account created. Sign in to continue.');
         void this.router.navigateByUrl('/signin');
       },
@@ -494,13 +504,53 @@ export class App implements OnInit {
         this.authBusy.set(false);
         const body = errorBody(error);
         this.signUpError.set(
-          (body?.code === 'Auth.RegistrationDisabled' || (error instanceof HttpErrorResponse && error.status === 400)) &&
+          body?.code === 'Auth.InviteInvalid'
+            ? 'This invite key is invalid, expired or already used.'
+            : (body?.code === 'Auth.RegistrationDisabled' || (error instanceof HttpErrorResponse && error.status === 400)) &&
             typeof body?.message === 'string'
             ? body.message
             : this.authErrorMessage(error, 'Unable to create your account. Please try again.'),
         );
       },
     });
+  }
+
+  onResetSubmit(e: Event): void {
+    e.preventDefault();
+    if (this.authBusy()) {
+      return;
+    }
+    this.resetError.set('');
+    if (!this.resetKey().trim()) {
+      this.resetError.set('Enter your reset key.');
+    } else if (this.resetPassword().length < 8) {
+      this.resetError.set('The new password must be at least 8 characters.');
+    } else if (this.resetPassword() !== this.resetConfirm()) {
+      this.resetError.set('The new passwords do not match.');
+    } else {
+      this.authBusy.set(true);
+      this.auth.reset(this.resetKey().trim(), this.resetPassword()).subscribe({
+        next: () => {
+          this.authBusy.set(false);
+          this.resetKey.set('');
+          this.resetPassword.set('');
+          this.resetConfirm.set('');
+          this.signUpSuccess.set('Password reset. Sign in with your new password.');
+          void this.router.navigateByUrl('/signin');
+        },
+        error: error => {
+          this.authBusy.set(false);
+          const body = errorBody(error);
+          this.resetError.set(
+            body?.code === 'Auth.InviteInvalid'
+              ? 'This reset key is invalid, expired or already used.'
+              : typeof body?.message === 'string' && body.message
+                ? body.message
+                : this.authErrorMessage(error, 'Unable to reset the password. Please try again.'),
+          );
+        },
+      });
+    }
   }
 
   selectFile(id: string, event?: MouseEvent): void {
@@ -1137,8 +1187,14 @@ export class App implements OnInit {
   private syncPageWithRoute(): void {
     const path = this.router.url.split('?')[0];
     const previous = this.page();
-    const next = path === '/signup' ? 'signup' : path === '/app' ? 'app' : 'signin';
+    const next = path === '/signup' ? 'signup' : path === '/reset' ? 'reset' : path === '/app' ? 'app' : 'signin';
     this.page.set(next);
+    if (next === 'signup' && previous !== 'signup') {
+      this.auth.setup().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: setup => this.requiresKey.set(setup.requiresKey),
+        error: () => this.requiresKey.set(true),
+      });
+    }
     if (next === 'app' && previous !== 'app') {
       this.loadFiles();
       this.refreshStorage();
@@ -1229,4 +1285,6 @@ export class App implements OnInit {
   }
 
   readonly accountOpen = signal<boolean>(false);
+  readonly adminOpen = signal<boolean>(false);
+  readonly isAdmin = this.auth.isAdmin;
 }

@@ -824,6 +824,8 @@ public class FileServiceTests
         public DbSet<Folder> Folders => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
+        public DbSet<UserProfile> UserProfiles => throw new NotSupportedException();
+        public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
         {

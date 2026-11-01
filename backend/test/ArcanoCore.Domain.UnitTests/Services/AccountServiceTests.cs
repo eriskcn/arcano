@@ -82,6 +82,8 @@ public class AccountServiceTests
         public DbSet<Folder> Folders => Set<Folder>();
         public DbSet<SharedLink> SharedLinks => Set<SharedLink>();
         public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
+        public DbSet<UserProfile> UserProfiles => throw new NotSupportedException();
+        public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

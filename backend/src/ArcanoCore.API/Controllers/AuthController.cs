@@ -1,12 +1,18 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
+using ArcanoCore.API.Authorization;
+using ArcanoCore.Application.Common.Interfaces;
+using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
+using ArcanoCore.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
 namespace ArcanoCore.API.Controllers;
@@ -20,26 +26,36 @@ public class AuthController : ApiControllerBase
     // Longest a login may keep renewing its token, so a stolen token cannot live forever.
     private static readonly TimeSpan MaxSessionAge = TimeSpan.FromHours(24);
 
+    // shortcut: serializes sign-ups inside one process so two first sign-ups cannot both become admin; use a DB lock if the API ever runs on several instances.
+    private static readonly SemaphoreSlim RegisterLock = new(1, 1);
+
     private readonly UserManager<IdentityUser<Guid>> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly IApplicationDbContext _dbContext;
+    private readonly IInviteKeyService _inviteKeys;
 
     public AuthController(
         UserManager<IdentityUser<Guid>> userManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IApplicationDbContext dbContext,
+        IInviteKeyService inviteKeys)
     {
         _userManager = userManager;
         _configuration = configuration;
+        _dbContext = dbContext;
+        _inviteKeys = inviteKeys;
     }
+
+    // Every account has a profile (the migration backfills existing ones), so "no profiles" means an empty install.
+    [EnableRateLimiting("public-info")]
+    [HttpGet("setup")]
+    public async Task<IActionResult> Setup(CancellationToken cancellationToken) =>
+        Ok(new { RequiresKey = await _dbContext.UserProfiles.AnyAsync(cancellationToken) });
 
     [EnableRateLimiting("auth")]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest? request)
     {
-        if (!_configuration.GetValue("Auth:AllowRegistration", true))
-        {
-            return StatusCode(403, new Error("Auth.RegistrationDisabled", "Sign-up is disabled on this server."));
-        }
-
         if (request == null || string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new Error("Auth.InvalidInput", "Email and password are required."));
@@ -53,29 +69,102 @@ public class AuthController : ApiControllerBase
         }
         var normalizedEmail = normalizedResult.Value;
 
-        // 2. Create User
-        var user = new IdentityUser<Guid>
+        await RegisterLock.WaitAsync();
+        try
         {
-            Id = Guid.NewGuid(),
-            Email = normalizedEmail,
-            UserName = normalizedEmail
-        };
-
-        var result = await _userManager.CreateAsync(user, request.Password);
-        if (!result.Succeeded)
-        {
-            // Same message for duplicates so sign-up does not reveal which emails exist.
-            if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
+            // The first account needs no key and becomes admin; afterwards a Join key is required (and consumed, single use).
+            var isFirst = !await _dbContext.UserProfiles.AnyAsync();
+            InviteKey? invite = null;
+            if (!isFirst)
             {
-                return BadRequest(new Error("Auth.RegisterFailed", "Could not create account."));
+                var consumed = await _inviteKeys.ConsumeAsync(request.InviteKey, InviteKeyType.Join);
+                if (consumed.IsFailure)
+                {
+                    return StatusCode(403, consumed.Error);
+                }
+                invite = consumed.Value;
             }
 
-            var firstError = result.Errors.FirstOrDefault();
-            var description = firstError?.Description ?? "User creation failed.";
-            return BadRequest(new Error("Auth.RegisterFailed", description));
+            // 2. Create User
+            var user = new IdentityUser<Guid>
+            {
+                Id = Guid.NewGuid(),
+                Email = normalizedEmail,
+                UserName = normalizedEmail
+            };
+
+            var result = await _userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+            {
+                // The key was not used up by a failed sign-up.
+                if (invite != null)
+                {
+                    await _inviteKeys.ReleaseAsync(invite.Id);
+                }
+
+                // Same message for duplicates so sign-up does not reveal which emails exist.
+                if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
+                {
+                    return BadRequest(new Error("Auth.RegisterFailed", "Could not create account."));
+                }
+
+                var firstError = result.Errors.FirstOrDefault();
+                var description = firstError?.Description ?? "User creation failed.";
+                return BadRequest(new Error("Auth.RegisterFailed", description));
+            }
+
+            try
+            {
+                _dbContext.UserProfiles.Add(new UserProfile { UserId = user.Id, IsAdmin = isFirst, QuotaBytes = invite?.QuotaBytes });
+                await _dbContext.SaveChangesAsync(CancellationToken.None);
+            }
+            catch
+            {
+                await _userManager.DeleteAsync(user); // no account without a profile
+                throw;
+            }
+
+            var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), isFirst);
+            return Ok(new { Message = "User registered successfully.", Token = token });
+        }
+        finally
+        {
+            RegisterLock.Release();
+        }
+    }
+
+    // Sets a new password with a Reset key. Changing the password rotates the security stamp, so every old token dies.
+    [EnableRateLimiting("auth")]
+    [HttpPost("reset")]
+    public async Task<IActionResult> Reset([FromBody] ResetRequest? request)
+    {
+        if (request == null || string.IsNullOrEmpty(request.NewPassword))
+        {
+            return BadRequest(new Error("Auth.InvalidInput", "Key and new password are required."));
         }
 
-        return Ok(new { Message = "User registered successfully." });
+        var consumed = await _inviteKeys.ConsumeAsync(request.Key, InviteKeyType.Reset);
+        if (consumed.IsFailure)
+        {
+            return StatusCode(403, consumed.Error);
+        }
+
+        var user = consumed.Value.TargetUserId is { } id ? await _userManager.FindByIdAsync(id.ToString()) : null;
+        if (user == null)
+        {
+            return StatusCode(403, new Error("Auth.InviteInvalid", "The key is invalid, expired or already used."));
+        }
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            await _inviteKeys.ReleaseAsync(consumed.Value.Id);
+            return BadRequest(new Error("Auth.PasswordInvalid", result.Errors.FirstOrDefault()?.Description ?? "Password reset failed."));
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        return NoContent();
     }
 
     [EnableRateLimiting("auth")]
@@ -121,7 +210,7 @@ public class AuthController : ApiControllerBase
         await _userManager.ResetAccessFailedCountAsync(user);
 
         // 4. Generate JWT Token
-        var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), await _dbContext.IsAdminAsync(user.Id));
 
         return Ok(new { Token = token });
     }
@@ -164,9 +253,10 @@ public class AuthController : ApiControllerBase
             return Unauthorized(new Error("Auth.SessionExpired", "Session expired."));
         }
 
-        return Ok(new { Token = JwtTokens.Create(_configuration, user, sessionStart) });
+        return Ok(new { Token = JwtTokens.Create(_configuration, user, sessionStart, await _dbContext.IsAdminAsync(user.Id)) });
     }
 }
 
-public record RegisterRequest(string Email, string Password);
+public record RegisterRequest(string Email, string Password, string? InviteKey = null);
+public record ResetRequest(string Key, string NewPassword);
 public record LoginRequest(string Email, string Password);

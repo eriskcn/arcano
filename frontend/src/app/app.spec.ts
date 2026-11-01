@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { By } from '@angular/platform-browser';
 import { App, FileItem } from './app';
 import { FilePreviewComponent } from './preview/file-preview.component';
@@ -740,19 +740,78 @@ describe('App', () => {
     http.verify();
   });
 
-  it('should show the backend message when sign-up is disabled', () => {
+  it('should show a clear message for an invalid invite key and send the key', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
     app.signUpEmail.set('a@b.co');
     app.signUpPassword.set('secret123');
+    app.signUpKey.set(' key-1 ');
 
     app.onSignUpSubmit(new Event('submit'));
-    http.expectOne(`${environment.apiBaseUrl}/Auth/register`).flush(
-      { code: 'Auth.RegistrationDisabled', message: 'Sign-up is disabled on this server.' },
+    const request = http.expectOne(`${environment.apiBaseUrl}/Auth/register`);
+    expect(request.request.body).toEqual({ email: 'a@b.co', password: 'secret123', inviteKey: 'key-1' });
+    request.flush(
+      { code: 'Auth.InviteInvalid', message: 'Invite key is invalid.' },
       { status: 403, statusText: 'Forbidden' },
     );
 
-    expect(app.signUpError()).toBe('Sign-up is disabled on this server.');
+    expect(app.signUpError()).toBe('This invite key is invalid, expired or already used.');
+  });
+
+  it('should show the invite key field only when the server requires one', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const el = fixture.nativeElement as HTMLElement;
+    fixture.detectChanges();
+    app.page.set('signup');
+    fixture.detectChanges();
+    expect(el.querySelector('input[name="inviteKey"]')).not.toBeNull();
+
+    app.requiresKey.set(false);
+    fixture.detectChanges();
+    expect(el.querySelector('input[name="inviteKey"]')).toBeNull();
+    expect(el.textContent).toContain('first account becomes the admin');
+
+    app.signUpEmail.set('a@b.co');
+    app.signUpPassword.set('secret123');
+    app.signUpKey.set('ignored');
+    app.onSignUpSubmit(new Event('submit'));
+    expect(http.expectOne(`${environment.apiBaseUrl}/Auth/register`).request.body).toEqual({ email: 'a@b.co', password: 'secret123' });
+  });
+
+  it('should reset the password with a key and return to sign-in with a note', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    app.resetKey.set('rk');
+    app.resetPassword.set('short');
+    app.resetConfirm.set('short');
+    app.onResetSubmit(new Event('submit'));
+    expect(app.resetError()).toContain('at least 8');
+    app.resetPassword.set('long-enough');
+    app.onResetSubmit(new Event('submit'));
+    expect(app.resetError()).toContain('do not match');
+    http.expectNone(`${environment.apiBaseUrl}/Auth/reset`);
+
+    app.resetConfirm.set('long-enough');
+    app.onResetSubmit(new Event('submit'));
+    const request = http.expectOne(`${environment.apiBaseUrl}/Auth/reset`);
+    expect(request.request.body).toEqual({ key: 'rk', newPassword: 'long-enough' });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    expect(app.signUpSuccess()).toContain('Password reset');
+    expect(navigate).toHaveBeenCalledWith('/signin');
+
+    app.resetKey.set('bad');
+    app.resetPassword.set('long-enough');
+    app.resetConfirm.set('long-enough');
+    app.onResetSubmit(new Event('submit'));
+    http.expectOne(`${environment.apiBaseUrl}/Auth/reset`).flush(
+      { code: 'Auth.InviteInvalid', message: 'x' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    expect(app.resetError()).toContain('invalid');
   });
 
   it('should show the backend message for a rejected sign-up and the generic text otherwise', () => {

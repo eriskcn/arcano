@@ -233,6 +233,8 @@ public class UploadServiceTests
         public DbSet<Folder> Folders => Set<Folder>();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => Sessions;
+        public DbSet<UserProfile> UserProfiles => throw new NotSupportedException();
+        public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
             optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());

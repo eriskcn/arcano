@@ -110,12 +110,12 @@ public class AccountControllerTests
 
     private static async Task<(AccountController Controller, UserManager<IdentityUser<Guid>> UserManager, FakeAccountService Accounts)> Setup()
     {
-        var (userManager, configuration) = AuthControllerTests.CreateUserManager();
-        var auth = new AuthController(userManager, configuration);
+        var env = AuthControllerTests.CreateEnv();
+        var (userManager, configuration, auth) = (env.UserManager, env.Configuration, env.Controller);
         Assert.IsType<OkObjectResult>(await auth.Register(new RegisterRequest(Email, Password)));
         var user = (await userManager.FindByEmailAsync(Email))!;
         var accounts = new FakeAccountService();
-        var controller = new AccountController(new FakeQuota(), accounts, new FakeCurrentUser(user.Id.ToString()), userManager, configuration)
+        var controller = new AccountController(new FakeQuota(), accounts, new FakeCurrentUser(user.Id.ToString()), userManager, configuration, env.Db)
         {
             // No session_start claim: ChangePassword falls back to "now".
             ControllerContext = new ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() }

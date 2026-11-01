@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ArcanoCore.API.Authorization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -13,9 +15,9 @@ internal static class JwtTokens
 {
     public const string SessionStartClaim = "session_start";
 
-    public static string Create(IConfiguration configuration, IdentityUser<Guid> user, long sessionStart)
+    public static string Create(IConfiguration configuration, IdentityUser<Guid> user, long sessionStart, bool isAdmin = false)
     {
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email!),
@@ -23,6 +25,8 @@ internal static class JwtTokens
             new Claim(SessionStartClaim, sessionStart.ToString(), ClaimValueTypes.Integer64),
             new Claim(AuthClaims.SecurityStamp, user.SecurityStamp ?? "")
         };
+        // UI hint only; admin endpoints check the database (AdminHandler).
+        if (isAdmin) claims.Add(new Claim("role", AdminPolicy.Role));
 
         var jwtSettings = configuration.GetSection("Jwt");
         // Validated at startup in DependencyInjection.AddInfrastructure.

@@ -17,13 +17,15 @@ The client reads the API base URL from `src/environments/`:
 - `environment.ts` (development): `http://localhost:5000/api`, matching the backend's local HTTP launch profile.
 - `environment.production.ts` (used by the production build and the nginx image): the same-origin path `/api`.
 
-Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The client renews the token with `POST Auth/refresh` and revokes it on sign-out with `POST Auth/logout`. The backend currently provides no role claims, so the client does not infer or display role-based permissions.
+Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endpoints. The JWT is kept in tab-scoped session storage and attached only to requests for the configured API. The client renews the token with `POST Auth/refresh` and revokes it on sign-out with `POST Auth/logout`. Tokens carry a `role` claim; when it is `Admin` the client shows the Admin entry (the server still enforces access).
 
 ## Features
 
 - File explorer with folder zip download (context menu and details panel).
 - Folder star is persisted (the Favorites view still lists files only).
 - On phones (under 640 px) a floating upload button opens the file picker.
+- Sign-up asks for an invite key (hidden on a fresh server, where the first account becomes the admin); `/reset` takes a reset key and a new password.
+- Admin dialog (admins only, from the sidebar): members with usage, quota edit, disable/enable, delete; generate join keys and member reset keys (shown once, with copy) and revoke open keys.
 - The "Shared" view was removed; share links are created per file from the Share dialog.
 
 ## Code scaffolding
