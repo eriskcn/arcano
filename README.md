@@ -6,6 +6,9 @@ A personal cloud-storage application monorepo with an ASP.NET Core backend and A
 
 - `backend/`: ASP.NET Core (.NET 10) Web API organized around Domain, Application, Infrastructure, and API layers. PostgreSQL stores metadata; SeaweedFS provides object storage.
 - `frontend/`: Angular 22 client: sign-in and sign-up, a file explorer with folders, drag and drop, trash, share links, previews, chunked uploads (including from a phone), folder zip download, starred items that persist, keyboard shortcuts, a right-click menu, an account settings dialog, and an admin dialog (invite and reset keys, per-user quotas; the first account is the admin).
+- `docs/USER_MANUAL.md`: how to use the app in a browser, including the admin tasks.
+- `docs/TECHNICAL.md`: architecture, data model, API routes, configuration and testing, for developers.
+- `docs/DEPLOY.md`: production deployment, backup and restore.
 - `REPO_STATUS.md`: current repository-stage assessment, gaps, and recommended next steps.
 - `backend/wbs/WBS.md` and `frontend/wbs/WBS.md`: implementation task tracking.
 
