@@ -16,6 +16,7 @@ const createToken = (claims: Record<string, unknown> = {}): string => {
 
 describe('AuthService', () => {
   beforeEach(() => {
+    localStorage.clear();
     sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
@@ -42,7 +43,7 @@ describe('AuthService', () => {
     request.flush({ token });
 
     expect(auth.email()).toBeNull();
-    expect(sessionStorage.getItem('arcano.auth.token')).toBe(token);
+    expect(localStorage.getItem('arcano.auth.token')).toBe(token);
 
     let authenticated = false;
     auth.validateSession().subscribe(result => authenticated = result);
@@ -67,8 +68,31 @@ describe('AuthService', () => {
     expect(auth.token()).toBeNull();
   });
 
+  it('should migrate a legacy sessionStorage token to localStorage', () => {
+    const token = createToken();
+    sessionStorage.setItem('arcano.auth.token', token);
+
+    const auth = TestBed.inject(AuthService);
+
+    expect(auth.token()).toBe(token);
+    expect(localStorage.getItem('arcano.auth.token')).toBe(token);
+    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+  });
+
+  it('should clear both stores on logout', () => {
+    const token = createToken();
+    localStorage.setItem('arcano.auth.token', token);
+    sessionStorage.setItem('arcano.auth.token', token);
+    const auth = TestBed.inject(AuthService);
+
+    auth.logout();
+
+    expect(localStorage.getItem('arcano.auth.token')).toBeNull();
+    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+  });
+
   it('should discard expired stored tokens', () => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'arcano.auth.token',
       createToken({ exp: Math.floor(Date.now() / 1000) - 1 }),
     );
@@ -76,12 +100,12 @@ describe('AuthService', () => {
     const auth = TestBed.inject(AuthService);
 
     expect(auth.token()).toBeNull();
-    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+    expect(localStorage.getItem('arcano.auth.token')).toBeNull();
   });
 
   it('should reject a forged token when the server cannot validate its signature', () => {
     const token = createToken();
-    sessionStorage.setItem('arcano.auth.token', token);
+    localStorage.setItem('arcano.auth.token', token);
     const auth = TestBed.inject(AuthService);
     const http = TestBed.inject(HttpTestingController);
 
@@ -93,12 +117,12 @@ describe('AuthService', () => {
 
     expect(authenticated).toBe(false);
     expect(auth.token()).toBeNull();
-    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+    expect(localStorage.getItem('arcano.auth.token')).toBeNull();
   });
 
   it('should attach the bearer token only to requests for the configured API', () => {
     const token = createToken();
-    sessionStorage.setItem('arcano.auth.token', token);
+    localStorage.setItem('arcano.auth.token', token);
     const http = TestBed.inject(HttpTestingController);
     const client = TestBed.inject(HttpClient);
     const apiUrl = `${environment.apiBaseUrl}/files`;
@@ -120,7 +144,7 @@ describe('AuthService', () => {
     it('should wait for a refresh when the token expires within 10 minutes', () => {
       const oldToken = soon();
       const newToken = createToken({ sig: 'new' });
-      sessionStorage.setItem('arcano.auth.token', oldToken);
+      localStorage.setItem('arcano.auth.token', oldToken);
       const http = TestBed.inject(HttpTestingController);
       const client = TestBed.inject(HttpClient);
       const apiUrl = `${environment.apiBaseUrl}/files`;
@@ -134,13 +158,13 @@ describe('AuthService', () => {
 
       const request = http.expectOne(apiUrl);
       expect(request.request.headers.get('Authorization')).toBe(`Bearer ${newToken}`);
-      expect(sessionStorage.getItem('arcano.auth.token')).toBe(newToken);
+      expect(localStorage.getItem('arcano.auth.token')).toBe(newToken);
       request.flush({});
     });
 
     it('should not refresh when the token is far from expiry', () => {
       const token = createToken();
-      sessionStorage.setItem('arcano.auth.token', token);
+      localStorage.setItem('arcano.auth.token', token);
       const http = TestBed.inject(HttpTestingController);
 
       TestBed.inject(HttpClient).get(`${environment.apiBaseUrl}/files`).subscribe();
@@ -153,7 +177,7 @@ describe('AuthService', () => {
 
     it('should share one refresh between concurrent requests', () => {
       const newToken = createToken({ sig: 'new' });
-      sessionStorage.setItem('arcano.auth.token', soon());
+      localStorage.setItem('arcano.auth.token', soon());
       const http = TestBed.inject(HttpTestingController);
       const client = TestBed.inject(HttpClient);
 
@@ -170,7 +194,7 @@ describe('AuthService', () => {
 
     it('should send the request with the old token when refresh fails', () => {
       const oldToken = soon();
-      sessionStorage.setItem('arcano.auth.token', oldToken);
+      localStorage.setItem('arcano.auth.token', oldToken);
       const http = TestBed.inject(HttpTestingController);
 
       TestBed.inject(HttpClient).get(`${environment.apiBaseUrl}/files`).subscribe();
@@ -198,7 +222,7 @@ describe('AuthService', () => {
 
     it('logoutEverywhere calls the server then clears the token', () => {
       const token = createToken();
-      sessionStorage.setItem('arcano.auth.token', token);
+      localStorage.setItem('arcano.auth.token', token);
       const auth = TestBed.inject(AuthService);
       const http = TestBed.inject(HttpTestingController);
 
@@ -209,7 +233,7 @@ describe('AuthService', () => {
     });
 
     it('deleteAccount sends the password and clears the token', () => {
-      sessionStorage.setItem('arcano.auth.token', createToken());
+      localStorage.setItem('arcano.auth.token', createToken());
       const auth = TestBed.inject(AuthService);
       const http = TestBed.inject(HttpTestingController);
 

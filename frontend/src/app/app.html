@@ -396,7 +396,7 @@
         <div>
           <h1 class="text-base font-semibold text-gray-900">{{ pageTitle() }}</h1>
           <p *ngIf="showFiles()" class="text-xs text-gray-500 mt-0.5">
-            {{ selectedIds().size ? selectedIds().size + ' selected · ' : '' }}{{ filteredFiles().length }} items
+            {{ selectedIds().size ? selectedIds().size + ' selected · ' : '' }}{{ filteredFiles().length }}{{ hasMoreFiles() ? '+' : '' }} items
           </p>
         </div>
         <div class="flex items-center gap-2">
@@ -514,6 +514,7 @@
           <!-- List View -->
           <div
             *ngIf="showFiles() && filteredFiles().length > 0 && viewMode() === 'list'"
+            (scroll)="onFilesScroll($event)"
             (pointerdown)="beginMarquee($event)"
             (contextmenu)="showBackgroundMenu($event)"
             (pointermove)="moveMarquee($event)"
@@ -602,6 +603,7 @@
           <!-- Grid View -->
           <div
             *ngIf="showFiles() && filteredFiles().length > 0 && viewMode() === 'grid'"
+            (scroll)="onFilesScroll($event)"
             (pointerdown)="beginMarquee($event)"
             (contextmenu)="showBackgroundMenu($event)"
             (pointermove)="moveMarquee($event)"

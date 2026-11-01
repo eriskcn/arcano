@@ -14,7 +14,7 @@ describe('FilesService', () => {
   const id = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
 
   beforeEach(() => {
-    sessionStorage.setItem('arcano.auth.token', createToken());
+    localStorage.setItem('arcano.auth.token', createToken());
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
@@ -25,7 +25,7 @@ describe('FilesService', () => {
 
   afterEach(() => {
     TestBed.inject(HttpTestingController).verify();
-    sessionStorage.clear();
+    localStorage.clear();
   });
 
   it('should list files with the bearer token', () => {
@@ -45,27 +45,13 @@ describe('FilesService', () => {
     expect(result).toEqual(files);
   });
 
-  it('should request the next page until a short page is returned', () => {
+  it('should request only the page at the given skip', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);
-    const pageOf = (start: number, count: number): FileDto[] =>
-      Array.from({ length: count }, (_, i) => ({
-        id: String(start + i),
-        fileName: `file-${start + i}.txt`,
-        contentType: 'text/plain',
-        fileSize: 1,
-        createdAtUtc: '2026-07-22T10:00:00Z',
-        isStarred: false,
-        lastModifiedAtUtc: null,
-      }));
-    let result: FileDto[] | undefined;
 
-    service.list().subscribe(response => (result = response));
+    service.list(null, 'all', '', 100).subscribe();
 
-    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush(pageOf(0, 100));
-    http.expectOne(`${environment.apiBaseUrl}/Files?skip=100&take=100`).flush(pageOf(100, 3));
-    expect(result?.length).toBe(103);
-    expect(result?.[102].id).toBe('102');
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=100&take=100`).flush([]);
   });
 
   it('should list files of a folder with the folderId parameter', () => {

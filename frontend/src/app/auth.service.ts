@@ -112,7 +112,7 @@ export class AuthService {
   }
 
   logout(): void {
-    this.storage()?.removeItem(this.storageKey);
+    this.clearStored();
     this.verifiedToken = null;
     this.token.set(null);
     this.email.set(null);
@@ -159,23 +159,52 @@ export class AuthService {
     if (!this.hasValidExpiry(token)) {
       throw new Error('The server returned an expired or invalid sign-in token.');
     }
-    this.storage()?.setItem(this.storageKey, token);
+    try {
+      this.storage()?.setItem(this.storageKey, token);
+    } catch {
+      // Storage blocked or full: keep the session in memory only.
+    }
     this.verifiedToken = null;
     this.token.set(token);
     this.email.set(null);
   }
 
   private readStoredToken(): string | null {
-    const token = this.storage()?.getItem(this.storageKey) ?? null;
+    let token: string | null = null;
+    try {
+      token = this.storage()?.getItem(this.storageKey) ?? null;
+      if (!token) {
+        // One-time migration from the previous per-tab sessionStorage location.
+        token = window.sessionStorage?.getItem(this.storageKey) ?? null;
+        if (token && this.hasValidExpiry(token)) {
+          this.storage()?.setItem(this.storageKey, token);
+        }
+        if (token) {
+          window.sessionStorage.removeItem(this.storageKey);
+        }
+      }
+    } catch {
+      return token && this.hasValidExpiry(token) ? token : null;
+    }
     if (!token || this.hasValidExpiry(token)) {
       return token;
     }
-    this.storage()?.removeItem(this.storageKey);
+    this.clearStored();
     return null;
   }
 
+  private clearStored(): void {
+    for (const store of [this.storage(), isPlatformBrowser(this.platformId) ? window.sessionStorage : null]) {
+      try {
+        store?.removeItem(this.storageKey);
+      } catch {
+        // Ignore blocked storage.
+      }
+    }
+  }
+
   private storage(): Storage | null {
-    return isPlatformBrowser(this.platformId) ? window.sessionStorage : null;
+    return isPlatformBrowser(this.platformId) ? window.localStorage : null;
   }
 
   private hasValidExpiry(token: string): boolean {

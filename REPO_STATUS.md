@@ -78,6 +78,10 @@ File versioning, folder sharing, per-user quotas, admin features, PDF preview, c
 
 The README files and both WBS files were brought up to date after the release-blocker and should-fix work (route table, configuration table, migrations, tests, environments, status sections). All projects now use the released 10.0.4 packages (`ArcanoCore.Application.csproj` was moved off the two preview packages).
 
+## Ops hardening
+
+Backup now includes api keys, env copy and image record, with optional rclone off-host copy; restore validates archives first; prod compose pins SeaweedFS by digest and rotates logs.
+
 ## Not verified
 
 - Real TLS in front of `web`, and `web` behind a real proxy.

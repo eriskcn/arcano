@@ -312,6 +312,30 @@ describe('App', () => {
     http.verify();
   });
 
+  it('should load the first page and append the next one near the bottom', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const page = (start: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({ id: `f${start + i}`, fileName: `f${start + i}.txt`, contentType: 'text/plain', fileSize: 1, createdAtUtc: '2026-07-22T10:00:00Z', isStarred: false, lastModifiedAtUtc: null }));
+    const near = { target: { scrollHeight: 1000, scrollTop: 500, clientHeight: 400 } } as unknown as Event;
+
+    app.loadFiles();
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=0&take=100`).flush(page(0, 100));
+    http.expectOne(`${environment.apiBaseUrl}/Folders`).flush([]);
+    expect(app.hasMoreFiles()).toBe(true);
+
+    app.onFilesScroll({ target: { scrollHeight: 5000, scrollTop: 0, clientHeight: 400 } } as unknown as Event);
+    http.verify(); // far from the bottom: nothing requested
+
+    app.onFilesScroll(near);
+    app.onFilesScroll(near); // in-flight guard: still one request
+    http.expectOne(`${environment.apiBaseUrl}/Files?skip=100&take=100`).flush(page(100, 3));
+    expect(app.files().length).toBe(103);
+    expect(app.hasMoreFiles()).toBe(false);
+    app.onFilesScroll(near);
+    http.verify();
+  });
+
   it('should list the trash and restore, delete forever and empty it', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);

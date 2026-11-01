@@ -146,6 +146,29 @@ public class FolderServiceTests
     }
 
     [Fact]
+    public async Task WriteZipAsync_ChildNamedBeforeParent_Succeeds()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var storage = new FakeStorage();
+        var service = new FolderService(dbContext, new FolderTestCurrentUser(userId.ToString()), storage);
+        var top = await CreateFolderAsync(service, "Top", null);
+        var photos = await CreateFolderAsync(service, "Photos", top.Id);
+        var year = await CreateFolderAsync(service, "2024", photos.Id);
+        AddFile(dbContext, userId, year.Id, "k1", "a.txt");
+        await dbContext.SaveChangesAsync();
+        storage.Data["k1"] = "one"u8.ToArray();
+
+        using var output = new MemoryStream();
+        var result = await service.WriteZipAsync(top.Id, output);
+
+        Assert.True(result.IsSuccess);
+        output.Position = 0;
+        using var zip = new ZipArchive(output);
+        Assert.NotNull(zip.GetEntry("Photos/2024/a.txt"));
+    }
+
+    [Fact]
     public async Task WriteZipAsync_OtherUsersFolder_IsNotFound()
     {
         var ownerId = Guid.NewGuid();

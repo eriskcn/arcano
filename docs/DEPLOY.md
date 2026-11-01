@@ -9,6 +9,7 @@ Linux host with Docker Engine + Compose v2, `openssl`, `git`, and a domain with 
 ```
 cp .env.production.example .env.production
 ```
+Store `.env.production` in a password manager as well: it holds every secret, and without it a restored backup cannot be run.
 Fill every value. Generate secrets with `openssl rand -hex 32` (use `openssl rand -hex 16` for `S3_ACCESS_KEY`).
 Never reuse dev values (`any_key`, `any_secret`, `postgrespassword`). The old dev JWT key remains in git history and must never be used.
 
@@ -23,7 +24,7 @@ Run these from the repo root. `gen-s3-config.sh` writes `backend/seaweedfs/s3.pr
 Sign-up is disabled by default. Create the first account: set `ALLOW_REGISTRATION=true` in `.env.production`, run the `up -d` command again, register in the browser, then set it back to `false` and run `up -d` again.
 
 ## 5. TLS in front
-`web` speaks plain HTTP; the proxy must forward `X-Forwarded-For` and `X-Forwarded-Proto` to `WEB_BIND:WEB_PORT`. `PUBLIC_ORIGIN` must equal the public https URL.
+`web` speaks plain HTTP; the proxy must forward `X-Forwarded-For` and `X-Forwarded-Proto` to `WEB_BIND:WEB_PORT`. Never expose `WEB_BIND` publicly (e.g. `0.0.0.0` without a firewall): the nginx in `web` trusts `X-Forwarded-Proto`, so direct clients could spoof it. `PUBLIC_ORIGIN` must equal the public https URL.
 
 Caddy:
 ```
@@ -50,28 +51,35 @@ The nginx inside the `web` image caps request bodies at 110m (`client_max_body_s
 ## 6. Backup and restore
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
-scripts/backup.sh               # db.dump + seaweedfs.tar.gz in backups/<UTC time>/, keeps BACKUP_KEEP=7
+scripts/backup.sh               # db.dump, seaweedfs.tar.gz, api_keys.tar.gz, env.production (mode 600), seaweedfs-image.txt in backups/<UTC time>/, keeps BACKUP_KEEP=7
 scripts/backup.sh --stop-api    # stops api briefly for a consistent DB/files pair
 ```
-Cron (daily 03:00): `0 3 * * * cd /opt/arcano && mkdir -p backups && scripts/backup.sh --stop-api >> backups/cron.log 2>&1`
-Copy `backups/` off the host; it lives on the same disk otherwise.
+The backups contain secrets (`env.production`); `backups/` is created with mode 700 and is gitignored.
 
-Restore (destructive; stops web/api, replaces DB and files, restarts):
+Off-host copy: install and configure `rclone`, then set `BACKUP_RCLONE_REMOTE` (e.g. `s3remote:arcano-backups`) in the environment of the script. After each backup it runs `rclone copy <dir> $BACKUP_RCLONE_REMOTE/<timestamp>`; if that fails the script exits non-zero (and skips pruning).
+
+Cron (daily 03:00): `0 3 * * * cd /opt/arcano && BACKUP_RCLONE_REMOTE=s3remote:arcano-backups scripts/backup.sh --stop-api >> backups/cron.log 2>&1`
+(Run `scripts/backup.sh` once by hand first so `backups/` exists with the right mode.) Without `BACKUP_RCLONE_REMOTE` backups stay on the same disk.
+
+Disk sizing: with 7 backups on the same disk as the data, plan for disk >= users x quota x ~8 (live data plus 7 archives).
+
+Restore (destructive; validates the archives first, then stops web/api, replaces DB, files and api keys, restarts):
 ```
 scripts/restore.sh backups/<timestamp> --yes
 ```
 
 ## 7. Upgrade
 ```
+scripts/backup.sh --stop-api
 git pull
 docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
-Database migrations run when the API starts. Take a backup first.
+Database migrations run when the API starts.
 
 ## Not covered
 - No high availability; run a single API instance only.
-- The `chrislusf/seaweedfs` image is unpinned (`:latest`) in `docker-compose.prod.yml`; pin a tag if you need reproducible upgrades.
+- The `chrislusf/seaweedfs` image is pinned by digest in `docker-compose.prod.yml` (the dev compose still uses `:latest`, and no version tag could be determined offline); bump the digest deliberately and take a backup first. Each backup records the image used in `seaweedfs-image.txt`.
 - No email, so no password reset.
 - Sessions last at most 24 hours; access tokens expire after `Jwt:ExpiryInMinutes` (default 60).
 - Tokens cannot be revoked; rotating `JWT_SECRET` logs everyone out.
-- No monitoring or log shipping; backups are not encrypted or copied off-host.
+- No monitoring or log shipping; backups are not encrypted, and are copied off-host only if `BACKUP_RCLONE_REMOTE` is set.

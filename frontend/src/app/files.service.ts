@@ -1,6 +1,6 @@
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { EMPTY, Observable, catchError, concat, concatMap, expand, filter, from, map, of, reduce, switchMap, throwError, timer } from 'rxjs';
+import { Observable, catchError, concat, concatMap, filter, from, map, of, switchMap, throwError, timer } from 'rxjs';
 import { environment } from '../environments/environment';
 
 export interface FileDto {
@@ -13,6 +13,8 @@ export interface FileDto {
   lastModifiedAtUtc: string | null;
 }
 
+export const FILES_PAGE_SIZE = 100; // the server clamps take to 100
+
 export type FilesView = 'all' | 'starred' | 'recent';
 
 @Injectable({ providedIn: 'root' })
@@ -20,16 +22,17 @@ export class FilesService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiBaseUrl}/Files`;
 
-  list(folderId?: string | null, view: FilesView = 'all', q = ''): Observable<FileDto[]> {
-    return this.fetchAll(this.baseUrl, {
+  /** One page of files, newest first; a page shorter than FILES_PAGE_SIZE is the last. */
+  list(folderId?: string | null, view: FilesView = 'all', q = '', skip = 0): Observable<FileDto[]> {
+    return this.fetchPage(this.baseUrl, skip, {
       ...(folderId ? { folderId } : {}),
       ...(view !== 'all' ? { view } : {}),
       ...(q ? { q } : {}),
     });
   }
 
-  trash(): Observable<FileDto[]> {
-    return this.fetchAll(`${this.baseUrl}/trash`, {});
+  trash(skip = 0): Observable<FileDto[]> {
+    return this.fetchPage(`${this.baseUrl}/trash`, skip, {});
   }
 
   rename(id: string, name: string): Observable<void> {
@@ -60,15 +63,8 @@ export class FilesService {
     return this.http.delete<void>(`${this.baseUrl}/trash`).pipe(map(() => undefined));
   }
 
-  private fetchAll(url: string, params: Record<string, string>): Observable<FileDto[]> {
-    const pageSize = 100;
-    const fetchPage = (skip: number): Observable<FileDto[]> =>
-      this.http.get<FileDto[]>(url, { params: { skip, take: pageSize, ...params } });
-    // expand's index counts pages fetched so far, so the next skip is (index + 1) * pageSize.
-    return fetchPage(0).pipe(
-      expand((page, index) => (page.length < pageSize ? EMPTY : fetchPage((index + 1) * pageSize))),
-      reduce((all, page) => [...all, ...page], [] as FileDto[]),
-    );
+  private fetchPage(url: string, skip: number, params: Record<string, string>): Observable<FileDto[]> {
+    return this.http.get<FileDto[]>(url, { params: { skip, take: FILES_PAGE_SIZE, ...params } });
   }
 
   /** Emits upload progress (0-100) and completes once the server has responded. */

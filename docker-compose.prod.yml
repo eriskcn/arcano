@@ -5,10 +5,17 @@
 # or edit frontend/nginx.conf. See docs/DEPLOY.md.
 name: arcano
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: arcanocore
       POSTGRES_USER: postgres
@@ -23,8 +30,9 @@ services:
     networks: [internal]
 
   seaweedfs:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs@sha256:fc9f76fa993ad69966ffeb2f65d0318fcae39c6f8e20cf68ef7b3a5cb97769e5 # pinned digest of the :latest image used in dev; bump deliberately
     restart: unless-stopped
+    logging: *logging
     # Credentials come ONLY from the generated s3.prod.json (scripts/gen-s3-config.sh).
     # security.toml (dev filer JWT signing) is intentionally not mounted: the filer is not reachable from outside.
     command: 'server -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json'
@@ -43,6 +51,7 @@ services:
       context: ./backend
       dockerfile: src/ArcanoCore.API/Dockerfile
     restart: unless-stopped
+    logging: *logging
     expose:
       - "8080"
     environment:
@@ -81,6 +90,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *logging
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
     depends_on:

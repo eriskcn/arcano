@@ -20,7 +20,7 @@ const createToken = (): string => {
 
 describe('authentication route guards', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
   });
 
   it('should redirect unauthenticated visits to protected routes to sign in', async () => {
@@ -42,7 +42,7 @@ describe('authentication route guards', () => {
   });
 
   it('should redirect authenticated visits from sign in to the app', async () => {
-    sessionStorage.setItem('arcano.auth.token', createToken());
+    localStorage.setItem('arcano.auth.token', createToken());
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -67,7 +67,7 @@ describe('authentication route guards', () => {
   });
 
   it('should redirect a forged token to sign in after server validation fails', async () => {
-    sessionStorage.setItem('arcano.auth.token', createToken());
+    localStorage.setItem('arcano.auth.token', createToken());
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -89,6 +89,6 @@ describe('authentication route guards', () => {
     await navigation;
 
     expect(TestBed.inject(Router).url).toBe('/signin?returnUrl=%2Fapp');
-    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
+    expect(localStorage.getItem('arcano.auth.token')).toBeNull();
   });
 });
