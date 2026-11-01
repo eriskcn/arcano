@@ -11,7 +11,7 @@ import { ContextMenuComponent, ContextMenuModel } from './context-menu.component
 import { FileActionsService } from './file-actions.service';
 import { errorBody, fileErrorMessage } from './http-errors';
 import { AuthService } from './auth.service';
-import { FileDto, FilesService, FilesView } from './files.service';
+import { FILES_PAGE_SIZE, FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
 import { ShareDialogComponent } from './share-dialog.component';
 import { AccountDialogComponent } from './account-dialog.component';
@@ -215,6 +215,10 @@ export class App implements OnInit {
   readonly files = signal<FileItem[]>([]);
   readonly filesLoading = signal<boolean>(false);
   readonly filesError = signal<string>('');
+  // The API returns no total, so more pages exist only while the last page came back full.
+  readonly hasMoreFiles = signal<boolean>(false);
+  private loadingMore = false;
+  private moreSubscription?: Subscription;
   readonly actionError = this.actions.actionError;
   readonly uploadState = this.actions.uploadState;
   readonly actionBusy = this.actions.actionBusy;
@@ -910,6 +914,9 @@ export class App implements OnInit {
   }
 
   loadFiles(): void {
+    this.moreSubscription?.unsubscribe();
+    this.loadingMore = false;
+    this.hasMoreFiles.set(false);
     this.files.set([]);
     this.folders.set([]);
     this.clearSelection();
@@ -925,17 +932,54 @@ export class App implements OnInit {
     const withFolders = !q && view === 'all' && nav !== 'trash';
     this.loadSubscription?.unsubscribe();
     this.loadSubscription = forkJoin({
-      files: nav === 'trash' ? this.filesApi.trash() : this.filesApi.list(parentId, view, q),
+      files: this.fetchFilesPage(0),
       folders: withFolders ? this.foldersApi.list(parentId) : of([]),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ files, folders }) => {
         this.folders.set(folders.map(toFolderItem));
         this.files.set(files.map(toFileItem));
+        this.hasMoreFiles.set(files.length >= FILES_PAGE_SIZE);
         this.filesLoading.set(false);
       },
       error: () => {
         this.filesLoading.set(false);
         this.filesError.set('Unable to load your files. Please try again.');
+      },
+    });
+  }
+
+  private fetchFilesPage(skip: number): Observable<FileDto[]> {
+    const nav = this.activeNav();
+    if (nav === 'trash') {
+      return this.filesApi.trash(skip);
+    }
+    const view: FilesView = nav === 'favorites' ? 'starred' : nav === 'recent' || nav === 'home' ? 'recent' : 'all';
+    return this.filesApi.list(this.currentFolderId(), view, this.searchQuery().trim(), skip);
+  }
+
+  onFilesScroll(event: Event): void {
+    const el = event.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      this.loadMoreFiles();
+    }
+  }
+
+  loadMoreFiles(): void {
+    if (!this.hasMoreFiles() || this.loadingMore || this.filesLoading()) {
+      return;
+    }
+    this.loadingMore = true;
+    this.moreSubscription = this.fetchFilesPage(this.files().length).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: page => {
+        // Local deletes shift the offset, so drop anything already shown.
+        const known = new Set(this.files().map(file => file.id));
+        this.files.update(files => [...files, ...page.filter(file => !known.has(file.id)).map(toFileItem)]);
+        this.hasMoreFiles.set(page.length >= FILES_PAGE_SIZE);
+        this.loadingMore = false;
+      },
+      error: () => {
+        this.loadingMore = false;
+        this.filesError.set('Unable to load more files. Please try again.');
       },
     });
   }
@@ -1040,7 +1084,7 @@ export class App implements OnInit {
   }
 
   emptyTrash(): void {
-    this.confirmTrash('Empty trash', `Empty trash? All ${this.files().length} items will be permanently deleted.`, () =>
+    this.confirmTrash('Empty trash', `Empty trash? All ${this.files().length}${this.hasMoreFiles() ? '+' : ''} items will be permanently deleted.`, () =>
       this.trashAction(this.filesApi.emptyTrash(), 'Unable to empty the trash. Please try again.'));
   }
 

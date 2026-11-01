@@ -7,7 +7,7 @@ import { environment } from '../environments/environment';
 describe('AccountDialogComponent', () => {
   const api = environment.apiBaseUrl;
   const setup = () => {
-    sessionStorage.clear();
+    localStorage.clear();
     TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
     const fixture = TestBed.createComponent(AccountDialogComponent);
     fixture.componentRef.setInput('open', true);

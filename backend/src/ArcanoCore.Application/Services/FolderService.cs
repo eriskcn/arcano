@@ -236,7 +236,7 @@ public class FolderService : IFolderService
         // Relative directory path per folder, with sibling names made unique.
         var paths = new Dictionary<Guid, string> { [root.Id] = "" };
         var used = new Dictionary<string, HashSet<string>>();
-        foreach (var folder in tree.Skip(1).OrderBy(f => f.Name))
+        foreach (var folder in tree.Skip(1))
         {
             var parentPath = paths[folder.ParentId!.Value];
             paths[folder.Id] = parentPath + UniqueName(used, parentPath, SanitizeName(folder.Name)) + "/";
