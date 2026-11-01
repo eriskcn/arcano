@@ -99,6 +99,7 @@ describe('App', () => {
       expect(folder.some(l => l.startsWith('Open'))).toBe(true);
       expect(folder.some(l => l === 'Download' || l.startsWith('Copy'))).toBe(false);
       expect(folder.some(l => l.startsWith('Download as zip'))).toBe(true);
+      expect(folder.some(l => l === 'Share')).toBe(true);
 
       const file = open(sampleFiles[0]).labels();
       expect(file.some(l => l.startsWith('Open'))).toBe(false);

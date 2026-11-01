@@ -20,11 +20,12 @@ import { FilePreviewComponent } from './preview/file-preview.component';
 import { ModalComponent } from './shared/components/modal.component';
 import { QuotaMeterComponent } from './shared/components/quota-meter.component';
 import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
+import { SharedWithMeComponent } from './shared-with-me.component';
 import { previewKind } from './preview/preview-kind';
 
 export type Page = 'signin' | 'signup' | 'reset' | 'app';
 export type ViewMode = 'list' | 'grid';
-export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'trash';
+export type NavItem = 'home' | 'my-files' | 'recent' | 'favorites' | 'trash' | 'shared';
 
 export interface MenuEntry {
   label: string;
@@ -101,7 +102,7 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, AccountDialogComponent, AdminDialogComponent, ModalComponent, QuotaMeterComponent, ConfirmDialogComponent],
+  imports: [CommonModule, FormsModule, ContextMenuComponent, FilePreviewComponent, ShareDialogComponent, AccountDialogComponent, AdminDialogComponent, ModalComponent, QuotaMeterComponent, ConfirmDialogComponent, SharedWithMeComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   providers: [FileActionsService],
@@ -201,6 +202,7 @@ export class App implements OnInit {
     { key: 'recent', label: 'Recent', icon: 'schedule' },
     { key: 'favorites', label: 'Favorites', icon: 'star' },
     { key: 'trash', label: 'Trash', icon: 'delete' },
+    { key: 'shared', label: 'Shared with me', icon: 'group' },
   ];
 
   readonly filterChips = ['All', 'Folders', 'Documents', 'Images', 'Videos'];
@@ -211,6 +213,7 @@ export class App implements OnInit {
     recent: 'Recent',
     favorites: 'Favorites',
     trash: 'Trash',
+    shared: 'Shared with me',
   };
 
   readonly emptyMessages: Record<NavItem, { icon: string; title: string; sub: string }> = {
@@ -219,6 +222,7 @@ export class App implements OnInit {
     recent: { icon: 'schedule', title: 'No recent activity', sub: 'Files you open will appear here.' },
     favorites: { icon: 'star', title: 'No favorites yet', sub: 'Star files to find them quickly.' },
     trash: { icon: 'delete', title: 'Trash is empty', sub: 'Deleted files will appear here for 30 days.' },
+    shared: { icon: 'group', title: 'Nothing shared', sub: 'Items others share with you will appear here.' },
   };
 
   readonly files = signal<FileItem[]>([]);
@@ -782,7 +786,7 @@ export class App implements OnInit {
       oneFile && { label: 'Preview', icon: 'visibility', run: () => this.openPreview() },
       oneFile && { label: 'Download', icon: 'download', run: () => this.downloadFile(oneFile) },
       oneFolder && { label: 'Download as zip', icon: 'folder_zip', run: () => this.downloadFolder(oneFolder) },
-      oneFile && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
+      one && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
       one && { label: 'Rename', icon: 'edit', shortcut: 'F2', divider: true, run: () => this.startRenameFolder(one) },
       oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.actions.copyItems([oneFile], this.currentFolderId()) },
       docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.actions.toClipboard('copy') },
@@ -970,6 +974,9 @@ export class App implements OnInit {
     this.files.set([]);
     this.folders.set([]);
     this.clearSelection();
+    if (this.activeNav() === 'shared') {
+      return; // the lazy shared view loads its own data
+    }
     this.filesLoading.set(true);
     this.filesError.set('');
     this.actionError.set('');

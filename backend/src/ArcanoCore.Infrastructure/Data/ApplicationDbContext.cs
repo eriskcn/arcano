@@ -23,6 +23,7 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
     public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<InviteKey> InviteKeys => Set<InviteKey>();
+    public DbSet<UserShare> UserShares => Set<UserShare>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

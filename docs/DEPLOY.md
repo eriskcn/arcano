@@ -88,5 +88,5 @@ Startup rule when no admin exists: if `Auth:BootstrapAdminEmail` is set, that us
 - No email: forgotten passwords are reset with an admin-issued Reset key (step 4).
 - Sessions last at most 24 hours; access tokens expire after `Jwt:ExpiryInMinutes` (default 60).
 - Tokens are revoked by sign-out-everywhere, a password change or reset, and disabling a user; rotating `JWT_SECRET` logs everyone out.
-- Trust model: an admin can issue a Reset key for any user, including other admins, and sign in as them. Admins cannot otherwise read other users' files. There is no audit log. Fine for a trusted group.
+- Trust model: an admin can issue a Reset key for any user, including other admins, and sign in as them. Admins cannot otherwise read other users' files. Members can share files and folders with each other by email (read-only) and can probe whether an email is registered. Admin and key actions are written as `Audit` lines to the API container log (`docker compose logs api | grep Audit`); log rotation keeps about 30 MB (3 files of 10 MB), so audit history is limited to that. Fine for a trusted group.
 - No monitoring or log shipping; backups are not encrypted, and are copied off-host only if `BACKUP_RCLONE_REMOTE` is set.

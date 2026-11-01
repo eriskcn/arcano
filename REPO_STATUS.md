@@ -26,8 +26,8 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend:** builds; 125 domain tests and 34 API tests pass. 28 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
-- **Frontend:** 174 unit tests in 18 files pass; the production build succeeds.
+- **Backend:** builds; 141 domain tests and 37 API tests pass. 33 integration tests pass against the real SeaweedFS and a real PostgreSQL (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database).
+- **Frontend:** 184 unit tests in 20 files pass; the production build succeeds.
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off (historical: before group mode, see below); change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (earlier today):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser.
 
@@ -64,15 +64,15 @@ Done:
 
 Not done:
 - **No email verification** (nothing can send email). Forgotten passwords are reset with an admin-issued Reset key (`POST api/Auth/reset`).
-- **Folders** cannot be copied or shared; no content search.
-- **Shared view removed:** the backend only supports share links you create, so there is no "Shared" nav item or filter; links are created per file.
+- **Folders** can be shared with other users (read-only) but have no public links and cannot be copied; no content search.
+- **Shared views:** the old "Shared" filter for public links stays removed (links are created per file). A "Shared with me" view now lists user-to-user shares.
 - **Several API instances** are not supported (upload lock and migrations are per process).
 - **Token renewal** still keeps a stolen token usable for up to 24 hours unless the owner signs out everywhere.
 - **CI:** push and check the CI run; the workflow has not run on GitHub as far as verified.
 
 ## Later
 
-File versioning, folder sharing, PDF preview, content search, resume of an upload after a page reload, running more than one API instance (the upload lock is in process), structured logging.
+File versioning, public links for folders, folder copy, PDF preview, content search, resume of an upload after a page reload, running more than one API instance (the upload lock is in process), structured logging.
 
 ## Group mode
 
@@ -81,6 +81,14 @@ The first sign-up on an empty install becomes admin; after that sign-up needs a 
 Verified end to end on the API against a throwaway PostgreSQL database (all scenarios, including disable, Reset key, the last-admin guard and rate limits).
 
 Not verified: the UI in a browser, S3 object removal when a member is deleted, and multi-instance operation.
+
+## Sharing and hardening
+
+- **User-to-user sharing:** files and folders can be shared read-only with a registered user by email (`api/UserShares`, `api/Shared`). Access is re-checked on every request. Members can probe whether an email is registered (accepted for a trusted group). Account and admin delete remove the user's shares. UI: People section in the Share dialog and a "Shared with me" view (not on the mobile bottom bar).
+- **Downloads:** owner and public downloads support HTTP Range (206 checked against real SeaweedFS in an integration test).
+- **Uploads:** failed multipart aborts keep the session and cleanup retries them; a retried `complete` after success returns the existing file; cancellation is no longer misreported.
+- **Audit log:** `Audit {Event} actor= target=` lines in the API log for key, user and quota actions; no table, no key material.
+- Not verified: the new UI and flows in a browser (a browser pass is running; the maintainer will add its result); controller HTTP status mapping has no controller tests; no rate limit on `/api/Shared` and `/api/UserShares`; the share zip over real Kestrel; the bootstrap audit line; whether the new tests fail before the change.
 
 ## Documentation
 
@@ -94,6 +102,7 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 - Real TLS in front of `web`, and `web` behind a real proxy.
 - The GitHub Actions workflow on GitHub (the YAML parses; it has not run as far as verified).
+- The sharing UI (People section, "Shared with me") in a real browser.
 - The Settings dialog, the confirmation dialogs and double-click preview in a real browser (unit tests only).
 - Real touch input on mobile, keyboard accessibility, and a restore of the file volume while uploads are running.
 - Test instances: the Angular dev server may still be running on port 4200 and an API on port 5000.

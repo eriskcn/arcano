@@ -38,6 +38,24 @@ public class AccountServiceTests
     }
 
     [Fact]
+    public async Task DeleteUserDataAsync_RemovesSharesWhereUserIsOwnerOrRecipient()
+    {
+        var third = Guid.NewGuid();
+        var f1 = new FileMetadata { Id = Guid.NewGuid(), OwnerId = _userId, StorageKey = "a" };
+        var f2 = new FileMetadata { Id = Guid.NewGuid(), OwnerId = _otherId, StorageKey = "b" };
+        var f3 = new FileMetadata { Id = Guid.NewGuid(), OwnerId = _otherId, StorageKey = "c" };
+        _context.AddRange(f1, f2, f3,
+            new UserShare { Id = Guid.NewGuid(), OwnerId = _userId, RecipientId = _otherId, FileId = f1.Id },
+            new UserShare { Id = Guid.NewGuid(), OwnerId = _otherId, RecipientId = _userId, FileId = f2.Id },
+            new UserShare { Id = Guid.NewGuid(), OwnerId = _otherId, RecipientId = third, FileId = f3.Id });
+        await _context.SaveChangesAsync(default);
+
+        await new AccountService(_context, _storage, _storage).DeleteUserDataAsync(_userId);
+
+        Assert.Equal([third], await _context.UserShares.Select(s => s.RecipientId).ToListAsync());
+    }
+
+    [Fact]
     public async Task DeleteUserDataAsync_StorageFailure_IsIgnored()
     {
         _context.Add(new FileMetadata { Id = Guid.NewGuid(), OwnerId = _userId, StorageKey = "k" });
@@ -84,6 +102,7 @@ public class AccountServiceTests
         public DbSet<UploadSession> UploadSessions => Set<UploadSession>();
         public DbSet<UserProfile> UserProfiles => throw new NotSupportedException();
         public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
+        public DbSet<UserShare> UserShares => Set<UserShare>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -44,6 +44,18 @@ public class CleanupServiceTests
     }
 
     [Fact]
+    public async Task RunOnce_AbortFailure_KeepsRowAndStillTerminates()
+    {
+        _context.Sessions.AddRange(Session("bad", TimeSpan.FromHours(30)), Session("ok", TimeSpan.FromHours(30)));
+        await _context.SaveChangesAsync();
+        _multipart.FailKey = "bad";
+
+        await RunAsync();
+
+        Assert.Equal(new[] { "bad" }, _context.Sessions.Select(s => s.StorageKey).ToArray());
+    }
+
+    [Fact]
     public async Task RunOnce_PurgesTrashOlderThan30DaysOfAllUsers_KeepsRecentAndLive()
     {
         _context.Files.AddRange(
@@ -120,6 +132,7 @@ public class CleanupServiceTests
     private sealed class FakeMultipart : IMultipartStorage
     {
         public List<string> Aborted { get; } = new();
+        public string? FailKey { get; set; }
 
         public Task<(string Key, string UploadId)> InitiateAsync(string contentType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UploadPartAsync(string key, string uploadId, int partNumber, Stream content, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -128,6 +141,7 @@ public class CleanupServiceTests
 
         public Task AbortAsync(string key, string uploadId, CancellationToken cancellationToken = default)
         {
+            if (key == FailKey) throw new IOException("boom");
             Aborted.Add(key);
             return Task.CompletedTask;
         }

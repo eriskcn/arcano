@@ -78,6 +78,6 @@ public class PublicController : ApiControllerBase
         }
 
         var (content, contentType, fileName) = result.Value;
-        return File(content, contentType, fileName);
+        return File(content, contentType, fileName, enableRangeProcessing: true);
     }
 }

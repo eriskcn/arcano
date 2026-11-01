@@ -14,6 +14,7 @@ public class UploadServiceTests
     private readonly Guid _ownerId = Guid.NewGuid();
     private readonly TestContext _context = new();
     private readonly FakeMultipart _multipart = new();
+    private readonly FakeStorage _storage = new();
 
     [Theory]
     [InlineData("", "File.ContentTypeRequired")]
@@ -164,8 +165,55 @@ public class UploadServiceTests
         Assert.Null(_context.Files.Single().FolderId);
     }
 
+    [Fact]
+    public async Task CompleteAsync_Retry_ReturnsTheSameFile()
+    {
+        var service = CreateService(_ownerId);
+        var id = (await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null))).Value.Id;
+        await service.UploadPartAsync(id, 1, new MemoryStream(new byte[10]), 10);
+        var first = await service.CompleteAsync(id);
+
+        var retry = await service.CompleteAsync(id);
+        var other = await CreateService(Guid.NewGuid()).CompleteAsync(id);
+
+        Assert.True(retry.IsSuccess);
+        Assert.Equal(first.Value, retry.Value);
+        Assert.Equal("Upload.NotFound", other.Error.Code);
+    }
+
+    [Fact]
+    public async Task AbortAsync_S3Failure_KeepsSessionForCleanupRetry()
+    {
+        var service = CreateService(_ownerId);
+        var id = (await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null))).Value.Id;
+        _multipart.AbortFails = true;
+
+        var result = await service.AbortAsync(id);
+
+        Assert.True(result.IsFailure);
+        Assert.Single(_context.Sessions);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_CancelledAfterS3Complete_DeletesObjectWithoutCancelledToken_AndPropagatesCancellation()
+    {
+        var folder = new Folder { Id = Guid.NewGuid(), Name = "f", OwnerId = _ownerId };
+        _context.Folders.Add(folder);
+        await _context.SaveChangesAsync(CancellationToken.None);
+        var service = CreateService(_ownerId);
+        var id = (await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, folder.Id))).Value.Id;
+        await service.UploadPartAsync(id, 1, new MemoryStream(new byte[10]), 10);
+        using var cts = new CancellationTokenSource();
+        _multipart.OnComplete = cts.Cancel;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CompleteAsync(id, cts.Token));
+
+        Assert.Single(_storage.DeleteTokens);
+        Assert.False(_storage.DeleteTokens[0].CanBeCanceled);
+    }
+
     private UploadService CreateService(Guid userId, Error? quotaError = null, FakeQuota? quota = null) =>
-        new(_context, _multipart, new FakeStorage(), new FakeUser(userId.ToString()), quota ?? new FakeQuota(quotaError));
+        new(_context, _multipart, _storage, new FakeUser(userId.ToString()), quota ?? new FakeQuota(quotaError));
 
     private sealed class FakeUser(string userId) : ICurrentUser
     {
@@ -191,7 +239,13 @@ public class UploadServiceTests
     {
         public Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public List<CancellationToken> DeleteTokens { get; } = new();
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
+        {
+            DeleteTokens.Add(cancellationToken);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeMultipart : IMultipartStorage
@@ -199,6 +253,8 @@ public class UploadServiceTests
         private readonly Dictionary<int, long> _parts = new();
         public bool Completed { get; private set; }
         public bool Aborted { get; private set; }
+        public bool AbortFails { get; set; }
+        public Action? OnComplete { get; set; }
 
         public Task<(string Key, string UploadId)> InitiateAsync(string contentType, CancellationToken cancellationToken = default) =>
             Task.FromResult((Guid.NewGuid().ToString(), "upload-id"));
@@ -215,11 +271,13 @@ public class UploadServiceTests
         public Task CompleteAsync(string key, string uploadId, CancellationToken cancellationToken = default)
         {
             Completed = true;
+            OnComplete?.Invoke();
             return Task.CompletedTask;
         }
 
         public Task AbortAsync(string key, string uploadId, CancellationToken cancellationToken = default)
         {
+            if (AbortFails) throw new IOException("boom");
             Aborted = true;
             return Task.CompletedTask;
         }

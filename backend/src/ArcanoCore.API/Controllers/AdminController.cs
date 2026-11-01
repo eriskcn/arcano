@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -28,6 +30,7 @@ public class AdminController : ApiControllerBase
     private readonly IAccountService _accountService;
     private readonly IInviteKeyService _inviteKeys;
     private readonly ICurrentUser _currentUser;
+    private readonly ILogger<AdminController> _logger;
 
     public AdminController(
         UserManager<IdentityUser<Guid>> userManager,
@@ -35,8 +38,10 @@ public class AdminController : ApiControllerBase
         IStorageQuotaService quotaService,
         IAccountService accountService,
         IInviteKeyService inviteKeys,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        ILogger<AdminController>? logger = null)
     {
+        _logger = logger ?? NullLogger<AdminController>.Instance;
         _userManager = userManager;
         _dbContext = dbContext;
         _quotaService = quotaService;
@@ -44,6 +49,10 @@ public class AdminController : ApiControllerBase
         _inviteKeys = inviteKeys;
         _currentUser = currentUser;
     }
+
+    // Audit trail: structured log lines only (no table); never log key material.
+    private void Audit(string name, object? target, string extra = "") =>
+        _logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId}" + extra, name, _currentUser.UserId, target);
 
     [HttpGet("users")]
     public async Task<IActionResult> Users(CancellationToken cancellationToken)
@@ -75,8 +84,10 @@ public class AdminController : ApiControllerBase
             return NotFound(UserNotFound);
         }
 
+        var oldQuota = profile.QuotaBytes;
         profile.QuotaBytes = request.QuotaBytes;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId} old={Old} new={New}", "QuotaChanged", _currentUser.UserId, id, oldQuota, request.QuotaBytes);
         return NoContent();
     }
 
@@ -97,6 +108,7 @@ public class AdminController : ApiControllerBase
         await _userManager.SetLockoutEnabledAsync(user, true);
         await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
         await _userManager.UpdateSecurityStampAsync(user);
+        Audit("UserDisabled", id);
         return NoContent();
     }
 
@@ -111,6 +123,7 @@ public class AdminController : ApiControllerBase
 
         await _userManager.SetLockoutEndDateAsync(user, null);
         await _userManager.ResetAccessFailedCountAsync(user);
+        Audit("UserEnabled", id);
         return NoContent();
     }
 
@@ -134,6 +147,7 @@ public class AdminController : ApiControllerBase
         {
             return BadRequest(new Error("Admin.DeleteFailed", "Could not delete the user. Please try again."));
         }
+        Audit("UserDeleted", id);
         return NoContent();
     }
 
@@ -168,12 +182,20 @@ public class AdminController : ApiControllerBase
         }
 
         var (key, plain) = await _inviteKeys.CreateAsync(type, request.QuotaBytes, request.UserId, days, adminId, cancellationToken);
+        _logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId} type={KeyType} user={KeyUserId}", "InviteKeyCreated", adminId, key.Id, key.Type, key.TargetUserId);
         return StatusCode(201, new { key.Id, Key = plain, Type = key.Type.ToString(), key.ExpiresAtUtc });
     }
 
     [HttpDelete("keys/{id:guid}")]
-    public async Task<IActionResult> RevokeKey(Guid id, CancellationToken cancellationToken) =>
-        await _inviteKeys.RevokeAsync(id, cancellationToken) ? NoContent() : NotFound(new Error("Admin.KeyNotFound", "Key not found."));
+    public async Task<IActionResult> RevokeKey(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await _inviteKeys.RevokeAsync(id, cancellationToken))
+        {
+            return NotFound(new Error("Admin.KeyNotFound", "Key not found."));
+        }
+        Audit("InviteKeyRevoked", id);
+        return NoContent();
+    }
 
     private static readonly Error UserNotFound = new("Admin.UserNotFound", "User not found.");
     // shortcut: check-then-write is not atomic, two concurrent requests could both pass; upgrade with a Serializable transaction if admins ever act concurrently.

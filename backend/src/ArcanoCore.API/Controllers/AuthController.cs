@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -33,13 +35,16 @@ public class AuthController : ApiControllerBase
     private readonly IConfiguration _configuration;
     private readonly IApplicationDbContext _dbContext;
     private readonly IInviteKeyService _inviteKeys;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UserManager<IdentityUser<Guid>> userManager,
         IConfiguration configuration,
         IApplicationDbContext dbContext,
-        IInviteKeyService inviteKeys)
+        IInviteKeyService inviteKeys,
+        ILogger<AuthController>? logger = null)
     {
+        _logger = logger ?? NullLogger<AuthController>.Instance;
         _userManager = userManager;
         _configuration = configuration;
         _dbContext = dbContext;
@@ -124,6 +129,10 @@ public class AuthController : ApiControllerBase
                 throw;
             }
 
+            if (invite != null)
+            {
+                _logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId} type={KeyType} admin={KeyCreatorId}", "InviteKeyRedeemed", user.Id, invite.Id, invite.Type, invite.CreatedById);
+            }
             var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), isFirst);
             return Ok(new { Message = "User registered successfully.", Token = token });
         }
@@ -164,6 +173,7 @@ public class AuthController : ApiControllerBase
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
+        _logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId} key={KeyId}", "ResetKeyUsed", user.Id, user.Id, consumed.Value.Id);
         return NoContent();
     }
 

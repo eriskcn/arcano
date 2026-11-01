@@ -57,5 +57,6 @@ public static class AdminBootstrap
         profile.IsAdmin = true;
         await db.SaveChangesAsync(cancellationToken);
         logger.LogInformation("Promoted {Email} to admin.", user.Email);
+        logger.LogInformation("Audit {Event} actor={ActorId} target={TargetId}", "AdminPromotedByBootstrap", "system", user.Id);
     }
 }

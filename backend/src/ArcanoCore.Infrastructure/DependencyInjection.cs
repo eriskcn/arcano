@@ -41,6 +41,7 @@ public static class DependencyInjection
         };
 
         services.AddSingleton<IAmazonS3>(new AmazonS3Client(accessKey, secretKey, s3Config));
+        services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<IStorageService, SeaweedStorageService>();
         services.AddScoped<IMultipartStorage, SeaweedStorageService>();
 

@@ -27,7 +27,9 @@ Sign-in and registration use the backend `/Auth/login` and `/Auth/register` endp
 - Sign-up asks for an invite key (hidden on a fresh server, where the first account becomes the admin); `/reset` takes a reset key and a new password.
 - The first account on a fresh server is the admin.
 - Admin dialog (admins only, from the sidebar): members with usage, quota edit, disable/enable, delete; generate join keys and member reset keys (shown once, with copy) and revoke open keys.
-- The "Shared" view was removed; share links are created per file from the Share dialog.
+- The old "Shared" filter for public links stays removed; share links are created per file from the Share dialog.
+- Share dialog People section: share a file or folder read-only with a registered user by email.
+- "Shared with me" (sidebar and drawer, not the mobile bottom bar): browse, preview, download and zip what others shared; remove a share with a confirmation.
 
 ## Code scaffolding
 
