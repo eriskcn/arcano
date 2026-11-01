@@ -159,7 +159,7 @@
           </div>
         </div>
 
-        <div *ngIf="requiresKey(); else firstAccount">
+        <div *ngIf="requiresKey() === true; else firstAccount">
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Invite key</label>
           <input
             type="text"
@@ -173,7 +173,7 @@
           />
         </div>
         <ng-template #firstAccount>
-          <p class="text-xs text-gray-500">This server has no accounts yet. The first account becomes the admin.</p>
+          <p *ngIf="requiresKey() === false" class="text-xs text-gray-500">This server has no accounts yet. The first account becomes the admin.</p>
         </ng-template>
 
         <div *ngIf="signUpError()" role="alert" class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100">

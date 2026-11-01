@@ -767,6 +767,11 @@ describe('App', () => {
     fixture.detectChanges();
     app.page.set('signup');
     fixture.detectChanges();
+    expect(el.querySelector('input[name="inviteKey"]')).toBeNull(); // setup not resolved yet
+    expect(el.textContent).not.toContain('first account becomes the admin');
+
+    app.requiresKey.set(true);
+    fixture.detectChanges();
     expect(el.querySelector('input[name="inviteKey"]')).not.toBeNull();
 
     app.requiresKey.set(false);

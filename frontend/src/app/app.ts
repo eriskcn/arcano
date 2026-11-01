@@ -164,7 +164,7 @@ export class App implements OnInit {
   readonly signUpPassword = signal<string>('');
   readonly showSignUpPassword = signal<boolean>(false);
   // Shown until the server says this is a fresh install (or the check fails: the server decides anyway).
-  readonly requiresKey = signal<boolean>(true);
+  readonly requiresKey = signal<boolean | null>(null); // null until GET Auth/setup resolves
   readonly signUpKey = signal<string>('');
 
   readonly resetKey = signal<string>('');
@@ -496,7 +496,7 @@ export class App implements OnInit {
     this.signUpError.set('');
     this.signUpSuccess.set('');
 
-    this.auth.register(this.signUpEmail().trim(), this.signUpPassword(), this.requiresKey() ? this.signUpKey().trim() : undefined).subscribe({
+    this.auth.register(this.signUpEmail().trim(), this.signUpPassword(), this.requiresKey() !== false ? this.signUpKey().trim() : undefined).subscribe({
       next: () => {
         this.authBusy.set(false);
         this.signUpPassword.set('');

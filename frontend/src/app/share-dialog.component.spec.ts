@@ -90,6 +90,19 @@ describe('ShareDialogComponent', () => {
     expect(dialog.people()).toEqual([]);
   });
 
+  it('submits the person form (what Enter does) only when the Share button is enabled', () => {
+    const { fixture, dialog, http } = setup();
+    const el = fixture.nativeElement as HTMLElement;
+    const button = el.querySelector('form button[type="submit"]') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+
+    dialog.personEmail.set('bob@example.com');
+    fixture.detectChanges();
+    expect(button.disabled).toBe(false);
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    http.expectOne(`${api}/UserShares`).flush({ id: 's1', recipientEmail: 'bob@example.com' });
+  });
+
   it('shows the backend message for a self-share and a fallback for an unknown email', () => {
     const { dialog, http } = setup();
 
