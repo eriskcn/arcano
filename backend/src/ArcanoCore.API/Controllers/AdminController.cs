@@ -89,7 +89,7 @@ public class AdminController : ApiControllerBase
         {
             return NotFound(UserNotFound);
         }
-        if (await IsLastActiveAdminAsync(user))
+        if (await _dbContext.IsLastActiveAdminAsync(_userManager, user))
         {
             return Conflict(LastAdmin);
         }
@@ -122,7 +122,7 @@ public class AdminController : ApiControllerBase
         {
             return NotFound(UserNotFound);
         }
-        if (await IsLastActiveAdminAsync(user))
+        if (await _dbContext.IsLastActiveAdminAsync(_userManager, user))
         {
             return Conflict(LastAdmin);
         }
@@ -176,26 +176,8 @@ public class AdminController : ApiControllerBase
         await _inviteKeys.RevokeAsync(id, cancellationToken) ? NoContent() : NotFound(new Error("Admin.KeyNotFound", "Key not found."));
 
     private static readonly Error UserNotFound = new("Admin.UserNotFound", "User not found.");
+    // shortcut: check-then-write is not atomic, two concurrent requests could both pass; upgrade with a Serializable transaction if admins ever act concurrently.
     private static readonly Error LastAdmin = new("Admin.LastAdmin", "The last active admin cannot be deleted or disabled.");
-
-    // True when the user is an active admin and no other active admin exists.
-    private async Task<bool> IsLastActiveAdminAsync(IdentityUser<Guid> user)
-    {
-        var adminIds = await _dbContext.UserProfiles.Where(p => p.IsAdmin).Select(p => p.UserId).ToListAsync();
-        if (!adminIds.Contains(user.Id) || user.IsDisabled())
-        {
-            return false;
-        }
-        foreach (var other in adminIds.Where(i => i != user.Id))
-        {
-            var u = await _userManager.FindByIdAsync(other.ToString());
-            if (u != null && !u.IsDisabled())
-            {
-                return false;
-            }
-        }
-        return true;
-    }
 }
 
 public record AdminUserDto(Guid Id, string? Email, bool IsAdmin, bool IsDisabled, long UsedBytes, long? QuotaBytes, long EffectiveQuotaBytes, DateTime CreatedAtUtc);

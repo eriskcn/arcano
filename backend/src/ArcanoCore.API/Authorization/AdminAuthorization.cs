@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Interfaces;
@@ -45,4 +46,23 @@ public static class AdminExtensions
 
     // A disabled user is locked out until the far future; a brute-force lockout lasts minutes.
     public static bool IsDisabled(this IdentityUser<Guid> user) => user.LockoutEnd > DateTimeOffset.UtcNow.AddYears(50);
+
+    // True when the user is an active admin and no other active admin exists.
+    public static async Task<bool> IsLastActiveAdminAsync(this IApplicationDbContext db, UserManager<IdentityUser<Guid>> userManager, IdentityUser<Guid> user)
+    {
+        var adminIds = await db.UserProfiles.Where(p => p.IsAdmin).Select(p => p.UserId).ToListAsync();
+        if (!adminIds.Contains(user.Id) || user.IsDisabled())
+        {
+            return false;
+        }
+        foreach (var other in adminIds.Where(i => i != user.Id))
+        {
+            var u = await userManager.FindByIdAsync(other.ToString());
+            if (u != null && !u.IsDisabled())
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 }

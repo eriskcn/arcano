@@ -184,9 +184,12 @@ public class AuthControllerTests
         IUserPasswordStore<IdentityUser<Guid>>,
         IUserEmailStore<IdentityUser<Guid>>,
         IUserLockoutStore<IdentityUser<Guid>>,
-        IUserSecurityStampStore<IdentityUser<Guid>>
+        IUserSecurityStampStore<IdentityUser<Guid>>,
+        IQueryableUserStore<IdentityUser<Guid>>
     {
         private readonly List<IdentityUser<Guid>> _users = new();
+
+        public IQueryable<IdentityUser<Guid>> Users => _users.AsQueryable();
 
         public Task<IdentityResult> CreateAsync(IdentityUser<Guid> user, CancellationToken cancellationToken)
         {

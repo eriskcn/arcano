@@ -256,13 +256,83 @@ public class GroupModeTests
         await env.Db.SaveChangesAsync();
 
         await AdminBootstrap.RunAsync(env.Db, env.UserManager, null, NullLogger.Instance);
-        Assert.False(await env.Db.UserProfiles.AnyAsync(p => p.IsAdmin)); // never auto-promotes
+        Assert.False(await env.Db.UserProfiles.AnyAsync(p => p.IsAdmin)); // several users and no email: never guesses
 
         await AdminBootstrap.RunAsync(env.Db, env.UserManager, "B@Example.com", NullLogger.Instance);
         Assert.Equal([b.Id], await env.Db.UserProfiles.Where(p => p.IsAdmin).Select(p => p.UserId).ToListAsync());
 
         await AdminBootstrap.RunAsync(env.Db, env.UserManager, "a@example.com", NullLogger.Instance);
         Assert.Equal([b.Id], await env.Db.UserProfiles.Where(p => p.IsAdmin).Select(p => p.UserId).ToListAsync());
+    }
+
+    private static async Task<(AuthControllerTests.Env Env, IdentityUser<Guid> A, IdentityUser<Guid> B)> TwoUsersNoAdmin()
+    {
+        var env = AuthControllerTests.CreateEnv();
+        await Register(env.Controller, "a@example.com");
+        await env.Controller.Register(new RegisterRequest("b@example.com", Password, await NewKey(env)));
+        env.Db.UserProfiles.ToList().ForEach(p => p.IsAdmin = false);
+        await env.Db.SaveChangesAsync();
+        return (env, await User(env, "a@example.com"), await User(env, "b@example.com"));
+    }
+
+    private static Task<bool> AnyAdmin(AuthControllerTests.Env env) => env.Db.UserProfiles.AnyAsync(p => p.IsAdmin);
+
+    [Fact]
+    public async Task Bootstrap_SoleUser_IsPromoted()
+    {
+        var env = AuthControllerTests.CreateEnv();
+        await Register(env.Controller, "a@example.com");
+        (await env.Db.UserProfiles.SingleAsync()).IsAdmin = false;
+        await env.Db.SaveChangesAsync();
+
+        await AdminBootstrap.RunAsync(env.Db, env.UserManager, null, NullLogger.Instance);
+
+        Assert.True(await AnyAdmin(env));
+    }
+
+    [Fact]
+    public async Task Bootstrap_SeveralUsersNoEmail_LogsErrorAndPromotesNobody()
+    {
+        var (env, _, _) = await TwoUsersNoAdmin();
+        var logger = new CapturingLogger();
+
+        await AdminBootstrap.RunAsync(env.Db, env.UserManager, null, logger);
+
+        Assert.False(await AnyAdmin(env));
+        Assert.Contains(Microsoft.Extensions.Logging.LogLevel.Error, logger.Levels);
+    }
+
+    [Fact]
+    public async Task Bootstrap_DisabledTarget_IsNotPromoted()
+    {
+        var (env, _, b) = await TwoUsersNoAdmin();
+        await env.UserManager.SetLockoutEnabledAsync(b, true);
+        await env.UserManager.SetLockoutEndDateAsync(b, DateTimeOffset.MaxValue);
+
+        await AdminBootstrap.RunAsync(env.Db, env.UserManager, "b@example.com", NullLogger.Instance);
+
+        Assert.False(await AnyAdmin(env));
+    }
+
+    [Fact]
+    public async Task Bootstrap_ExistingAdmin_IsNeverChanged()
+    {
+        var env = AuthControllerTests.CreateEnv();
+        await Register(env.Controller, "a@example.com"); // first user is admin
+        await env.Controller.Register(new RegisterRequest("b@example.com", Password, await NewKey(env)));
+        var b = await User(env, "b@example.com");
+
+        await AdminBootstrap.RunAsync(env.Db, env.UserManager, "b@example.com", NullLogger.Instance);
+
+        Assert.False(await env.Db.IsAdminAsync(b.Id));
+    }
+
+    private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public System.Collections.Generic.List<Microsoft.Extensions.Logging.LogLevel> Levels { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 
     private sealed class FakeAccounts : IAccountService

@@ -814,6 +814,22 @@ describe('App', () => {
     expect(app.resetError()).toContain('invalid');
   });
 
+  it('should explain HTTP 429 on sign-up, reset and sign-in', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const msg = 'Too many attempts. Wait a minute and try again.';
+    app.onSignUpSubmit(new Event('submit'));
+    http.expectOne(`${environment.apiBaseUrl}/Auth/register`).flush({}, { status: 429, statusText: 'x' });
+    expect(app.signUpError()).toBe(msg);
+
+    app.resetKey.set('rk');
+    app.resetPassword.set('long-enough');
+    app.resetConfirm.set('long-enough');
+    app.onResetSubmit(new Event('submit'));
+    http.expectOne(`${environment.apiBaseUrl}/Auth/reset`).flush({}, { status: 429, statusText: 'x' });
+    expect(app.resetError()).toBe(msg);
+  });
+
   it('should show the backend message for a rejected sign-up and the generic text otherwise', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);

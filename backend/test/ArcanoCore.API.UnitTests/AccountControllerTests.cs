@@ -11,6 +11,8 @@ using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ArcanoCore.Domain.Entities;
 using Xunit;
 
 namespace ArcanoCore.API.UnitTests;
@@ -108,7 +110,47 @@ public class AccountControllerTests
         Assert.Equal(0, await userManager.GetAccessFailedCountAsync(user));
     }
 
+    [Fact]
+    public async Task Delete_LastAdminWithOtherUsers_IsRefused()
+    {
+        var (controller, userManager, accounts, env) = await SetupWithEnv();
+        await env.Controller.Register(new RegisterRequest("b@example.com", Password, (await env.Keys.CreateAsync(InviteKeyType.Join, null, null, 7, Guid.NewGuid())).Plain));
+
+        var conflict = Assert.IsType<ConflictObjectResult>(await controller.Delete(new DeleteAccountRequest(Password), default));
+
+        Assert.Equal("Admin.LastAdmin", Assert.IsType<Error>(conflict.Value).Code);
+        Assert.False(accounts.Deleted);
+        Assert.NotNull(await userManager.FindByEmailAsync(Email));
+    }
+
+    [Fact]
+    public async Task Delete_LastAdminAsSoleUser_IsAllowed()
+    {
+        var (controller, userManager, _) = await Setup(); // first user is admin and alone
+
+        Assert.IsType<NoContentResult>(await controller.Delete(new DeleteAccountRequest(Password), default));
+
+        Assert.Null(await userManager.FindByEmailAsync(Email));
+    }
+
+    [Fact]
+    public async Task Delete_NonLastAdmin_IsAllowed()
+    {
+        var (controller, userManager, _, env) = await SetupWithEnv();
+        await env.Controller.Register(new RegisterRequest("b@example.com", Password, (await env.Keys.CreateAsync(InviteKeyType.Join, null, null, 7, Guid.NewGuid())).Plain));
+        (await env.Db.UserProfiles.SingleAsync(p => p.UserId == userManager.FindByEmailAsync("b@example.com").Result!.Id)).IsAdmin = true;
+        await env.Db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(await controller.Delete(new DeleteAccountRequest(Password), default));
+    }
+
     private static async Task<(AccountController Controller, UserManager<IdentityUser<Guid>> UserManager, FakeAccountService Accounts)> Setup()
+    {
+        var (c, u, a, _) = await SetupWithEnv();
+        return (c, u, a);
+    }
+
+    private static async Task<(AccountController Controller, UserManager<IdentityUser<Guid>> UserManager, FakeAccountService Accounts, AuthControllerTests.Env Env)> SetupWithEnv()
     {
         var env = AuthControllerTests.CreateEnv();
         var (userManager, configuration, auth) = (env.UserManager, env.Configuration, env.Controller);
@@ -120,7 +162,7 @@ public class AccountControllerTests
             // No session_start claim: ChangePassword falls back to "now".
             ControllerContext = new ControllerContext { HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext() }
         };
-        return (controller, userManager, accounts);
+        return (controller, userManager, accounts, env);
     }
 
     private sealed class FakeAccountService : IAccountService
