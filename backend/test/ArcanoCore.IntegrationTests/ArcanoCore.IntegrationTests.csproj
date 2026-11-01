@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\ArcanoCore.API\ArcanoCore.API.csproj" />
     <ProjectReference Include="..\..\src\ArcanoCore.Application\ArcanoCore.Application.csproj" />
     <ProjectReference Include="..\..\src\ArcanoCore.Domain\ArcanoCore.Domain.csproj" />
     <ProjectReference Include="..\..\src\ArcanoCore.Infrastructure\ArcanoCore.Infrastructure.csproj" />

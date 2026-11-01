@@ -21,7 +21,9 @@ docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml u
 Run these from the repo root. `gen-s3-config.sh` writes `backend/seaweedfs/s3.prod.json` (mode 600, gitignored). If you change `S3_*` later, re-run it and `up -d` again. `backend/seaweedfs/security.toml` is not needed in production.
 
 ## 4. First account
-Sign-up is disabled by default. Create the first account: set `ALLOW_REGISTRATION=true` in `.env.production`, run the `up -d` command again, register in the browser, then set it back to `false` and run `up -d` again.
+Open the site and sign up. On an empty install the first account needs no key and becomes the admin. Do this right after the first start, before anyone else can reach the site.
+
+After that, sign-up needs a single-use invite key. As admin, open the admin page, create a Join key (optionally with a storage quota for the new member), and send it to them; it is shown once and expires after 7 days by default. A member who forgot their password gets a Reset key the same way. Admins can also set quotas, disable or delete users there. Admins cannot read other users' files, and the last admin cannot be deleted or disabled.
 
 ## 5. TLS in front
 `web` speaks plain HTTP; the proxy must forward `X-Forwarded-For` and `X-Forwarded-Proto` to `WEB_BIND:WEB_PORT`. Never expose `WEB_BIND` publicly (e.g. `0.0.0.0` without a firewall): the nginx in `web` trusts `X-Forwarded-Proto`, so direct clients could spoof it. `PUBLIC_ORIGIN` must equal the public https URL.
@@ -75,6 +77,8 @@ git pull
 docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 Database migrations run when the API starts.
+
+Upgrading an install that already has accounts (from before invite keys): the migration gives every existing account a profile but makes nobody admin. Set `BOOTSTRAP_ADMIN_EMAIL=you@example.com` in `.env.production` (it becomes `Auth:BootstrapAdminEmail`) and run `up -d` again. It only promotes when no admin exists yet; remove it afterwards. Without it the API logs a warning at startup and sign-up stays closed.
 
 ## Not covered
 - No high availability; run a single API instance only.

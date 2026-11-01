@@ -30,7 +30,8 @@ public class StorageQuotaService : IStorageQuotaService
             .IgnoreQueryFilters()
             .Where(f => f.OwnerId == ownerId)
             .SumAsync(f => f.FileSize, cancellationToken);
-        return new StorageUsageDto(used, _limitBytes);
+        var own = await _dbContext.UserProfiles.Where(p => p.UserId == ownerId).Select(p => p.QuotaBytes).FirstOrDefaultAsync(cancellationToken);
+        return new StorageUsageDto(used, own ?? _limitBytes);
     }
 
     public async Task<Result> EnsureWithinQuotaAsync(Guid ownerId, long additionalBytes, CancellationToken cancellationToken = default)

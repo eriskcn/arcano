@@ -36,6 +36,20 @@ public class StorageQuotaServiceTests
         Assert.Equal("Storage.QuotaExceeded", result.Error.Code);
     }
 
+    [Fact]
+    public async Task GetUsageAsync_UsesOwnQuotaWhenSet_ElseGlobalLimit()
+    {
+        var withQuota = Guid.NewGuid();
+        var withoutQuota = Guid.NewGuid();
+        var service = CreateService(100, new[] { new UserProfile { UserId = withQuota, QuotaBytes = 7 }, new UserProfile { UserId = withoutQuota } });
+
+        Assert.Equal(7, (await service.GetUsageAsync(withQuota)).LimitBytes);
+        Assert.Equal(100, (await service.GetUsageAsync(withoutQuota)).LimitBytes);
+        Assert.Equal(100, (await service.GetUsageAsync(Guid.NewGuid())).LimitBytes);
+        Assert.True((await service.EnsureWithinQuotaAsync(withQuota, 7)).IsSuccess);
+        Assert.Equal("Storage.QuotaExceeded", (await service.EnsureWithinQuotaAsync(withQuota, 8)).Error.Code);
+    }
+
     private static FileMetadata NewFile(Guid ownerId, long size, bool trashed = false) => new()
     {
         Id = Guid.NewGuid(),
@@ -47,19 +61,26 @@ public class StorageQuotaServiceTests
     };
 
     private static StorageQuotaService CreateService(long limit, params FileMetadata[] files) =>
-        new(new TestDbContext(files), limit);
+        new(new TestDbContext(files, []), limit);
+
+    private static StorageQuotaService CreateService(long limit, UserProfile[] profiles) =>
+        new(new TestDbContext([], profiles), limit);
 
     private sealed class TestDbContext : IApplicationDbContext
     {
-        public TestDbContext(FileMetadata[] files)
+        public TestDbContext(FileMetadata[] files, UserProfile[] profiles)
         {
             var context = new TestContext();
             context.Files.AddRange(files);
+            context.Profiles.AddRange(profiles);
             context.SaveChanges();
             FileMetadatas = context.Files;
+            UserProfiles = context.Profiles;
         }
 
         public DbSet<FileMetadata> FileMetadatas { get; }
+        public DbSet<UserProfile> UserProfiles { get; }
+        public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
         public DbSet<Folder> Folders => throw new NotSupportedException();
         public DbSet<SharedLink> SharedLinks => throw new NotSupportedException();
         public DbSet<UploadSession> UploadSessions => throw new NotSupportedException();
@@ -69,6 +90,7 @@ public class StorageQuotaServiceTests
     private sealed class TestContext : DbContext
     {
         public DbSet<FileMetadata> Files => Set<FileMetadata>();
+        public DbSet<UserProfile> Profiles => Set<UserProfile>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

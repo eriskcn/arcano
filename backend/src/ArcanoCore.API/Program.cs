@@ -1,4 +1,8 @@
+using ArcanoCore.API.Authorization;
 using ArcanoCore.API.Middleware;
+using ArcanoCore.Application.Common.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using ArcanoCore.Application;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Infrastructure;
@@ -85,6 +89,9 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = maxUploadBytes);
 builder.Services.AddApplication(builder.Configuration.GetValue<long?>("Storage:QuotaBytes") ?? StorageQuotaService.DefaultLimitBytes);
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AdminPolicy.Name, policy => policy.RequireAuthenticatedUser().AddRequirements(new AdminRequirement()));
+builder.Services.AddScoped<IAuthorizationHandler, AdminHandler>();
 
 // Persist DataProtection keys in containers (volume mounted at /app/keys); outside containers use the framework default.
 var keysPath = builder.Configuration["DataProtection:KeysPath"]
@@ -116,6 +123,15 @@ if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))
             Thread.Sleep(TimeSpan.FromSeconds(2));
         }
     }
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    await AdminBootstrap.RunAsync(
+        scope.ServiceProvider.GetRequiredService<IApplicationDbContext>(),
+        scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser<Guid>>>(),
+        builder.Configuration["Auth:BootstrapAdminEmail"],
+        app.Logger);
 }
 
 // Configure the HTTP request pipeline.

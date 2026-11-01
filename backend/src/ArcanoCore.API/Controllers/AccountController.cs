@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using ArcanoCore.API.Authorization;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
@@ -22,19 +23,22 @@ public class AccountController : ApiControllerBase
     private readonly ICurrentUser _currentUser;
     private readonly UserManager<IdentityUser<Guid>> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly IApplicationDbContext _dbContext;
 
     public AccountController(
         IStorageQuotaService quotaService,
         IAccountService accountService,
         ICurrentUser currentUser,
         UserManager<IdentityUser<Guid>> userManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IApplicationDbContext dbContext)
     {
         _quotaService = quotaService;
         _accountService = accountService;
         _currentUser = currentUser;
         _userManager = userManager;
         _configuration = configuration;
+        _dbContext = dbContext;
     }
 
     // Counts failures toward lockout like sign-in; a locked account gets the plain wrong-password response so lockout is not revealed.
@@ -96,7 +100,7 @@ public class AccountController : ApiControllerBase
         var sessionStart = long.TryParse(User.FindFirstValue(JwtTokens.SessionStartClaim), out var parsed)
             ? parsed
             : DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        return Ok(new { Token = JwtTokens.Create(_configuration, user, sessionStart) });
+        return Ok(new { Token = JwtTokens.Create(_configuration, user, sessionStart, await _dbContext.IsAdminAsync(user.Id)) });
     }
 
     [EnableRateLimiting("auth")]

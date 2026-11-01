@@ -64,7 +64,7 @@ services:
       Storage__BucketName: arcanocore-bucket
       Storage__QuotaBytes: ${STORAGE_QUOTA_BYTES:-5368709120}
       Storage__MaxUploadBytes: ${MAX_UPLOAD_BYTES:-104857600}
-      Auth__AllowRegistration: ${ALLOW_REGISTRATION:-false}
+      Auth__BootstrapAdminEmail: ${BOOTSTRAP_ADMIN_EMAIL:-}
       Database__MigrateOnStartup: "true"
       Cors__AllowedOrigins__0: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN, e.g. https://drive.example.com}
       # Trust X-Forwarded-For only from the web container (fixed IP below) so rate limits see real client IPs.

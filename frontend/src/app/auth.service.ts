@@ -1,6 +1,6 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
+import { computed, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
 import { Observable, catchError, finalize, map, of, share, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -24,6 +24,23 @@ export class AuthService {
   private refreshing$: Observable<void> | null = null;
   readonly token = signal<string | null>(this.readStoredToken());
   readonly email = signal<string | null>(null);
+  // Only decides whether to show the Admin entry; the server enforces access.
+  readonly isAdmin = computed(() => {
+    const claims = this.claims(this.token() ?? '');
+    const role = claims?.['role'] ?? claims?.['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+    return Array.isArray(role) ? role.includes('Admin') : role === 'Admin';
+  });
+
+  // false only on a fresh server with no users: the first account needs no invite key.
+  setup(): Observable<{ requiresKey: boolean }> {
+    return this.http.get<{ requiresKey: boolean }>(`${environment.apiBaseUrl}/Auth/setup`);
+  }
+
+  reset(key: string, newPassword: string): Observable<void> {
+    return this.http
+      .post<void>(`${environment.apiBaseUrl}/Auth/reset`, { key, newPassword })
+      .pipe(map(() => undefined));
+  }
 
   login(email: string, password: string): Observable<void> {
     return this.http
@@ -68,9 +85,9 @@ export class AuthService {
     return expiry !== null && expiry > Date.now() && expiry - Date.now() < REFRESH_WINDOW_MS;
   }
 
-  register(email: string, password: string): Observable<void> {
+  register(email: string, password: string, inviteKey?: string): Observable<void> {
     return this.http
-      .post<unknown>(`${environment.apiBaseUrl}/Auth/register`, { email, password })
+      .post<unknown>(`${environment.apiBaseUrl}/Auth/register`, inviteKey ? { email, password, inviteKey } : { email, password })
       .pipe(map(() => undefined));
   }
 
@@ -214,6 +231,11 @@ export class AuthService {
 
   // Decodes the JWT payload and returns `exp` in milliseconds, or null if unreadable.
   private expiryMs(token: string): number | null {
+    const exp = this.claims(token)?.['exp'];
+    return typeof exp === 'number' ? exp * 1000 : null;
+  }
+
+  private claims(token: string): Record<string, unknown> | null {
     const payload = token.split('.')[1];
     if (!payload) {
       return null;
@@ -223,10 +245,7 @@ export class AuthService {
       const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
       const bytes = Uint8Array.from(decoded, character => character.charCodeAt(0));
       const claims: unknown = JSON.parse(new TextDecoder().decode(bytes));
-      if (typeof claims !== 'object' || claims === null || !('exp' in claims) || typeof claims.exp !== 'number') {
-        return null;
-      }
-      return claims.exp * 1000;
+      return typeof claims === 'object' && claims !== null ? (claims as Record<string, unknown>) : null;
     } catch {
       return null;
     }

@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<IShareService, ShareService>();
         services.AddScoped<IUploadService, UploadService>();
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IInviteKeyService, InviteKeyService>();
         services.AddScoped<IStorageQuotaService>(sp => new StorageQuotaService(sp.GetRequiredService<IApplicationDbContext>(), storageQuotaBytes));
         return services;
     }
