@@ -30,6 +30,9 @@ public class AccountService : IAccountService
         var folders = await _dbContext.Folders.IgnoreQueryFilters().Where(f => f.OwnerId == ownerId).ToListAsync(cancellationToken);
         var sessions = await _dbContext.UploadSessions.Where(s => s.OwnerId == ownerId).ToListAsync(cancellationToken);
 
+        var userShares = await _dbContext.UserShares.Where(s => s.OwnerId == ownerId || s.RecipientId == ownerId).ToListAsync(cancellationToken);
+
+        _dbContext.UserShares.RemoveRange(userShares);
         _dbContext.SharedLinks.RemoveRange(links);
         _dbContext.FileMetadatas.RemoveRange(files);
         _dbContext.Folders.RemoveRange(folders);

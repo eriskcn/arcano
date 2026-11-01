@@ -185,7 +185,14 @@ public class UploadService : IUploadService
         var session = await FindOwnedSessionAsync(id, cancellationToken);
         if (session == null)
         {
-            return Fail<FileResponseDto>("Upload.NotFound", "Upload not found.");
+            // Retry after a successful complete: the file was saved with the session id as its id.
+            var ownerId = CurrentOwnerId;
+            var done = ownerId == Guid.Empty
+                ? null
+                : await _dbContext.FileMetadatas.FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId, cancellationToken);
+            return done == null
+                ? Fail<FileResponseDto>("Upload.NotFound", "Upload not found.")
+                : Result<FileResponseDto>.Success(new FileResponseDto(done.Id, done.FileName, done.ContentType, done.FileSize));
         }
 
         // Same per-user lock as single-request uploads, so the quota check and the save cannot interleave.
@@ -217,7 +224,7 @@ public class UploadService : IUploadService
                         : null;
                 var file = new FileMetadata
                 {
-                    Id = Guid.NewGuid(),
+                    Id = session.Id, // lets a retried complete find the file
                     FileName = session.FileName,
                     ContentType = session.ContentType,
                     FileSize = session.FileSize,
@@ -234,7 +241,8 @@ public class UploadService : IUploadService
             {
                 try
                 {
-                    await _storageService.DeleteAsync(session.StorageKey, cancellationToken);
+                    // None: this must run even when the request was cancelled, or the object is orphaned.
+                    await _storageService.DeleteAsync(session.StorageKey, CancellationToken.None);
                 }
                 catch (Exception)
                 {
@@ -243,7 +251,7 @@ public class UploadService : IUploadService
                 throw;
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Fail<FileResponseDto>("File.UploadFailed", "Upload failed. Please try again.");
         }
@@ -265,9 +273,10 @@ public class UploadService : IUploadService
         {
             await _multipart.AbortAsync(session.StorageKey, session.StorageUploadId, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The session row is removed either way; a leftover multipart upload is the shortcut noted above.
+            // Keep the row so cleanup retries the abort; removing it would orphan the multipart upload.
+            return Result.Failure(new Error("File.UploadFailed", "Upload failed. Please try again."));
         }
 
         _dbContext.UploadSessions.Remove(session);
@@ -281,21 +290,23 @@ public class UploadService : IUploadService
         var stale = await _dbContext.UploadSessions
             .Where(s => s.OwnerId == ownerId && s.CreatedAtUtc < cutoff)
             .ToListAsync(cancellationToken);
+        var removed = 0;
         foreach (var session in stale)
         {
             try
             {
                 await _multipart.AbortAsync(session.StorageKey, session.StorageUploadId, cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Best effort: the row is removed either way.
+                continue; // keep the row; the cleanup job retries the abort
             }
 
             _dbContext.UploadSessions.Remove(session);
+            removed++;
         }
 
-        if (stale.Count > 0)
+        if (removed > 0)
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }

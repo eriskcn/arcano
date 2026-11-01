@@ -69,8 +69,8 @@ public class SeaweedStorageService : IStorageService, IMultipartStorage
 
     public async Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default)
     {
-        var response = await _s3Client.GetObjectAsync(_bucketName, key, cancellationToken);
-        return response.ResponseStream;
+        var meta = await _s3Client.GetObjectMetadataAsync(_bucketName, key, cancellationToken);
+        return new RangedS3Stream(_s3Client, _bucketName, key, meta.ContentLength);
     }
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
@@ -150,11 +150,78 @@ public class SeaweedStorageService : IStorageService, IMultipartStorage
 
     public async Task AbortAsync(string key, string uploadId, CancellationToken cancellationToken = default)
     {
-        await _s3Client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+        try
         {
-            BucketName = _bucketName,
-            Key = key,
-            UploadId = uploadId
-        }, cancellationToken);
+            await _s3Client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
+            {
+                BucketName = _bucketName,
+                Key = key,
+                UploadId = uploadId
+            }, cancellationToken);
+        }
+        catch (AmazonS3Exception ex) when (ex.ErrorCode == "NoSuchUpload")
+        {
+            // Already gone, which is the goal.
+        }
     }
+}
+
+// Seekable read-only view of an object, so ASP.NET range processing works: each Seek restarts a ranged GET at the new position.
+internal sealed class RangedS3Stream(IAmazonS3 s3, string bucket, string key, long length) : Stream
+{
+    private long _position;
+    private Stream? _current;
+
+    public override bool CanRead => true;
+    public override bool CanSeek => true;
+    public override bool CanWrite => false;
+    public override long Length => length;
+    public override long Position { get => _position; set => Seek(value, SeekOrigin.Begin); }
+
+    public override long Seek(long offset, SeekOrigin origin)
+    {
+        var target = origin switch { SeekOrigin.Begin => offset, SeekOrigin.Current => _position + offset, _ => length + offset };
+        if (target < 0) throw new IOException("Seek before the start of the stream.");
+        if (target != _position)
+        {
+            _current?.Dispose();
+            _current = null;
+            _position = target;
+        }
+        return _position;
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (_position >= length || buffer.Length == 0) return 0;
+        if (_current == null)
+        {
+            var response = await s3.GetObjectAsync(new GetObjectRequest
+            {
+                BucketName = bucket,
+                Key = key,
+                ByteRange = new ByteRange(_position, length - 1)
+            }, cancellationToken);
+            _current = response.ResponseStream;
+        }
+        var read = await _current.ReadAsync(buffer, cancellationToken);
+        _position += read;
+        return read;
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+    public override int Read(byte[] buffer, int offset, int count) =>
+        ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _current?.Dispose();
+        base.Dispose(disposing);
+    }
+
+    public override void Flush() { }
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

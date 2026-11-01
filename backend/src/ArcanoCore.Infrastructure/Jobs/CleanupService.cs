@@ -1,3 +1,4 @@
+using System.Linq;
 using ArcanoCore.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -81,10 +82,12 @@ public class CleanupService : BackgroundService
         var sessionCutoff = now - SessionLifetime;
         var trashCutoff = now - TrashRetention;
 
+        // Sessions whose abort failed stay in the table and are retried on every pass (shortcut: no attempt cap, so a permanently failing abort is retried hourly and logged; add a counter column if that gets noisy).
+        var failed = new List<Guid>();
         while (true)
         {
             var stale = await db.UploadSessions
-                .Where(s => s.CreatedAtUtc < sessionCutoff)
+                .Where(s => s.CreatedAtUtc < sessionCutoff && !failed.Contains(s.Id))
                 .OrderBy(s => s.CreatedAtUtc)
                 .Take(BatchSize)
                 .ToListAsync(cancellationToken);
@@ -98,14 +101,16 @@ public class CleanupService : BackgroundService
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    logger.LogWarning(ex, "Abort of stale upload {SessionId} failed; removing the row anyway.", session.Id);
+                    logger.LogWarning(ex, "Abort of stale upload {SessionId} failed; keeping the row to retry.", session.Id);
+                    failed.Add(session.Id);
+                    continue;
                 }
 
                 db.UploadSessions.Remove(session);
             }
 
             await db.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("Cleanup removed {Count} stale upload sessions.", stale.Count);
+            logger.LogInformation("Cleanup removed {Count} stale upload sessions.", stale.Count - stale.Count(s => failed.Contains(s.Id)));
         }
 
         while (true)

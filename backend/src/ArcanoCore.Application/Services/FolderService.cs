@@ -207,14 +207,20 @@ public class FolderService : IFolderService
         return folder == null ? Result<string>.Failure(NotFoundError) : Result<string>.Success(folder.Name + ".zip");
     }
 
-    public async Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default)
+    public Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default)
     {
         var ownerId = CurrentOwnerId;
         if (ownerId == Guid.Empty)
         {
-            return Result.Failure(new Error("Folder.Unauthorized", "A valid user ID is required."));
+            return Task.FromResult(Result.Failure(new Error("Folder.Unauthorized", "A valid user ID is required.")));
         }
 
+        return WriteZipForOwnerAsync(ownerId, id, output, cancellationToken);
+    }
+
+    // The caller has already authorized access; the folder must still belong to ownerId.
+    public async Task<Result> WriteZipForOwnerAsync(Guid ownerId, Guid id, Stream output, CancellationToken cancellationToken = default)
+    {
         var root = await FindOwnedFolderAsync(id, ownerId, cancellationToken);
         if (root == null)
         {

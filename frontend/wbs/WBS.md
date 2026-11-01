@@ -62,6 +62,7 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 ### 5. File Sharing
 - [x] **5.1 Share-link management — Completed for files (unit-tested, not verified in a browser).** A Share button in the details panel opens a dialog to create a link (never, 1, 7, or 30 days), copy it, and revoke it. Replaces the earlier mock dialog. Password and folder sharing are not included.
 - [x] **5.2 Public share view — Completed (unit-tested, not verified in a browser).** Route `/share/:token` needs no login. It shows the file name and size, a Download button, and an inline preview (image, media, text only), or "This link is invalid or has expired." Download errors show no message yet.
+- [x] **5.3 Share with people and "Shared with me" — Completed (unit-tested, not browser-tested).** The Share dialog has a People section: add a registered user by email (read-only), list and remove people. A "Shared with me" nav item (sidebar and drawer only; the mobile bottom bar does not show it) lists incoming shares with read-only browsing of shared folders, preview, download, folder zip, and a confirmation to remove a share. Backend: 1.18. Initial bundle 520 kB; the warning budget in `angular.json` was raised from 500 kB to 540 kB.
 
 ### 6. Media and Document Previews
 - Current state: the side preview panel (desktop, toggled from the toolbar) shows the selected item's details; file content renders in the preview popup (6.1).
@@ -100,7 +101,7 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 
 ## Status
 - The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (174 specs in 18 files); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (184 specs in 20 files; the sharing UI is not browser-tested); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization

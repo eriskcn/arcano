@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<IFolderService, FolderService>();
         services.AddScoped<IShareService, ShareService>();
+        services.AddScoped<IUserShareService, UserShareService>();
         services.AddScoped<IUploadService, UploadService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IInviteKeyService, InviteKeyService>();

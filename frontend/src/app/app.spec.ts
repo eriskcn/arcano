@@ -99,6 +99,7 @@ describe('App', () => {
       expect(folder.some(l => l.startsWith('Open'))).toBe(true);
       expect(folder.some(l => l === 'Download' || l.startsWith('Copy'))).toBe(false);
       expect(folder.some(l => l.startsWith('Download as zip'))).toBe(true);
+      expect(folder.some(l => l === 'Share')).toBe(true);
 
       const file = open(sampleFiles[0]).labels();
       expect(file.some(l => l.startsWith('Open'))).toBe(false);
@@ -765,6 +766,11 @@ describe('App', () => {
     const el = fixture.nativeElement as HTMLElement;
     fixture.detectChanges();
     app.page.set('signup');
+    fixture.detectChanges();
+    expect(el.querySelector('input[name="inviteKey"]')).toBeNull(); // setup not resolved yet
+    expect(el.textContent).not.toContain('first account becomes the admin');
+
+    app.requiresKey.set(true);
     fixture.detectChanges();
     expect(el.querySelector('input[name="inviteKey"]')).not.toBeNull();
 

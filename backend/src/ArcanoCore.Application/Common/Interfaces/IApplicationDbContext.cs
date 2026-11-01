@@ -13,5 +13,7 @@ public interface IApplicationDbContext
     DbSet<UploadSession> UploadSessions { get; }
     DbSet<UserProfile> UserProfiles { get; }
     DbSet<InviteKey> InviteKeys { get; }
+    // Default so contexts that do not touch sharing need not declare it.
+    DbSet<UserShare> UserShares => throw new System.NotSupportedException();
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

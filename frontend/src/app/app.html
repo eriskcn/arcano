@@ -159,7 +159,7 @@
           </div>
         </div>
 
-        <div *ngIf="requiresKey(); else firstAccount">
+        <div *ngIf="requiresKey() === true; else firstAccount">
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Invite key</label>
           <input
             type="text"
@@ -173,7 +173,7 @@
           />
         </div>
         <ng-template #firstAccount>
-          <p class="text-xs text-gray-500">This server has no accounts yet. The first account becomes the admin.</p>
+          <p *ngIf="requiresKey() === false" class="text-xs text-gray-500">This server has no accounts yet. The first account becomes the admin.</p>
         </ng-template>
 
         <div *ngIf="signUpError()" role="alert" class="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100">
@@ -313,6 +313,7 @@
       <!-- Upload -->
       <input #uploadInput type="file" multiple class="hidden" (change)="onUploadSelected($event)" />
       <button
+        *ngIf="activeNav() !== 'shared'"
         type="button"
         (click)="uploadInput.click()"
         [disabled]="actionBusy()"
@@ -323,7 +324,7 @@
       </button>
 
       <!-- New -->
-      <button (click)="startCreateFolder()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">
+      <button *ngIf="activeNav() !== 'shared'" (click)="startCreateFolder()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">
         <span class="material-symbols-rounded text-white" style="font-size: 18px">add</span>
         <span class="hidden sm:inline">New</span>
       </button>
@@ -504,13 +505,20 @@
       <div class="flex flex-1 overflow-hidden">
         <div class="flex-1 flex flex-col overflow-hidden bg-white">
           <!-- Empty State when nav doesn't show files -->
-          <div *ngIf="!showFiles()" class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <div *ngIf="!showFiles() && activeNav() !== 'shared'" class="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <div class="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
               <span class="material-symbols-rounded text-gray-400" style="font-size: 28px">{{ emptyMessages[activeNav()].icon }}</span>
             </div>
             <p class="text-sm font-semibold text-gray-700 mb-1">{{ emptyMessages[activeNav()].title }}</p>
             <p class="text-xs text-gray-400 max-w-48">{{ emptyMessages[activeNav()].sub }}</p>
           </div>
+
+          <!-- Shared with me: read-only view, loaded on first visit -->
+          @if (activeNav() === 'shared') {
+            @defer {
+              <app-shared-with-me class="flex-1 flex flex-col overflow-hidden" />
+            }
+          }
 
           <!-- Loading / error / action error -->
           <div *ngIf="showFiles() && filesLoading()" class="px-4 py-3 text-xs font-medium text-gray-500" role="status">Loading your files...</div>
@@ -798,7 +806,7 @@
                 Download as zip
               </button>
               <button
-                *ngIf="file.type !== 'folder' && selectedIds().size === 1 && activeNav() !== 'trash'"
+                *ngIf="selectedIds().size === 1 && activeNav() !== 'trash'"
                 (click)="openShare()"
                 class="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
               >
@@ -898,7 +906,9 @@
   <app-account-dialog [open]="accountOpen()" (close)="accountOpen.set(false)" (signedOut)="accountOpen.set(false); signOut()" />
 
   <!-- Share Dialog -->
-  <app-share-dialog [open]="shareOpen()" [fileId]="selectedFile()?.id ?? null" [fileName]="selectedFile()?.name ?? ''" (close)="closeShare()" />
+  @defer (when shareOpen()) {
+    <app-share-dialog [open]="shareOpen()" [fileId]="selectedFile()?.type === 'folder' ? null : (selectedFile()?.id ?? null)" [folderId]="selectedFile()?.type === 'folder' ? selectedFile()!.id : null" [fileName]="selectedFile()?.name ?? ''" (close)="closeShare()" />
+  }
 
   <!-- Preview popup (single file only); outside the xl-only details panel so it shows at every width -->
   <app-modal
@@ -1004,6 +1014,7 @@
   <!-- Mobile FAB -->
   <!-- Phones only: from sm up the header Upload button is visible. -->
   <button
+    *ngIf="activeNav() !== 'shared'"
     type="button"
     (click)="uploadInput.click()"
     [disabled]="actionBusy()"

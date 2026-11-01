@@ -288,6 +288,53 @@ namespace ArcanoCore.Infrastructure.Migrations
                     b.ToTable("UserProfile", (string)null);
                 });
 
+            modelBuilder.Entity("ArcanoCore.Domain.Entities.UserShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileId");
+
+                    b.HasIndex("FolderId");
+
+                    b.HasIndex("RecipientId");
+
+                    b.HasIndex("OwnerId", "FileId");
+
+                    b.HasIndex("OwnerId", "FolderId");
+
+                    b.HasIndex("OwnerId", "RecipientId", "FileId")
+                        .IsUnique()
+                        .HasFilter("\"FileId\" IS NOT NULL");
+
+                    b.HasIndex("OwnerId", "RecipientId", "FolderId")
+                        .IsUnique()
+                        .HasFilter("\"FolderId\" IS NOT NULL");
+
+                    b.ToTable("UserShare", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserShare_OneTarget", "(\"FileId\" IS NULL) <> (\"FolderId\" IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -560,6 +607,31 @@ namespace ArcanoCore.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ArcanoCore.Domain.Entities.UserShare", b =>
+                {
+                    b.HasOne("ArcanoCore.Domain.Entities.FileMetadata", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("ArcanoCore.Domain.Entities.Folder", null)
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser<System.Guid>", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser<System.Guid>", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

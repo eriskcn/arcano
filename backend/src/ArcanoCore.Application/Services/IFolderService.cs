@@ -17,4 +17,5 @@ public interface IFolderService
     Task<Result> DeleteFolderAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<string>> GetZipNameAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default);
+    Task<Result> WriteZipForOwnerAsync(Guid ownerId, Guid id, Stream output, CancellationToken cancellationToken = default);
 }

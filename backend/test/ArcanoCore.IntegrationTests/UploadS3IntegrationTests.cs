@@ -1,5 +1,10 @@
 using System.Security.Cryptography;
 using Amazon.S3;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
@@ -69,6 +74,42 @@ public class UploadS3IntegrationTests
         await downloaded.CopyToAsync(copy);
         Assert.Equal(data.Length, copy.Length);
         Assert.Equal(SHA256.HashData(data), SHA256.HashData(copy.ToArray()));
+    }
+
+    [RequiresS3Fact]
+    public async Task Download_RangeRequest_Returns206WithContentRangeAndExactBytes()
+    {
+        var data = RandomBytes(Chunk + 123);
+        var id = (await _service.StartAsync(new UploadStartDto("big.bin", "application/octet-stream", data.Length, null))).Value.Id;
+        await UploadPart(id, 1, data);
+        await UploadPart(id, 2, data);
+        var complete = await _service.CompleteAsync(id);
+        var retry = await _service.CompleteAsync(id); // idempotent against real S3 too
+        Assert.Equal(complete.Value, retry.Value);
+        var stream = await _storage.DownloadAsync(_context.Files.Single().StorageKey);
+
+        var services = new ServiceCollection().AddLogging().AddMvcCore().Services.BuildServiceProvider();
+        var http = new DefaultHttpContext { RequestServices = services };
+        http.Request.Method = "GET";
+        http.Request.Headers.Range = $"bytes={Chunk - 10}-{Chunk + 49}";
+        var body = new MemoryStream();
+        http.Response.Body = body;
+        await new FileStreamResult(stream, "application/octet-stream") { EnableRangeProcessing = true }
+            .ExecuteResultAsync(new ActionContext(http, new RouteData(), new ActionDescriptor()));
+
+        Assert.Equal(206, http.Response.StatusCode);
+        Assert.Equal($"bytes {Chunk - 10}-{Chunk + 49}/{data.Length}", http.Response.Headers.ContentRange.ToString());
+        Assert.Equal(60, http.Response.ContentLength);
+        Assert.Equal(data.AsSpan((int)Chunk - 10, 60).ToArray(), body.ToArray());
+    }
+
+    [RequiresS3Fact]
+    public async Task Abort_AlreadyAbortedUpload_Succeeds()
+    {
+        var (key, uploadId) = await _storage.InitiateAsync("application/octet-stream");
+        await _storage.AbortAsync(key, uploadId);
+
+        await _storage.AbortAsync(key, uploadId); // NoSuchUpload is treated as done
     }
 
     [RequiresS3Fact]
