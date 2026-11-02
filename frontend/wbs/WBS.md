@@ -101,7 +101,7 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 
 ## Status
 - The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (231 specs in 21 files, 2026-11-02; the sharing UI is not browser-tested); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (236 specs in 21 files, 2026-11-02; the sharing UI is not browser-tested); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
 - **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
@@ -146,3 +146,8 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
   - Upload errors: `fileErrorMessage` maps the `File.*` and `Upload.*` codes from the backend; unknown codes keep the caller's fallback text.
   - Upload cancel: a Cancel link in the progress row; unsubscribing a chunked upload sends `DELETE /Uploads/{id}`. Closing the tab sends a keepalive `DELETE` on `pagehide` while a chunked upload is active (best effort: a crash, killed browser, lost network or expired token still leaves the session until the 24 h sweep).
   - Details below `xl`: a toggle and a right-hand sheet render the same details template; closes on the Close button, Escape, a view change or an empty selection. No backdrop or focus trap; layout at 375 and 768 px not checked.
+- [x] **9.18 Browser pass follow-ups (2026-11-02) — Completed (unit-tested, 236 specs in 21 files; `ng build` 527.48 kB; the changes themselves not browser-tested)**
+  - Accessible names: password show/hide buttons on sign-in and sign-up (`aria-label`, `aria-pressed`), the header bell, and the Settings password inputs (including the delete-account input).
+  - Admin dialog: "Loading..." under Members and Invite keys until the first responses; the generate-key quota and expiry fields reset when the dialog closes (they stay filled after a generate, to issue several keys alike).
+  - "Shared with me" loading state already existed in the component; a spec was added. The blank second seen in the browser was not explained.
+  - Not changed: sign-up has no confirm-password field, touch targets under 44 px, the persistent "Folders were skipped" banner, no notice after account deletion, no Grid/List toggle below `sm`.
