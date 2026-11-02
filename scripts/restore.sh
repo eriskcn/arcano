@@ -14,6 +14,8 @@ tar tzf "$src/seaweedfs.tar.gz" > /dev/null
 
 ENV_FILE="${ENV_FILE:-.env.production}" # the compose file has required variables, so every compose call needs it
 [ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found (set ENV_FILE=...)" >&2; exit 1; }
+# a missing bind-mount source makes Docker create a directory there, and seaweedfs then runs without credentials
+[ -f backend/seaweedfs/s3.prod.json ] || { echo "backend/seaweedfs/s3.prod.json is missing (Docker would create a directory in its place). Run: scripts/gen-s3-config.sh $ENV_FILE" >&2; exit 1; }
 DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 VOLUME=arcano_seaweedfs_data
 KEYS_VOLUME=arcano_api_keys

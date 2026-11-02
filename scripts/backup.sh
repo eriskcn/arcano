@@ -3,7 +3,8 @@
 # Writes backups/<UTC timestamp>/{db.dump,seaweedfs.tar.gz,api_keys.tar.gz,env.production,seaweedfs-image.txt};
 # keeps newest BACKUP_KEEP (default 7). If BACKUP_RCLONE_REMOTE is set, also copies the dir there with rclone.
 # Consistency: DB and object data are copied at slightly different moments. For a point-in-time
-# consistent pair pass --stop-api (api is stopped briefly, then started); otherwise accept small drift.
+# consistent pair pass --stop-api (api and seaweedfs are stopped while copying, then started);
+# otherwise uploads during the backup can leave orphan objects (files without rows).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,9 +21,14 @@ umask 077
 dir="backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$dir"
 
+STOPPED=()
+restart() { [ ${#STOPPED[@]} -eq 0 ] || "${DC[@]}" start "${STOPPED[@]}"; }
+trap restart EXIT # restarts whatever was stopped, also on failure
 if [ "$STOP_API" = 1 ]; then
-  "${DC[@]}" stop api
-  trap '"${DC[@]}" start api' EXIT
+  STOPPED=(seaweedfs api) # started in this order
+  "${DC[@]}" stop api seaweedfs
+else
+  echo "warning: DB and files may not match (orphan objects possible); use --stop-api for a consistent pair" >&2
 fi
 
 "${DC[@]}" exec -T postgres pg_dump -U postgres -Fc arcanocore > "$dir/db.dump"

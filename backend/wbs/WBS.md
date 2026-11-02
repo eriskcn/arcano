@@ -159,6 +159,11 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
   - [x] **1.21 Failed-login lockout no longer ends sessions (2026-11-02) — Completed (143 domain and 50 API tests pass; integration tests not run)**
     - Token validation and `AuthController.Refresh` rejected any locked-out user, so five failed logins by anyone signed a user out everywhere. They now reject only an admin-disabled user (`UserAccountState.IsDisabled`, lockout end more than 50 years out, the value `Disable` sets). Login still locks after repeated failures.
     - Test: `FailedLoginLockout_KeepsIssuedTokenValid_ButDisabledUserTokenIsRejected` in `GroupModeTests`. It calls the helper, not the JWT event, so the wiring is not covered end to end.
+  - [x] **1.22 Backup and restore hardening (2026-11-02) — Completed (throwaway stack; full fresh-host sequence and rclone path not re-run)**
+    - `scripts/restore.sh` empties the `public` schema and restores with `--exit-on-error --single-transaction`, so a pre-upgrade backup restores over an upgraded database (it failed before: 15 `pg_restore` errors, inconsistent migration history, API crash loop); it also exits before stopping anything when `backend/seaweedfs/s3.prod.json` is missing.
+    - `scripts/backup.sh --stop-api` stops the API and SeaweedFS while copying and restarts them on exit, also on failure; a plain backup warns that orphan objects are possible.
+    - `docs/DEPLOY.md`: rollback paragraph, fresh-host restore sequence, backup text.
+    - Not tested: running v0.1.0 code against the restored database; a delete racing a plain backup.
 
 ## Dependencies
 - 1.2 depends on 1.1.
