@@ -495,6 +495,56 @@ describe('App', () => {
     http.verify();
   });
 
+  describe('details below xl', () => {
+    const openSelected = () => {
+      const fixture = TestBed.createComponent(App);
+      const app = fixture.componentInstance;
+      fixture.detectChanges();
+      app.page.set('app');
+      app.activeNav.set('my-files');
+      app.files.set(sampleFiles);
+      app.selectedId.set(sampleFiles[0].id);
+      app.selectedIds.set(new Set([sampleFiles[0].id]));
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const toggle = () => el.querySelector('button.xl\\:hidden[aria-label="Toggle details"]') as HTMLButtonElement;
+      const sheet = () => el.querySelector('div.fixed.right-0.xl\\:hidden');
+      return { fixture, app, toggle, sheet };
+    };
+
+    it('opens the existing panel in a sheet from the toggle and closes it on the button, Escape and a view change', () => {
+      const { fixture, app, toggle, sheet } = openSelected();
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+      expect(sheet()).toBeNull();
+
+      toggle().click();
+      fixture.detectChanges();
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(sheet()?.textContent).toContain('File Info');
+
+      (sheet()!.querySelector('[aria-label="Close details"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(sheet()).toBeNull();
+
+      app.detailsSheetOpen.set(true);
+      app.onEscape();
+      expect(app.detailsSheetOpen()).toBe(false);
+      expect(app.selectedIds().size).toBe(1); // first Escape only closes the sheet
+
+      app.detailsSheetOpen.set(true);
+      app.selectNav('trash');
+      expect(app.detailsSheetOpen()).toBe(false);
+    });
+
+    it('does not open the sheet when a file is selected', () => {
+      const { fixture, app, sheet } = openSelected();
+      app.selectFile(sampleFiles[0].id);
+      fixture.detectChanges();
+      expect(app.previewOpen()).toBe(true); // xl panel behaviour unchanged
+      expect(sheet()).toBeNull();
+    });
+  });
+
   it('should render the empty state when the user has no files', async () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;

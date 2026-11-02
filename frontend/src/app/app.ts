@@ -142,6 +142,8 @@ export class App implements OnInit {
   readonly searchQuery = signal<string>('');
   readonly activeFilter = signal<string>('All');
   readonly previewOpen = signal<boolean>(true);
+  /** Details overlay below xl; opened only by its toggle so tapping a file never covers the grid. */
+  readonly detailsSheetOpen = signal<boolean>(false);
   readonly previewModalOpen = signal<boolean>(false);
   readonly contextMenu = signal<ContextMenuModel | null>(null);
   readonly uploadInput = viewChild<ElementRef<HTMLInputElement>>('uploadInput');
@@ -352,6 +354,7 @@ export class App implements OnInit {
   selectNav(key: NavItem): void {
     const changed = key !== this.activeNav();
     this.activeNav.set(key);
+    this.detailsSheetOpen.set(false);
     // Re-selecting the active section also returns to its root.
     if (changed || this.folderPath().length) {
       this.folderPath.set([]);
@@ -601,6 +604,11 @@ export class App implements OnInit {
     this.previewOpen.set(this.selectedIds().size > 0);
   }
 
+  closeDetails(): void {
+    this.previewOpen.set(false);
+    this.detailsSheetOpen.set(false);
+  }
+
   clearSelection(): void {
     this.setSelection(new Set(), null);
     this.selectionAnchorId.set(null);
@@ -617,6 +625,10 @@ export class App implements OnInit {
     }
     if (this.contextMenu()) {
       this.contextMenu.set(null);
+      return;
+    }
+    if (this.detailsSheetOpen()) {
+      this.detailsSheetOpen.set(false);
       return;
     }
     this.clearSelection();
@@ -1201,6 +1213,9 @@ export class App implements OnInit {
   private setSelection(ids: Set<string>, primaryId: string | null): void {
     this.selectedIds.set(ids);
     this.selectedId.set(primaryId);
+    if (!ids.size) {
+      this.detailsSheetOpen.set(false);
+    }
   }
 
   private syncPageWithRoute(): void {

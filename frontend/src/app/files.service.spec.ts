@@ -286,6 +286,56 @@ describe('FilesService', () => {
       http.verify();
     });
 
+    describe('pagehide', () => {
+      const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+      beforeEach(() => vi.stubGlobal('fetch', fetchMock));
+      afterEach(() => {
+        fetchMock.mockClear();
+        vi.unstubAllGlobals();
+      });
+      const hide = () => window.dispatchEvent(new Event('pagehide'));
+
+      it('should send one keepalive DELETE with the token when the page hides mid-upload', () => {
+        const { http } = start();
+        http.expectOne(`${url}/${sid}/parts/1`);
+        hide();
+        hide();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [target, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(target).toBe(`${url}/${sid}`);
+        expect(init.method).toBe('DELETE');
+        expect(init.keepalive).toBe(true);
+        expect((init.headers as Record<string, string>)['Authorization']).toBe(`Bearer ${localStorage.getItem('arcano.auth.token')}`);
+        TestBed.inject(HttpTestingController).verify(); // no second abort via the HttpClient
+      });
+
+      it('should do nothing when nothing is uploading', () => {
+        hide();
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+
+      it('should not abort on pagehide after completion', () => {
+        const { http } = start();
+        for (const n of [1, 2, 3]) {
+          http.expectOne(`${url}/${sid}/parts/${n}`).flush(null, { status: 204, statusText: 'No Content' });
+        }
+        http.expectOne(`${url}/${sid}/complete`).flush({ id });
+        hide();
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+
+      it('should not send a second abort on pagehide after cancel', () => {
+        const http = TestBed.inject(HttpTestingController);
+        const sub = TestBed.inject(FilesService).uploadChunked(file, id).subscribe();
+        http.expectOne(url).flush({ id: sid, chunkSize: 10 });
+        http.expectOne(`${url}/${sid}/parts/1`);
+        sub.unsubscribe();
+        http.expectOne(`${url}/${sid}`).flush(null, { status: 204, statusText: 'No Content' });
+        hide();
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
+    });
+
     it('should abort the session when a chunk keeps failing', async () => {
       const { http, state } = start();
       http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 500, statusText: 'Server Error' });
