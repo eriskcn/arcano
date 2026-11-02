@@ -20,6 +20,21 @@ describe('SharedWithMeComponent', () => {
     return { fixture, cmp: fixture.componentInstance, http, text };
   };
 
+  it('shows Loading instead of the empty message until the first load completes', () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const fixture = TestBed.createComponent(SharedWithMeComponent);
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text()).toContain('Loading...');
+    expect(text()).not.toContain('Nothing has been shared');
+
+    http.expectOne(`${api}/Shared`).flush([]);
+    fixture.detectChanges();
+    expect(text()).not.toContain('Loading...');
+    expect(text()).toContain('Nothing has been shared');
+  });
+
   it('lists incoming shares with owner email and only read-only actions', () => {
     const { text } = setup();
 

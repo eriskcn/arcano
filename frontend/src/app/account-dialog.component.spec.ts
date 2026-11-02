@@ -18,6 +18,12 @@ describe('AccountDialogComponent', () => {
     return { dialog, http: TestBed.inject(HttpTestingController), signedOut };
   };
 
+  it('labels every password input', () => {
+    setup();
+    const labels = Array.from(document.querySelectorAll('input[type="password"]')).map(input => input.getAttribute('aria-label'));
+    expect(labels).toEqual(['Current password', 'New password (8+ characters)', 'Confirm new password']);
+  });
+
   it('validates the new password on the client', () => {
     const { dialog, http } = setup();
     dialog.currentPassword.set('old-password');

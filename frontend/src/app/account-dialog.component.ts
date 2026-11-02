@@ -20,9 +20,9 @@ const MIN_PASSWORD_LENGTH = 8;
 
         <form class="space-y-2" (ngSubmit)="changePassword()">
           <h3 class="text-sm font-semibold text-gray-900">Change password</h3>
-          <input type="password" name="current" autocomplete="current-password" placeholder="Current password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="currentPassword()" (ngModelChange)="currentPassword.set($event)" />
-          <input type="password" name="new" autocomplete="new-password" placeholder="New password (8+ characters)" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)" />
-          <input type="password" name="confirm" autocomplete="new-password" placeholder="Confirm new password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="confirmPassword()" (ngModelChange)="confirmPassword.set($event)" />
+          <input type="password" name="current" autocomplete="current-password" placeholder="Current password" aria-label="Current password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="currentPassword()" (ngModelChange)="currentPassword.set($event)" />
+          <input type="password" name="new" autocomplete="new-password" placeholder="New password (8+ characters)" aria-label="New password (8+ characters)" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="newPassword()" (ngModelChange)="newPassword.set($event)" />
+          <input type="password" name="confirm" autocomplete="new-password" placeholder="Confirm new password" aria-label="Confirm new password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="confirmPassword()" (ngModelChange)="confirmPassword.set($event)" />
           <button type="submit" [disabled]="busy()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-default">Change password</button>
           <p class="text-[11px] text-gray-400">Changing your password signs out your other sessions.</p>
         </form>
@@ -37,7 +37,7 @@ const MIN_PASSWORD_LENGTH = 8;
           <button *ngIf="!confirmingDelete()" type="button" (click)="confirmingDelete.set(true)" class="px-4 py-2 rounded-xl border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50 cursor-pointer">Delete account</button>
           <form *ngIf="confirmingDelete()" class="space-y-2" (ngSubmit)="deleteAccount()">
             <p class="text-xs text-red-700">This permanently deletes your account and all your files, folders and shared links, including the Trash. It cannot be undone.</p>
-            <input type="password" name="delete" autocomplete="current-password" placeholder="Enter your password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="deletePassword()" (ngModelChange)="deletePassword.set($event)" />
+            <input type="password" name="delete" autocomplete="current-password" placeholder="Enter your password" aria-label="Enter your password" class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" [ngModel]="deletePassword()" (ngModelChange)="deletePassword.set($event)" />
             <button type="submit" [disabled]="busy()" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-default">Delete everything permanently</button>
           </form>
         </div>
