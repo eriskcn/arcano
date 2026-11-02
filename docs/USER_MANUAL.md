@@ -208,7 +208,7 @@ Use any of these:
 
 The count of selected items appears under the section title. Press Esc to clear the selection.
 
-Some actions apply only to the files in a selection and skip any folders: **Copy**, **Cut**, **Move to trash** and the Delete key. When folders are skipped, the app shows "Folders were skipped. Act on them one at a time." **Move to…** and the favorites action apply to files and folders.
+Some actions apply only to the files in a selection and skip any folders: **Copy**, **Cut**, **Move to trash** and the Delete key. When folders are skipped, the app shows "Folders were skipped." followed by "Act on them one at a time." for Move to trash and Delete, or "They cannot be copied or cut." for Copy and Cut. **Move to…** and the favorites action apply to files and folders.
 
 ### The right-click menu
 

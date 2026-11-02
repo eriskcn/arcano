@@ -16,11 +16,11 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
   - **1.2 Application layer — Completed (foundation)**
     - [x] Define storage and database-context interfaces and file DTOs.
     - [x] Implement file-storage coordination in `FileService`.
-  - **1.3 Infrastructure layer — In Progress**
+  - **1.3 Infrastructure layer — Completed**
     - [x] Implement SeaweedFS S3 integration.
     - [x] Configure EF Core context and migrations.
     - [x] Read current-user identity from claims.
-    - [ ] Verify persistence and storage behavior with integration tests.
+    - [x] Verify persistence and storage behavior with integration tests (`ArcanoCore.IntegrationTests`, real PostgreSQL and SeaweedFS S3; 28 passed and 5 S3 tests skipped in the last run, not re-run 2026-11-02).
   - **1.4 API layer — In Progress**
     - [x] Add file upload, download, and delete endpoints.
     - [x] Add centralized exception handling.
@@ -73,11 +73,11 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
     - [x] **1.8.3 Trash — Completed.** Delete moves a file to the trash and keeps the stored object. Endpoints to list, restore, delete permanently, and empty the trash. A restored file goes to the root if its folder was deleted. Trash older than 30 days is purged when the trash is listed (a shortcut; the background cleanup job in 1.15 now also purges it). No ADR was written for the retention decision.
     - [ ] **1.8.4 Account safety — Partly done.** Done: sign-in and sign-up are rate limited (10 per minute per IP, then 429), and an account locks after 5 wrong passwords. `POST api/Account/password` and `DELETE api/Account` use the same "auth" rate limit and count wrong passwords toward lockout; account delete removes the data first, then the Identity user (the owner foreign keys are Restrict, so the user cannot go first). Also done later: `POST api/Auth/refresh` renews a still-valid token (1.13 finding 5), and logout, change password and security-stamp revocation exist (1.15). Not built: email verification (it needs an email sender; password reset is replaced by admin Reset keys, 1.16.4), and a refresh-token store (`Auth/refresh` renews the access token; no refresh tokens are stored).
     - Migration `FileStarAndTrash` adds `IsStarred` and `DeletedAtUtc` to `FileMetadata`.
-    - Known limits: the rate limit keys on the remote IP, so behind a reverse proxy without forwarded headers all clients share one bucket. The trash restore and permanent-delete lookups use an explicit query, because `FindAsync` still applies the "not deleted" filter on the real database; the in-memory test provider does not, so tests alone did not catch it.
+    - Known limits: the public and auth rate limits key on the remote IP, so behind a reverse proxy that does not forward the client address all clients share one bucket; the production `web` nginx resolves it (1.20.1). The trash restore and permanent-delete lookups use an explicit query, because `FindAsync` still applies the "not deleted" filter on the real database; the in-memory test provider does not, so tests alone did not catch it.
   - **1.9 File sharing — In Progress** (file links only; 6 new unit tests plus a live smoke test)
     - [x] **1.9.1 Share links for files — Completed.** `POST /api/Share` (fileId, optional expiry), `GET /api/Share?fileId=`, `DELETE /api/Share/{id}` (revoke), all owner-only. Uses the existing `SharedLink` table, so no migration. The token is 32 random bytes (hex).
     - [x] **1.9.2 Public download — Completed.** `GET /api/Public/{token}/info` returns file name, type, and size; `GET /api/Public/{token}` needs no login and always sends `Content-Disposition: attachment`. Revoked, expired, unknown, or trashed-file links return 404.
-    - [ ] **1.9.3 Folder sharing, link passwords, public listing page — Not Started.** No ADR was written for the anonymous-access model; recommended before extending it. The public endpoints are rate limited (1.13 finding 6); there is no download count.
+    - [ ] **1.9.3 Public links for folders, link passwords, public listing page — Not Started** (user-to-user folder sharing is done, 1.18). No ADR was written for the anonymous-access model; recommended before extending it. The public endpoints are rate limited (1.13 finding 6); there is no download count.
 
   - **1.10 Code review findings (2026-10-31 whole-project review) — Mostly done** (at the time, 109 domain and 3 auth tests passed)
     - Source: `/code-review` of the whole project on 2026-10-31. Findings were deduped but not verified. Numbers match the review.
@@ -142,7 +142,8 @@ Provide the backend API and storage services for Arcano, a personal cloud-storag
     - [x] Access is re-validated on every request: share row, both users not disabled, item inside the shared subtree, not trashed.
     - [x] Sharing with yourself, an unknown or a disabled email returns 400 `UserShare.InvalidRecipient`. Accepted limit: members can probe whether an email is registered.
     - [x] Account and admin delete remove the user's shares. Folders have no public links.
-    - Not verified: the controllers' HTTP status mapping has no controller tests; `/api/Shared`, `/api/UserShares` and `/api/Admin` are limited to 120 per minute per user (POST `api/UserShares` 20) but the 429 was only checked by build, not over HTTP; the share zip over real Kestrel (needs synchronous IO, see 1.15) was not run.
+    - HTTP status mapping of `UserShares` and `Shared` is covered by controller unit tests with stub services (`UserSharesControllerTests.cs`).
+    - Not verified: `/api/Shared`, `/api/UserShares` and `/api/Admin` are limited to 120 per minute per user (POST `api/UserShares` 20) but the 429 was only checked by build, not over HTTP; the share zip over real Kestrel (needs synchronous IO, see 1.15) was not run.
   - [x] **1.19 Download/upload hardening and audit log — Completed (unit and integration tested)**
     - [x] HTTP Range on owner and public downloads (seekable ranged S3 stream); 206 verified against real SeaweedFS in an integration test.
     - [x] A failed multipart abort keeps the session row; cleanup retries every pass, and `NoSuchUpload` counts as success. No attempt cap (`shortcut:` comment).
