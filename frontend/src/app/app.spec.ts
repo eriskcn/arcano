@@ -1169,6 +1169,7 @@ describe('App', () => {
 
     describe('with folders selected', () => {
       const skipped = 'Folders were skipped. Act on them one at a time.';
+      const copyCut = 'Folders were skipped. They cannot be copied or cut.';
       const folder = (id: string): FileItem => ({ ...sampleFiles[0], id, name: `Folder ${id}`, type: 'folder' });
       const setupFolders = (...ids: string[]) => {
         const { app, http } = setup();
@@ -1199,7 +1200,7 @@ describe('App', () => {
           app.actionError.set('');
           press(key, { ctrlKey: true });
           expect(app.clipboard()?.items.map(item => item.id)).toEqual(['1']);
-          expect(app.actionError()).toBe(skipped);
+          expect(app.actionError()).toBe(copyCut);
         }
       });
 
@@ -1230,7 +1231,7 @@ describe('App', () => {
         press('c', { ctrlKey: true });
 
         expect(app.clipboard()).toBeNull();
-        expect(app.actionError()).toBe(skipped);
+        expect(app.actionError()).toBe(copyCut);
       });
 
       it('the menu sends a lone folder to confirmation, and a mix to trash with the message', () => {

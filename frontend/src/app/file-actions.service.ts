@@ -41,13 +41,13 @@ export class FileActionsService {
   }
 
   // host.files() holds no folders, so a selected id missing from it is a folder.
-  private foldersSkippedNotice(): string {
-    return this.host.selectedIds().size > this.selectedFiles().length ? 'Folders were skipped. Act on them one at a time.' : '';
+  private foldersSkippedNotice(hint = 'Act on them one at a time.'): string {
+    return this.host.selectedIds().size > this.selectedFiles().length ? `Folders were skipped. ${hint}` : '';
   }
 
   toClipboard(mode: 'copy' | 'cut'): void {
     const items = this.selectedFiles();
-    this.actionError.set(this.foldersSkippedNotice());
+    this.actionError.set(this.foldersSkippedNotice('They cannot be copied or cut.'));
     if (items.length > 0) {
       this.clipboard.set({ mode, items, sourceFolderId: this.host.currentFolderId() });
     }

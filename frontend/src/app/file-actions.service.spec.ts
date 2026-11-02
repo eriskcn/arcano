@@ -127,6 +127,7 @@ describe('FileActionsService', () => {
 
   describe('with folders in the selection', () => {
     const skipped = 'Folders were skipped. Act on them one at a time.';
+    const copyCut = 'Folders were skipped. They cannot be copied or cut.';
 
     it('trashes the file only and keeps the message after the action finishes', () => {
       host.selected = new Set(['1', 'folder']);
@@ -143,7 +144,7 @@ describe('FileActionsService', () => {
       service.toClipboard(mode);
 
       expect(service.clipboard()?.items).toEqual([doc('1')]);
-      expect(service.actionError()).toBe(skipped);
+      expect(service.actionError()).toBe(copyCut);
     });
 
     it('with only folders, trash shows the message and runs nothing', () => {
@@ -164,7 +165,7 @@ describe('FileActionsService', () => {
       service.toClipboard('cut');
 
       expect(service.clipboard()).toBe(clip);
-      expect(service.actionError()).toBe(skipped);
+      expect(service.actionError()).toBe(copyCut);
     });
 
     it('shows no message for a files-only selection, and clears an earlier one', () => {
