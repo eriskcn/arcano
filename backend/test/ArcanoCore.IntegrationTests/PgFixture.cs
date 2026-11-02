@@ -1,6 +1,7 @@
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Infrastructure.Data;
+using ArcanoCore.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -89,7 +90,11 @@ public abstract class PgTestBase : IClassFixture<PgFixture>
 
     protected FolderService Folders(Guid? owner = null) => new(Pg.NewContext(), new FakeUser(owner ?? Owner), Storage);
 
-    protected ShareService Shares(Guid? owner = null) => new(Pg.NewContext(), Storage, new FakeUser(owner ?? Owner));
+    protected ShareService Shares(Guid? owner = null)
+    {
+        var db = Pg.NewContext();
+        return new(db, Storage, new FakeUser(owner ?? Owner), new UserDirectory(db, new CustomLookupNormalizer()));
+    }
 
     protected static async Task<Guid> Upload(FileService svc, string name, int size = 10, Guid? folderId = null)
     {

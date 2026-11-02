@@ -2,8 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { By } from '@angular/platform-browser';
 import { App, FileItem } from './app';
+import { routes } from './app.routes';
+import { AuthService } from './auth.service';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { environment } from '../environments/environment';
 
@@ -108,6 +111,24 @@ describe('App', () => {
       }
     });
 
+    it('Download as zip explains a folder with too many files, read from the Blob error body', async () => {
+      const { app, http } = open(folderItem('d1', 'Docs'));
+      const fail = (body: string) => {
+        app.downloadFolder(folderItem('d1', 'Docs'));
+        http.expectOne(`${api}/Folders/d1/download`).flush(new Blob([body], { type: 'application/json' }), { status: 400, statusText: 'Bad Request' });
+      };
+
+      fail(JSON.stringify({ code: 'Folder.TooLarge', message: 'Folder holds more than 5000 files.' }));
+      await vi.waitFor(() => expect(app.actionBusy()).toBe(false));
+      expect(app.actionError()).toBe('This folder has too many files to download as a zip.');
+
+      for (const body of [JSON.stringify({ code: 'Folder.NotFound', message: 'Not found.' }), '<html>Bad Gateway</html>', 'null']) {
+        fail(body);
+        await vi.waitFor(() => expect(app.actionBusy()).toBe(false));
+        expect(app.actionError()).toBe('Unable to download Docs. Please try again.');
+      }
+    });
+
     it('Download as zip fetches the folder archive', () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
       URL.createObjectURL = () => 'blob:zip';
@@ -138,13 +159,13 @@ describe('App', () => {
       expect(http.expectOne(`${api}/Folders/d1/download`).request.method).toBe('GET');
     });
 
-    it('Download as zip reports an error', () => {
+    it('Download as zip reports an error', async () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
 
       app.downloadFolder(folderItem('d1', 'Docs'));
       http.expectOne(`${api}/Folders/d1/download`).flush(new Blob(['x']), { status: 500, statusText: 'Server Error' });
 
-      expect(app.actionError()).toBe('Unable to download Docs. Please try again.');
+      await vi.waitFor(() => expect(app.actionError()).toBe('Unable to download Docs. Please try again.'));
     });
 
     it('deleting a folder asks first and only deletes after confirming', () => {
@@ -806,7 +827,7 @@ describe('App', () => {
     const request = http.expectOne(`${environment.apiBaseUrl}/Auth/reset`);
     expect(request.request.body).toEqual({ key: 'rk', newPassword: 'long-enough' });
     request.flush(null, { status: 204, statusText: 'No Content' });
-    expect(app.signUpSuccess()).toContain('Password reset');
+    expect(TestBed.inject(AuthService).takeSignInNotice()).toContain('Password reset');
     expect(navigate).toHaveBeenCalledWith('/signin');
 
     app.resetKey.set('bad');
@@ -960,6 +981,95 @@ describe('App', () => {
     http.verify();
   });
 
+  describe.each(['list', 'grid'] as const)('clicking real rows in %s view', view => {
+    const setup = (files: FileItem[] = sampleFiles) => {
+      const fixture = TestBed.createComponent(App);
+      const app = fixture.componentInstance;
+      fixture.detectChanges(); // ngOnInit resets the page, so set it afterwards
+      app.page.set('app');
+      app.viewMode.set(view);
+      app.files.set(files);
+      fixture.detectChanges();
+      const row = (id: string) => fixture.nativeElement.querySelector(`[data-file-id="${id}"]`) as HTMLElement;
+      // Dispatches on an inner element, where a real click lands: the name in a list row, the button in a grid card.
+      const fire = (id: string, type: string, init: MouseEventInit = {}) => {
+        const target = row(id).querySelector(view === 'list' ? 'td span' : 'button') as HTMLElement;
+        target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...init }));
+        fixture.detectChanges();
+      };
+      const selected = () => Array.from(fixture.nativeElement.querySelectorAll('[data-file-id][aria-selected="true"]') as NodeListOf<HTMLElement>).map(el => el.dataset['fileId']);
+      return { app, row, fire, selected };
+    };
+
+    it('Ctrl-click and Cmd-click add and remove items', () => {
+      const { fire, selected } = setup();
+      fire('1', 'click');
+      fire('3', 'click', { ctrlKey: true });
+      expect(selected()).toEqual(['1', '3']);
+      fire('5', 'click', { metaKey: true });
+      expect(selected()).toEqual(['1', '3', '5']);
+      fire('3', 'click', { ctrlKey: true });
+      expect(selected()).toEqual(['1', '5']);
+    });
+
+    it('Shift-click selects the range from the anchor, in either direction', () => {
+      const { fire, selected } = setup();
+      fire('2', 'click');
+      fire('4', 'click', { shiftKey: true });
+      expect(selected()).toEqual(['2', '3', '4']);
+      fire('1', 'click', { shiftKey: true });
+      expect(selected()).toEqual(['1', '2']);
+    });
+
+    it('Ctrl+Shift-click adds the range to the selection, and a plain click resets it', () => {
+      const { fire, selected } = setup();
+      fire('1', 'click');
+      fire('3', 'click', { ctrlKey: true });
+      fire('5', 'click', { ctrlKey: true, shiftKey: true });
+      expect(selected()).toEqual(['1', '3', '4', '5']);
+      fire('2', 'click');
+      expect(selected()).toEqual(['2']);
+    });
+
+    it('double-click with a modifier does not open the item or reset the selection', () => {
+      const song = { ...sampleFiles[0], contentType: 'audio/wav', fileSize: 10 };
+      const { app, fire, selected } = setup([song, sampleFiles[1], folderItem('d1', 'Docs')]);
+      fire('2', 'click');
+      fire(song.id, 'click', { ctrlKey: true });
+      fire(song.id, 'dblclick', { ctrlKey: true });
+      fire('d1', 'dblclick', { shiftKey: true });
+      expect(app.previewModalOpen()).toBe(false);
+      expect(app.folderPath()).toEqual([]);
+      expect(selected()).toEqual(['1', '2']);
+    });
+
+    it('double-click without a modifier still opens the item', () => {
+      const song = { ...sampleFiles[0], contentType: 'audio/wav', fileSize: 10 };
+      const { app, fire } = setup([song]);
+      fire(song.id, 'dblclick');
+      expect(app.previewModalOpen()).toBe(true);
+    });
+
+    it('pressing, right-clicking and dragging a selected row keep the selection', () => {
+      const { app, row, fire, selected } = setup();
+      fire('1', 'click');
+      fire('2', 'click', { ctrlKey: true });
+
+      fire('2', 'pointerdown', { button: 0 });
+      expect(selected()).toEqual(['1', '2']);
+
+      fire('2', 'contextmenu');
+      expect(selected()).toEqual(['1', '2']);
+      expect(app.contextMenu()?.items.map(item => item.id)).toEqual(['1', '2']);
+      app.contextMenu.set(null);
+
+      const setData = vi.fn();
+      row('2').dispatchEvent(Object.assign(new Event('dragstart', { bubbles: true }), { dataTransfer: { setData } }));
+      expect(setData).toHaveBeenCalledWith('text/plain', '1,2');
+      expect(selected()).toEqual(['1', '2']);
+    });
+  });
+
   describe('keyboard shortcuts', () => {
     const api = environment.apiBaseUrl;
     const setup = () => {
@@ -1057,6 +1167,114 @@ describe('App', () => {
       expect(http.expectOne(`${api}/Files/1/restore`).request.method).toBe('POST');
     });
 
+    describe('with folders selected', () => {
+      const skipped = 'Folders were skipped. Act on them one at a time.';
+      const copyCut = 'Folders were skipped. They cannot be copied or cut.';
+      const folder = (id: string): FileItem => ({ ...sampleFiles[0], id, name: `Folder ${id}`, type: 'folder' });
+      const setupFolders = (...ids: string[]) => {
+        const { app, http } = setup();
+        app.folders.set([folder('f1'), folder('f2')]);
+        ids.forEach((id, index) => app.selectFile(id, index ? new MouseEvent('click', { ctrlKey: true }) : undefined));
+        return { app, http };
+      };
+      const menuEntry = (app: App, item: FileItem, label: string) => {
+        app.showContextMenu(item, new MouseEvent('contextmenu'));
+        return app.contextMenu()!.entries.find(entry => entry.label === label);
+      };
+
+      it('Delete on a mix trashes the file only and the message survives the reload', () => {
+        const { app, http } = setupFolders('f1', '1');
+
+        expect(press('Delete').defaultPrevented).toBe(true);
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        http.expectNone(`${api}/Files/f1`);
+        settle(http);
+
+        expect(app.actionError()).toBe(skipped);
+      });
+
+      it('Ctrl+C and Ctrl+X on a mix keep the file only and show the message', () => {
+        const { app } = setupFolders('f1', '1');
+
+        for (const key of ['c', 'x']) {
+          app.actionError.set('');
+          press(key, { ctrlKey: true });
+          expect(app.clipboard()?.items.map(item => item.id)).toEqual(['1']);
+          expect(app.actionError()).toBe(copyCut);
+        }
+      });
+
+      it('Delete on one folder asks to confirm through deleteFile', () => {
+        const { app, http } = setupFolders('f1');
+
+        expect(press('Delete').defaultPrevented).toBe(true);
+
+        expect(app.pendingTrash()?.title).toBe('Delete folder');
+        expect(app.actionError()).toBe('');
+        http.verify();
+      });
+
+      it('Delete on several folders shows the message and runs nothing', () => {
+        const { app, http } = setupFolders('f1', 'f2');
+
+        press('Delete');
+
+        expect(app.pendingTrash()).toBeNull();
+        expect(app.actionError()).toBe(skipped);
+        expect(app.selectedIds().size).toBe(2);
+        http.verify();
+      });
+
+      it('Ctrl+C on only folders shows the message and leaves the clipboard alone', () => {
+        const { app } = setupFolders('f1');
+
+        press('c', { ctrlKey: true });
+
+        expect(app.clipboard()).toBeNull();
+        expect(app.actionError()).toBe(copyCut);
+      });
+
+      it('the menu sends a lone folder to confirmation, and a mix to trash with the message', () => {
+        const { app, http } = setupFolders('f1');
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+        expect(app.pendingTrash()?.title).toBe('Delete folder');
+        expect(app.actionError()).toBe('');
+        app.pendingTrash.set(null);
+        http.verify();
+
+        app.selectFile('1', new MouseEvent('click', { ctrlKey: true }));
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        settle(http);
+        expect(app.actionError()).toBe(skipped);
+      });
+
+      it('the menu on several folders offers no Copy or Cut, and Move to trash shows the message', () => {
+        const { app, http } = setupFolders('f1', 'f2');
+
+        expect(menuEntry(app, folder('f1'), 'Copy')).toBeUndefined();
+        expect(menuEntry(app, folder('f1'), 'Cut')).toBeUndefined();
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+
+        expect(app.actionError()).toBe(skipped);
+        http.verify();
+      });
+
+      it('a files-only selection shows no message', () => {
+        const { app, http } = setupFolders('1', '2');
+
+        press('c', { ctrlKey: true });
+        press('x', { ctrlKey: true });
+        expect(app.actionError()).toBe('');
+
+        press('Delete');
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        http.expectOne(`${api}/Files/2`).flush(null, { status: 204, statusText: 'No Content' });
+        settle(http);
+        expect(app.actionError()).toBe('');
+      });
+    });
+
     it('Shift+Delete deletes forever only in Trash', () => {
       const { app, http } = setup();
       app.selectFile('1');
@@ -1071,5 +1289,58 @@ describe('App', () => {
       http.expectOne(`${api}/Files/1/permanent`).flush(null, { status: 204, statusText: 'No Content' });
       settle(http);
     });
+  });
+});
+
+describe('App sign-in notice through the real router', () => {
+  const api = environment.apiBaseUrl;
+  const setup = async (url: string) => {
+    localStorage.removeItem('arcano.auth.token');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter(routes)],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const harness = await RouterTestingHarness.create(url);
+    const app = harness.routeDebugElement!.componentInstance as App;
+    const form = harness.routeNativeElement!.querySelector('form') as HTMLFormElement;
+    const submit = () => form.dispatchEvent(new Event('submit', { cancelable: true }));
+    const settled = async () => {
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+      return harness.routeNativeElement!.querySelector('[role="status"]')?.textContent?.trim();
+    };
+    return { harness, http, app, submit, settled };
+  };
+
+  it('shows the sign-up notice once on /signin', async () => {
+    const { harness, http, app, submit, settled } = await setup('/signup');
+    http.expectOne(`${api}/Auth/setup`).flush({ requiresKey: false });
+    app.signUpEmail.set('a@b.co');
+    app.signUpPassword.set('secret123');
+    submit();
+    http.expectOne(`${api}/Auth/register`).flush({});
+
+    expect(await settled()).toBe('Account created. Sign in to continue.');
+    expect(TestBed.inject(Router).url).toBe('/signin');
+    expect(harness.routeDebugElement!.componentInstance).not.toBe(app);
+
+    await harness.navigateByUrl('/reset');
+    await harness.navigateByUrl('/signin');
+    expect(await settled()).toBeUndefined();
+  });
+
+  it('shows the reset notice once on /signin', async () => {
+    const { harness, http, app, submit, settled } = await setup('/reset');
+    app.resetKey.set('rk');
+    app.resetPassword.set('long-enough');
+    app.resetConfirm.set('long-enough');
+    submit();
+    http.expectOne(`${api}/Auth/reset`).flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(await settled()).toBe('Password reset. Sign in with your new password.');
+
+    await harness.navigateByUrl('/reset');
+    await harness.navigateByUrl('/signin');
+    expect(await settled()).toBeUndefined();
   });
 });

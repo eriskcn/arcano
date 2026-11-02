@@ -125,6 +125,66 @@ describe('FileActionsService', () => {
     expect(http.expectOne(`${api}/Files/1/restore`).request.method).toBe('POST');
   });
 
+  describe('with folders in the selection', () => {
+    const skipped = 'Folders were skipped. Act on them one at a time.';
+    const copyCut = 'Folders were skipped. They cannot be copied or cut.';
+
+    it('trashes the file only and keeps the message after the action finishes', () => {
+      host.selected = new Set(['1', 'folder']);
+      service.trashSelected();
+      http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+      http.verify();
+
+      expect(host.reload).toHaveBeenCalledTimes(1);
+      expect(service.actionError()).toBe(skipped);
+    });
+
+    it.each(['copy', 'cut'] as const)('%s puts the file only on the clipboard and shows the message', mode => {
+      host.selected = new Set(['1', 'folder']);
+      service.toClipboard(mode);
+
+      expect(service.clipboard()?.items).toEqual([doc('1')]);
+      expect(service.actionError()).toBe(copyCut);
+    });
+
+    it('with only folders, trash shows the message and runs nothing', () => {
+      host.selected = new Set(['folder']);
+      service.trashSelected();
+      http.verify();
+
+      expect(host.reload).not.toHaveBeenCalled();
+      expect(service.actionBusy()).toBe(false);
+      expect(service.actionError()).toBe(skipped);
+    });
+
+    it('with only folders, copy and cut show the message and keep the clipboard', () => {
+      service.toClipboard('copy');
+      const clip = service.clipboard();
+      host.selected = new Set(['folder']);
+
+      service.toClipboard('cut');
+
+      expect(service.clipboard()).toBe(clip);
+      expect(service.actionError()).toBe(copyCut);
+    });
+
+    it('shows no message for a files-only selection, and clears an earlier one', () => {
+      host.selected = new Set(['1', 'folder']);
+      service.toClipboard('copy');
+      host.selected = new Set(['1', '2']);
+
+      service.toClipboard('copy');
+      expect(service.actionError()).toBe('');
+      service.toClipboard('cut');
+      expect(service.actionError()).toBe('');
+
+      service.trashSelected();
+      http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${api}/Files/2`).flush(null, { status: 204, statusText: 'No Content' });
+      expect(service.actionError()).toBe('');
+    });
+  });
+
   it('keeps only the last 20 undo steps', () => {
     for (let i = 0; i < 25; i++) service.pushUndo(() => {});
     let count = 0;

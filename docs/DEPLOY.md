@@ -48,6 +48,13 @@ location / {
 ```
 Add `listen 443 ssl;` and certificates as usual.
 
+Client IP (per-IP rate limits): `frontend/nginx.conf` trusts `X-Forwarded-For` only from `set_real_ip_from 172.28.0.1`, the Docker gateway of the compose subnet, which is where a proxy on the Docker host arrives from. It uses the rightmost entry, the one your proxy appends, so the proxy must append or replace the header (both examples above do). If the proxy runs elsewhere, change that address and rebuild `web`:
+- On another host (`WEB_BIND` not loopback, firewalled to the proxy): the proxy's IP as `web` sees it.
+- A container on the `internal` network: give it a fixed IP and use that.
+- A changed compose subnet: its gateway.
+
+Check: in `docker compose -p arcano logs web`, the first field of a request through the proxy must be the client's IP, not the proxy's or 172.28.0.1. A wrong address does not allow spoofing, but all clients then share one rate-limit bucket. Processes on the Docker host can set their own client IP through the published port, so keep it closed to anything else.
+
 The nginx inside the `web` image caps request bodies at 110m (`client_max_body_size` in `frontend/nginx.conf`). If you set `MAX_UPLOAD_BYTES` above ~110 MiB, raise that value too and rebuild.
 
 ## 6. Backup and restore

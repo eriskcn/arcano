@@ -610,8 +610,8 @@
               <tbody>
                 <tr
                   *ngFor="let file of filteredFiles()"
-                  (click)="selectFile(file.id)"
-                  (dblclick)="openItem(file)"
+                  (click)="selectFile(file.id, $event)"
+                  (dblclick)="openItem(file, $event)"
                   draggable="true"
                   (dragstart)="startDrag($event, file)"
                   (dragend)="endDrag()"
@@ -624,7 +624,7 @@
                   [attr.aria-selected]="selectedIds().has(file.id)"
                   (contextmenu)="showContextMenu(file, $event)"
                   [ngClass]="selectedIds().has(file.id) ? 'bg-blue-50' : 'hover:bg-gray-50'"
-                  class="border-b border-gray-50 cursor-pointer group transition-colors"
+                  class="border-b border-gray-50 cursor-pointer select-none group transition-colors"
                 >
                   <td class="pl-4 py-2.5">
                     <span
@@ -686,7 +686,7 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               <div
                 *ngFor="let file of filteredFiles()"
-                (dblclick)="openItem(file)"
+                (dblclick)="openItem(file, $event)"
                 draggable="true"
                 (dragstart)="startDrag($event, file)"
                 (dragend)="endDrag()"
@@ -703,7 +703,7 @@
               >
                 <button
                   type="button"
-                  (click)="selectFile(file.id)"
+                  (click)="selectFile(file.id, $event)"
                   [attr.aria-pressed]="selectedIds().has(file.id)"
                   class="w-full p-3 rounded-xl text-left cursor-pointer"
                 >

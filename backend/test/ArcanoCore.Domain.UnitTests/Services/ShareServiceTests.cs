@@ -12,6 +12,7 @@ public class ShareServiceTests
 {
     private readonly Guid _ownerId = Guid.NewGuid();
     private readonly TestContext _context = new();
+    private readonly TestDirectory _directory = new();
 
     [Fact]
     public async Task CreateLinkAsync_OtherUsersFile_ReturnsNotFound()
@@ -116,6 +117,34 @@ public class ShareServiceTests
         Assert.Equal(kept.Id, Assert.Single(links).Id);
     }
 
+    [Fact]
+    public async Task PublicLink_DisabledOwner_ReturnsNotFound()
+    {
+        var file = AddFile(_ownerId);
+        var link = (await CreateService(_ownerId).CreateLinkAsync(new ShareLinkRequestDto(file.Id, null))).Value;
+        _directory.Disabled.Add(_ownerId);
+
+        var service = CreateService(null);
+
+        Assert.Equal("Share.NotFound", (await service.GetSharedFileInfoAsync(link.Token)).Error.Code);
+        Assert.Equal("Share.NotFound", (await service.OpenSharedFileAsync(link.Token)).Error.Code);
+    }
+
+    [Fact]
+    public async Task PublicLink_OwnerEnabledAgain_Works()
+    {
+        var file = AddFile(_ownerId);
+        var link = (await CreateService(_ownerId).CreateLinkAsync(new ShareLinkRequestDto(file.Id, null))).Value;
+        _directory.Disabled.Add(_ownerId);
+        var service = CreateService(null);
+        Assert.True((await service.GetSharedFileInfoAsync(link.Token)).IsFailure);
+
+        _directory.Disabled.Remove(_ownerId);
+
+        Assert.True((await service.GetSharedFileInfoAsync(link.Token)).IsSuccess);
+        Assert.True((await service.OpenSharedFileAsync(link.Token)).IsSuccess);
+    }
+
     private FileMetadata AddFile(Guid ownerId)
     {
         var file = new FileMetadata { Id = Guid.NewGuid(), OwnerId = ownerId, FileName = "a.txt", ContentType = "text/plain", StorageKey = "k", FileSize = 1 };
@@ -133,7 +162,15 @@ public class ShareServiceTests
     }
 
     private ShareService CreateService(Guid? userId) =>
-        new(_context, new TestStorage(), new TestCurrentUser(userId?.ToString()));
+        new(_context, new TestStorage(), new TestCurrentUser(userId?.ToString()), _directory);
+
+    private sealed class TestDirectory : IUserDirectory
+    {
+        public HashSet<Guid> Disabled { get; } = new();
+        public Task<DirectoryUser?> FindByEmailAsync(string email, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<Dictionary<Guid, DirectoryUser>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default) =>
+            Task.FromResult(ids.ToDictionary(id => id, id => new DirectoryUser(id, "", Disabled.Contains(id))));
+    }
 
     private sealed class TestCurrentUser(string? userId) : ICurrentUser
     {

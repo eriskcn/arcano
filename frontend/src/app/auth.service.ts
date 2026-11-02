@@ -22,6 +22,8 @@ export class AuthService {
   private readonly storageKey = 'arcano.auth.token';
   private verifiedToken: string | null = null;
   private refreshing$: Observable<void> | null = null;
+  // App is recreated for each route, so a message for the next sign-in page waits here. In memory only: a reload drops it.
+  private signInNotice = '';
   readonly token = signal<string | null>(this.readStoredToken());
   readonly email = signal<string | null>(null);
   // Only decides whether to show the Admin entry; the server enforces access.
@@ -30,6 +32,16 @@ export class AuthService {
     const role = claims?.['role'] ?? claims?.['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
     return Array.isArray(role) ? role.includes('Admin') : role === 'Admin';
   });
+
+  setSignInNotice(message: string): void {
+    this.signInNotice = message;
+  }
+
+  takeSignInNotice(): string {
+    const message = this.signInNotice;
+    this.signInNotice = '';
+    return message;
+  }
 
   // false only on a fresh server with no users: the first account needs no invite key.
   setup(): Observable<{ requiresKey: boolean }> {

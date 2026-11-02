@@ -40,15 +40,29 @@ export class FileActionsService {
     return this.host.files().filter(file => this.host.selectedIds().has(file.id));
   }
 
+  // host.files() holds no folders, so a selected id missing from it is a folder.
+  private foldersSkippedNotice(hint = 'Act on them one at a time.'): string {
+    return this.host.selectedIds().size > this.selectedFiles().length ? `Folders were skipped. ${hint}` : '';
+  }
+
   toClipboard(mode: 'copy' | 'cut'): void {
-    this.clipboard.set({ mode, items: this.selectedFiles(), sourceFolderId: this.host.currentFolderId() });
+    const items = this.selectedFiles();
+    this.actionError.set(this.foldersSkippedNotice('They cannot be copied or cut.'));
+    if (items.length > 0) {
+      this.clipboard.set({ mode, items, sourceFolderId: this.host.currentFolderId() });
+    }
   }
 
   trashSelected(): void {
-    this.bulk(this.selectedFiles(), file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
+    const files = this.selectedFiles();
+    if (files.length === 0) {
+      this.actionError.set(this.foldersSkippedNotice());
+      return;
+    }
+    this.bulk(files, file => this.filesApi.delete(file.id), name => `Unable to delete ${name}. Please try again.`, done => {
       const deleted = done.map(([file]) => file);
       this.pushUndo(() => this.bulk(deleted, file => this.filesApi.restore(file.id), name => `Unable to restore ${name}. Please try again.`));
-    });
+    }, this.foldersSkippedNotice());
   }
 
   undo(): void {
@@ -87,12 +101,13 @@ export class FileActionsService {
     op: (item: { id: string; name: string }) => Observable<R>,
     failure: (name: string) => string,
     done?: (succeeded: [{ id: string; name: string }, R][]) => void,
+    notice = '',
   ): void {
     if (this.actionBusy()) {
       return;
     }
     this.actionBusy.set(true);
-    this.actionError.set('');
+    this.actionError.set(notice);
     const succeeded: [{ id: string; name: string }, R][] = [];
 
     from(items)

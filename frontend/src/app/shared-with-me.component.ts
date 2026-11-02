@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
+import { errorBody, readBlobError } from './http-errors';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { previewKind } from './preview/preview-kind';
 import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
@@ -202,7 +203,10 @@ export class SharedWithMeComponent {
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
-      error: () => this.error.set(`Unable to download ${fileName}. Please try again.`),
+      error: async (error: unknown) => {
+        const tooLarge = errorBody(await readBlobError(error))?.code === 'Folder.TooLarge';
+        this.error.set(tooLarge ? 'This folder has too many files to download as a zip.' : `Unable to download ${fileName}. Please try again.`);
+      },
     });
   }
 
