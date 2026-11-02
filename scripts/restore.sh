@@ -23,7 +23,10 @@ KEYS_VOLUME=arcano_api_keys
 "${DC[@]}" exec -T postgres pg_restore --list < "$src/db.dump" > /dev/null
 
 "${DC[@]}" stop web api seaweedfs
-"${DC[@]}" exec -T postgres pg_restore -U postgres -d arcanocore --clean --if-exists --no-owner < "$src/db.dump"
+trap 'echo "restore failed with the services stopped; fix the error and run this script again" >&2' ERR
+# Empty the schema first: --clean only drops what the dump knows, so tables added by later migrations (and their foreign keys) would block it.
+"${DC[@]}" exec -T postgres psql -U postgres -d arcanocore -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+"${DC[@]}" exec -T postgres pg_restore -U postgres -d arcanocore --exit-on-error --single-transaction --no-owner < "$src/db.dump"
 # wipe then extract (dotfiles included)
 docker run --rm -v "$VOLUME":/data -v "$src":/backup:ro alpine \
   sh -c 'find /data -mindepth 1 -delete && tar xzf /backup/seaweedfs.tar.gz -C /data'

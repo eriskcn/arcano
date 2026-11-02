@@ -85,6 +85,8 @@ docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml u
 ```
 Database migrations run when the API starts.
 
+Rollback: `scripts/restore.sh backups/<timestamp> --yes` with the backup taken before the upgrade. It empties the database schema first, so a backup from before the upgrade restores over the upgraded database; accounts, keys and shares created after that backup are lost, and files are restored too. Then start the code you want: the upgraded code applies its migrations again at startup (tested). Running the old code against the restored database was not tested. If `restore.sh` fails it leaves the services stopped; fix the error and run it again.
+
 Upgrading an install that already has accounts (from before invite keys): the migration gives every existing account a profile but makes nobody admin. Set `BOOTSTRAP_ADMIN_EMAIL=you@example.com` in `.env.production` (it becomes `Auth:BootstrapAdminEmail`) and run `up -d` again. It only promotes when no admin exists yet; remove it afterwards. Without it the API logs a warning at startup and sign-up stays closed.
 
 Startup rule when no admin exists: if `Auth:BootstrapAdminEmail` is set, that user is promoted (skipped if disabled). With no email and exactly one user, that user is promoted automatically (a warning is logged). With several users and no email an error is logged and nobody is promoted, so set `BOOTSTRAP_ADMIN_EMAIL`.
