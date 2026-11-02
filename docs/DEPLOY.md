@@ -61,7 +61,7 @@ The nginx inside the `web` image caps request bodies at 110m (`client_max_body_s
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
 scripts/backup.sh               # db.dump, seaweedfs.tar.gz, api_keys.tar.gz, env.production (mode 600), seaweedfs-image.txt in backups/<UTC time>/, keeps BACKUP_KEEP=7
-scripts/backup.sh --stop-api    # stops api and seaweedfs while copying (restarted afterwards, also on failure): consistent DB/files pair, uploads fail meanwhile
+scripts/backup.sh --stop-api    # stops api and seaweedfs while copying (restarted before the off-host copy, also on failure): consistent DB/files pair, uploads fail meanwhile
 ```
 Without `--stop-api` the script warns on stderr: the database is dumped first and the files are tarred while uploads continue, so the restore can contain orphan objects (files without a database row; measured: 26 during an upload loop). They are harmless leaked storage: nothing reclaims them. Use `--stop-api` (and in cron) for a consistent pair.
 The backups contain secrets (`env.production`); `backups/` is created with mode 700 and is gitignored.
@@ -69,7 +69,7 @@ The backups contain secrets (`env.production`); `backups/` is created with mode 
 Off-host copy: install and configure `rclone`, then set `BACKUP_RCLONE_REMOTE` (e.g. `s3remote:arcano-backups`) in the environment of the script. After each backup it runs `rclone copy <dir> $BACKUP_RCLONE_REMOTE/<timestamp>`; if that fails the script exits non-zero (and skips pruning).
 
 Cron (daily 03:00): `0 3 * * * cd /opt/arcano && BACKUP_RCLONE_REMOTE=s3remote:arcano-backups scripts/backup.sh --stop-api >> backups/cron.log 2>&1`
-(Run `scripts/backup.sh` once by hand first so `backups/` exists with the right mode.) Without `BACKUP_RCLONE_REMOTE` backups stay on the same disk.
+(Run `scripts/backup.sh` once by hand first so `backups/` exists with the right mode.) With `--stop-api` the services are running again before `rclone` starts. Without `BACKUP_RCLONE_REMOTE` backups stay on the same disk.
 
 Disk sizing: with 7 backups on the same disk as the data, plan for disk >= users x quota x ~8 (live data plus 7 archives).
 
@@ -96,11 +96,17 @@ docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml u
 ```
 Database migrations run when the API starts.
 
-Rollback: `scripts/restore.sh backups/<timestamp> --yes` with the backup taken before the upgrade. It empties the database schema first, so a backup from before the upgrade restores over the upgraded database; accounts, keys and shares created after that backup are lost, and files are restored too. Then start the code you want: the upgraded code applies its migrations again at startup (tested). Running the old code against the restored database was not tested. If `restore.sh` fails it leaves the services stopped; fix the error and run it again.
+A v0.1.0 install takes this pre-upgrade backup with the v0.1.0 script, which stops only the API and has no api keys or env copy, so keep `.env.production` separately.
 
-Upgrading an install that already has accounts (from before invite keys): the migration gives every existing account a profile but makes nobody admin. Set `BOOTSTRAP_ADMIN_EMAIL=you@example.com` in `.env.production` (it becomes `Auth:BootstrapAdminEmail`) and run `up -d` again. It only promotes when no admin exists yet; remove it afterwards. Without it the API logs a warning at startup and sign-up stays closed.
+Rollback: `scripts/restore.sh backups/<timestamp> --yes` with the backup taken before the upgrade. It empties the database schema first, so a backup from before the upgrade restores over the upgraded database; accounts, keys and shares created after that backup are lost, and files are restored too. Then start the code you want: the upgraded code applies its migrations again at startup.
 
-Startup rule when no admin exists: if `Auth:BootstrapAdminEmail` is set, that user is promoted (skipped if disabled). With no email and exactly one user, that user is promoted automatically (a warning is logged). With several users and no email an error is logged and nobody is promoted, so set `BOOTSTRAP_ADMIN_EMAIL`.
+Tested on throwaway stacks: the same steps by hand (drop the schema, restore a v0.1.0 backup, start the current code) gave identical data and file hashes, with migrations re-applied; `restore.sh` itself with a same-version backup (row count and file hash matched); and its database commands against an older-schema dump on a throwaway Postgres. Not tested: `restore.sh` with an actual v0.1.0 backup, and running the old code against the restored database.
+
+If `restore.sh` fails it leaves the services stopped; fix the error and run it again.
+
+Upgrading an install that already has accounts (from before invite keys): the migration gives every existing account a profile but makes nobody admin. Set `BOOTSTRAP_ADMIN_EMAIL=you@example.com` in `.env.production` (it becomes `Auth:BootstrapAdminEmail`) and run `up -d` again. It only promotes when no admin exists yet; remove it afterwards. Without it the startup rule below decides. `ALLOW_REGISTRATION` no longer has any effect and can be removed from `.env.production`.
+
+Startup rule when no admin exists: if `Auth:BootstrapAdminEmail` is set, that user is promoted (skipped if disabled or locked out: a warning is logged and nobody is promoted). With no email and exactly one user, that user is promoted automatically (a warning is logged). With several users and no email an error is logged and nobody is promoted, so set `BOOTSTRAP_ADMIN_EMAIL`.
 
 ## Not covered
 - No high availability; run a single API instance only.

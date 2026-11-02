@@ -1,6 +1,6 @@
 # Arcano
 
-A personal cloud-storage application monorepo with an ASP.NET Core backend and Angular client. The backend API and the Angular client cover the personal-use workflows (sign-in, files and folders, trash, share links, previews, chunked uploads), and a production Compose setup exists. See `REPO_STATUS.md` for what is verified and what is still open.
+A personal cloud-storage application monorepo, also usable by a small trusted group, with an ASP.NET Core backend and Angular client. The backend API and the Angular client cover the main workflows (sign-in, files and folders, trash, share links, previews, chunked uploads), and a production Compose setup exists. See `REPO_STATUS.md` for what is verified and what is still open.
 
 ## Repository overview
 

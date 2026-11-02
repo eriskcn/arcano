@@ -5,7 +5,7 @@ Boilerplate ASP.NET Core Web API project targeting .NET 10 based on Clean Archit
 ## Project Structure
 - `ArcanoCore.Domain`: Base entities, results, interfaces without dependencies.
 - `ArcanoCore.Application`: DTOs, business interfaces and the File, Folder, Share, Upload, Quota and Account services.
-- `ArcanoCore.Infrastructure`: DbContext, Repositories, Unit of Work, SeaweedStorageService implementing S3.
+- `ArcanoCore.Infrastructure`: DbContext, migrations, Identity and JWT setup, cleanup job, SeaweedStorageService implementing S3.
 - `ArcanoCore.API`: Endpoints, Dependency Injection registration, RFC 7807 Exception Middleware.
 
 ## Prerequisites
@@ -117,7 +117,7 @@ Set values in `appsettings.json` or as environment variables (`:` becomes `__`, 
 | `ForwardedHeaders:KnownProxies` | `[]` | Behind a reverse proxy set `ForwardedHeaders__KnownProxies__0` to the proxy IP so rate limiting sees client IPs; when empty, X-Forwarded-For is ignored. |
 | (rate limits) | fixed | Sign-in/up 10/min per IP; `/api/Public` info 60 and download 20/min per IP; `/api/UserShares`, `/api/Shared`, `/api/Admin` 120/min per user (429 over the limit). Not configurable. |
 | `Database:MigrateOnStartup` | `true` | Applies migrations at startup. |
-| `Auth:BootstrapAdminEmail` | empty | Upgrades only: if users exist but none is an admin, this user is promoted at startup. Without it a warning is logged. |
+| `Auth:BootstrapAdminEmail` | empty | Upgrades only: if users exist but none is an admin, this user is promoted at startup (not if disabled or locked out). Without it a sole user is promoted automatically; with several users an error is logged and nobody is promoted. |
 | `Cleanup:Enabled` | `true` | Background job: abandoned upload sessions older than 24 h, trashed files older than 30 days, and soft-deleted folders older than 30 days once empty. |
 | `Cleanup:IntervalMinutes` | `60` | |
 | `DataProtection:KeysPath` | `/app/keys` in a container, framework default otherwise | Where DataProtection keys are persisted. |

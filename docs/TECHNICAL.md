@@ -265,7 +265,7 @@ HS256, built in `backend/src/ArcanoCore.API/Controllers/JwtTokens.cs`. `Jwt:Secr
 
 ### Revocation with the security stamp
 
-`JwtBearerEvents.OnTokenValidated` loads the user on every authenticated request. The token fails if the user is gone, `sstamp` is missing or differs from the current stamp, or the user is locked out.
+`JwtBearerEvents.OnTokenValidated` loads the user on every authenticated request. The token fails if the user is gone, `sstamp` is missing or differs from the current stamp, or the user is disabled (`UserAccountState.IsTokenValid`). A brute-force lockout does not end existing sessions.
 
 | Action | Effect |
 |---|---|
@@ -276,7 +276,7 @@ HS256, built in `backend/src/ArcanoCore.API/Controllers/JwtTokens.cs`. `Jwt:Secr
 
 ### Refresh and session cap
 
-`POST /api/Auth/refresh` returns a new token with the original `session_start`. It returns 401 `Auth.SessionExpired` when more than 24 hours have passed since `session_start`, or when the user is gone or locked out (`MaxSessionAge` in `AuthController`). A token issued just before the cap remains valid for its normal lifetime, so the longest session is 24 hours plus `Jwt:ExpiryInMinutes`.
+`POST /api/Auth/refresh` returns a new token with the original `session_start`. It returns 401 `Auth.SessionExpired` when more than 24 hours have passed since `session_start`, or when the user is gone or disabled (`MaxSessionAge` in `AuthController`). A token issued just before the cap remains valid for its normal lifetime, so the longest session is 24 hours plus `Jwt:ExpiryInMinutes`.
 
 ### Group mode
 
@@ -358,7 +358,7 @@ An oversized form body returns 413 through the custom `InvalidModelStateResponse
 
 **Abort retry.** S3 `NoSuchUpload` counts as success. On any other S3 failure the session row is kept, the endpoint returns 400 `File.UploadFailed`, and the start-time sweep and cleanup job retry the abort. There is no attempt cap.
 
-**Client behaviour** (`frontend/src/app/files.service.ts`, `file-actions.service.ts`): files larger than 8 MiB use chunked upload, others single-request. Parts are sent one at a time. A failed part retries up to 3 times, 500 ms apart, first asking the server whether the part already arrived. Any final failure sends an abort. The session id is not persisted, so an upload does not resume after a page reload.
+**Client behaviour** (`frontend/src/app/files.service.ts`, `file-actions.service.ts`): files larger than 8 MiB use chunked upload, others single-request. Parts are sent one at a time. A failed part retries up to 3 times, 500 ms apart, first asking the server whether the part already arrived. Any final failure sends an abort. The Cancel link in the progress row unsubscribes, which aborts the open session and drops the files still queued. On `pagehide` during a chunked upload the client sends the abort as a `keepalive` `DELETE`, on a best-effort basis; if it does not arrive, the session stays until the 24-hour sweep. The session id is not persisted, so an upload does not resume after a page reload.
 
 ### Quota and the upload lock
 
@@ -626,6 +626,7 @@ Settings use standard ASP.NET configuration; in environment variables `:` become
 | `DataProtection:KeysPath` | `/app/keys` if `DOTNET_RUNNING_IN_CONTAINER=true`, else framework default | Absent | |
 | `Logging:LogLevel:Default` | Framework | `Information` | |
 | `Logging:LogLevel:Microsoft.AspNetCore` | Framework | `Warning` | |
+| `Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command` | Framework | `Warning` | |
 | `AllowedHosts` | Framework | `*` | |
 
 Production environment variables that feed these keys are in `docker-compose.prod.yml` and `.env.production.example`.
@@ -687,6 +688,7 @@ Angular 22 with standalone components and signals, Tailwind CSS, Vitest. Everyth
 - `authInterceptor` adds `Authorization: Bearer` only to requests whose origin and path match the configured API.
 - When the token has under 10 minutes left, the interceptor calls `POST /Auth/refresh` before sending. Concurrent callers share one in-flight refresh. If it fails, the old token is sent.
 - `authenticatedGuard` and `anonymousOnlyGuard` call `validateSession()`, which verifies each new token once with `GET /Auth/session`, and signs out on 401. An expired token is dropped locally.
+- A 401 on any other API request that carried the token calls `AuthService.sessionExpired`: it signs out once, sets the notice "Your session has ended. Sign in again." and goes to `/signin`. Login, register, reset, refresh, setup, session and `Public/` calls are excluded (`isCredentialCall` in `auth.interceptor.ts`).
 - `isAdmin` reads the `role` claim and only controls whether the Admin entry appears.
 
 ### Lazy loading
@@ -787,7 +789,7 @@ The design assumes one API process. State held per process: `FileService.UploadL
 
 Accounts and sessions:
 
-- A brute-force lockout also invalidates the user's existing tokens for its duration, because `OnTokenValidated` rejects any locked-out user. Failed attempts come from `Login` and from password verification in `AccountController`.
+- A brute-force lockout refuses sign-in and password verification in `AccountController` for its duration; issued tokens stay valid. Failed attempts come from `Login` and from password verification in `AccountController`.
 - There is no email. Forgotten passwords use Reset keys. An admin can reset any user's password, including another admin's (see the trust model in [DEPLOY.md](DEPLOY.md#not-covered)).
 - No endpoint promotes or demotes an admin after bootstrap.
 

@@ -83,7 +83,7 @@ The layout depends on the width of your screen:
 
 - **Large screens (1024 pixels wide and up):** the sections are in the left sidebar. **Settings** and **Admin** are at the bottom of it.
 - **Smaller screens, including phones:** the first five sections are in the bottom bar. Select the menu icon at the top left to reach **Shared with me**, **Settings**, **Admin** and your storage meter. If the menu stays in front of a dialog you opened from it, tap outside the menu to close it.
-- **Wider screens (1280 pixels wide and up):** selecting an item also opens a **Details** panel on the right. It has quick actions such as **Preview**, **Download** and **Share**. Narrower screens do not show this panel, so use the [right-click menu](#the-right-click-menu).
+- **Wider screens (1280 pixels wide and up):** selecting an item also opens a **Details** panel on the right. It has quick actions such as **Preview**, **Download** and **Share**. On narrower screens, select an item and then the **Details** button (an info icon above the list). The same panel opens as a sheet from the right. Close it with its close icon or Esc.
 
 Other controls:
 
@@ -112,7 +112,9 @@ If the upload starts from **Home**, **Recent**, **Favorites** or **Trash**, the 
 
 Files over 8 MB are sent in pieces of 8 MB. Each failed piece is retried up to three times. The bar moves forward as each piece finishes, and stays at 99% until the server finishes the file.
 
-Keep the page open until the upload finishes. An upload cannot resume after the page closes or the upload fails. You must start it again. The app has no button to cancel an upload.
+Keep the page open until the upload finishes. To stop, select **Cancel** in the progress bar. This also stops any files still waiting. Files that already finished stay.
+
+An upload cannot resume after you cancel it, the upload fails or the page closes. You must start it again. Closing the page tries to cancel a large upload, but this is not guaranteed. If it does not work, the upload stays open for up to 24 hours.
 
 The largest possible file is about 78 GB, but your storage limit usually applies first.
 
@@ -133,9 +135,9 @@ Two folders in the same place cannot have the same name.
 
 ### Open a folder
 
-Double-click it, or select it and press Enter. Use the path at the top to go back up. Selecting **My Files** in the sidebar while you are already in My Files does not take you back to the top.
+Double-click it, or select it and press Enter. Use the path at the top to go back up. Selecting **My Files** while you are in one of its folders takes you back to the top.
 
-Phones do not show the path. To return to the top level on a phone, tap another section and then **My Files**.
+Phones do not show the path. To go up one level on a phone, tap the **Up one folder** arrow at the top. To return to the top level, tap **My Files**.
 
 ### Download a file
 
@@ -212,7 +214,7 @@ Some actions apply only to the files in a selection and skip any folders: **Copy
 
 ### The right-click menu
 
-Right-click an item, or select the **⋮** button that appears when you point at it. On a touch screen, try pressing and holding the item. If that does nothing, tap the far right of the row, or the top right corner of the card in grid view. The **⋮** button is there even when you cannot see it.
+Right-click an item, or select the **⋮** button that appears when you point at it. On a touch screen the **⋮** button is always shown, at the far right of the row, or the top right corner of the card in grid view. Pressing and holding the item may also open the menu, depending on the browser.
 
 | You right-click | Menu options |
 |---|---|
@@ -521,10 +523,15 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 
 | Message or problem | Meaning | What to do |
 |---|---|---|
-| Unable to load your files. Please try again. | The request failed. Your session may have ended. | Select **Try again**. If that fails, reload the page. You will go to the sign-in page if your session ended. |
+| Your session has ended. Sign in again. | Shown on the sign-in page. Your session expired, or was ended by **Sign out everywhere**, a password change or reset, or an admin disabling your account. | Sign in again. If that fails, ask an admin. |
+| Unable to load your files. Please try again. | The request failed. | Select **Try again**. If that fails, reload the page. |
 | Not enough storage space. | The file does not fit in your limit. | Free some space. See [Storage](#storage). |
 | File is too large. | The server refused the upload because of its size. | Ask the person who runs the server. |
-| Unable to upload (file name). Please try again. | The upload failed. Common causes are listed below. | Check the causes below, then try again. |
+| File name is too long (255 characters at most). | The server refused the file's name. | Rename the file on your device, then upload it. |
+| File type is not supported. | The server refused the file type your browser reported, for example one over 100 characters. | Ask the person who runs the server. |
+| Too many uploads in progress. Finish or cancel one first. | You already have 3 large uploads open. An upload left open when a page closed can stay open for up to 24 hours, and can use up your available space during that time. | Finish or cancel your upload, or wait for the open ones to end. |
+| The upload was interrupted. Please try again. | The server no longer has the upload, or a piece is missing or the wrong size. | Start the upload again. |
+| Unable to upload (file name). Please try again. | The upload failed. One cause is an empty (0-byte) file, which cannot be uploaded. | Check the file, then try again. |
 | Unable to download (name). Please try again. | The download failed. | Try again. |
 | This folder has too many files to download as a zip. | A zip cannot hold more than 5,000 files. | Download smaller subfolders. |
 | A folder with this name already exists here. | Folder names must be unique in one place. | Choose another name. |
@@ -533,12 +540,6 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 | No folders to move to | The current folder has no subfolders, and you are at the top level. | Use drag and drop or cut and paste, or create a folder first. |
 | Preview unavailable. | The file type or size has no preview, or loading failed. | Select **Download**. See [Previews](#previews). |
 | The Sort, Filter, notifications and profile buttons do nothing. | These controls have no function yet. | Use the filter buttons under the title, such as **Images**. |
-
-An upload can also fail for these reasons:
-
-- The file is empty (0 bytes).
-- The file name is over 255 characters.
-- You already have 3 large uploads open. An upload stays open for up to 24 hours if you closed the page while it ran. It can also use up your available space during that time.
 
 ### Sharing
 
@@ -559,4 +560,4 @@ An upload can also fail for these reasons:
 | Enter a quota of 0 or more GB, or leave it empty. | The quota is not valid. | Fix the number. |
 | Expiry must be a whole number of days from 1 to 30. | The expiry is not valid. | Fix the number. |
 | Copy failed. Select the key and copy it manually. | The browser blocked copying. | Select the key and copy it yourself. |
-| Something went wrong. Please try again. | An admin action failed. | Try again. If you just disabled or deleted your own account, reload the page. |
+| Something went wrong. Please try again. | An admin action failed. | Try again. |
