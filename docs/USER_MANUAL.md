@@ -26,7 +26,7 @@ The first account on a new server needs no key and becomes the admin.
 2. Check that the page says "This server has no accounts yet. The first account becomes the admin."
 3. Enter your **Email address** and a **Password** of at least 8 characters.
 4. Select **Create account**.
-5. On the sign-in page, sign in with the same details.
+5. The sign-in page opens and says "Account created. Sign in to continue." Sign in with the same details.
 
 ### Sign up with an invite key
 
@@ -36,7 +36,7 @@ Every later account needs an invite key from an admin. A key works once.
 2. Enter your **Email address** and a **Password** of at least 8 characters.
 3. Paste the key into **Invite key**.
 4. Select **Create account**.
-5. On the sign-in page, sign in with the same details.
+5. The sign-in page opens and says "Account created. Sign in to continue." Sign in with the same details.
 
 If sign-up fails because of your email or password, the key is not used up. You can try again with it.
 
@@ -62,7 +62,7 @@ The app does not send reset emails. An admin gives you a Reset key instead.
 3. Enter the **Reset key**.
 4. Enter your new password twice. It must be at least 8 characters.
 5. Select **Reset password**.
-6. On the sign-in page, sign in with the new password.
+6. The sign-in page opens and says "Password reset. Sign in with your new password." Sign in with the new password.
 
 A Reset key works once. Using it signs you out of all your sessions.
 
@@ -199,8 +199,10 @@ Clear the box to return to the normal list.
 
 ### Select several items
 
-Use either of these:
+Use any of these:
 
+- Hold Ctrl (Cmd on a Mac) and click an item to add it to the selection. Do the same on a selected item to remove it.
+- Click one item, then hold Shift and click another to select both and everything between them. Hold Ctrl+Shift (Cmd+Shift on a Mac) instead, to add them to what is already selected.
 - Press and drag from empty space in the list to draw a box around items. Hold Ctrl (Cmd on a Mac) as you start, to add to what is already selected.
 - Press Ctrl+A (Cmd+A on a Mac) to select everything in the list.
 
@@ -485,7 +487,7 @@ Disabling a member:
 - Signs them out at once and stops them signing in.
 - Keeps their files.
 - Hides what they shared with other users until they are enabled again.
-- Does not stop their public links, which keep working. Ask them to revoke links before you disable them, or delete the member.
+- Stops their public links while they are disabled. The same links work again when the member is enabled, unless they have expired.
 
 ### Delete a member
 
@@ -525,7 +527,8 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 | Not enough storage space. | The file does not fit in your limit. | Free some space. See [Storage](#storage). |
 | File is too large. | The server refused the upload because of its size. | Ask the person who runs the server. |
 | Unable to upload (file name). Please try again. | The upload failed. Common causes are listed below. | Check the causes below, then try again. |
-| Unable to download (name). Please try again. | The download failed. For a folder, it may hold more than 5,000 files. | Try again, or download smaller subfolders. |
+| Unable to download (name). Please try again. | The download failed. For a folder in **Shared with me**, it may hold more than 5,000 files. | Try again, or download smaller subfolders. |
+| This folder has too many files to download as a zip. | A zip cannot hold more than 5,000 files. | Download smaller subfolders. |
 | A folder with this name already exists here. | Folder names must be unique in one place. | Choose another name. |
 | Enter a valid folder name. / Enter a valid file name. | The name is empty or over 255 characters. | Change the name. |
 | A folder cannot be moved into itself or one of its subfolders. | The target is inside the folder you are moving. | Choose another target. |

@@ -9,7 +9,7 @@ import { environment } from '../environments/environment';
 import { AccountService } from './account.service';
 import { ContextMenuComponent, ContextMenuModel } from './context-menu.component';
 import { FileActionsService } from './file-actions.service';
-import { errorBody, fileErrorMessage } from './http-errors';
+import { errorBody, fileErrorMessage, readBlobError } from './http-errors';
 import { AuthService } from './auth.service';
 import { FILES_PAGE_SIZE, FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
@@ -156,7 +156,7 @@ export class App implements OnInit {
   readonly signInPassword = signal<string>('');
   readonly signInError = signal<string>('');
   readonly signUpError = signal<string>('');
-  readonly signUpSuccess = signal<string>('');
+  readonly signUpSuccess = signal<string>(this.auth.takeSignInNotice());
   readonly authBusy = signal<boolean>(false);
   readonly showSignInPassword = signal<boolean>(false);
 
@@ -357,7 +357,11 @@ export class App implements OnInit {
     }
   }
 
-  openItem(file: FileItem): void {
+  openItem(file: FileItem, event?: MouseEvent): void {
+    // A double-click with a modifier is two quick selection clicks, not an open.
+    if (event?.ctrlKey || event?.metaKey || event?.shiftKey) {
+      return;
+    }
     if (file.type === 'folder') {
       this.openFolder(file);
     } else if (previewKind(file.contentType ?? '', file.fileSize ?? 0) !== 'none') {
@@ -501,7 +505,7 @@ export class App implements OnInit {
         this.authBusy.set(false);
         this.signUpPassword.set('');
         this.signUpKey.set('');
-        this.signUpSuccess.set('Account created. Sign in to continue.');
+        this.auth.setSignInNotice('Account created. Sign in to continue.');
         void this.router.navigateByUrl('/signin');
       },
       error: error => {
@@ -539,7 +543,7 @@ export class App implements OnInit {
           this.resetKey.set('');
           this.resetPassword.set('');
           this.resetConfirm.set('');
-          this.signUpSuccess.set('Password reset. Sign in with your new password.');
+          this.auth.setSignInNotice('Password reset. Sign in with your new password.');
           void this.router.navigateByUrl('/signin');
         },
         error: error => {
@@ -1091,9 +1095,10 @@ export class App implements OnInit {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         this.actionBusy.set(false);
       },
-      error: () => {
+      error: async (error: unknown) => {
+        const message = this.folderErrorMessage(await readBlobError(error), `Unable to download ${folder.name}. Please try again.`);
         this.actionBusy.set(false);
-        this.actionError.set(`Unable to download ${folder.name}. Please try again.`);
+        this.actionError.set(message);
       },
     });
   }

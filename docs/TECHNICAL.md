@@ -71,7 +71,7 @@ Services return `Result` or `Result<T>` rather than throwing for expected failur
 | `/` | `try_files $uri $uri/ /index.html` (SPA fallback) |
 | `= /index.html` | `Cache-Control: no-cache` |
 | `~* \.(js\|css\|woff2?\|png\|jpg\|jpeg\|svg\|ico\|webp)$` | `expires 1y`, `public, immutable` (build output is content-hashed) |
-| `/api/` | Proxy to `http://api:8080`; sets `X-Forwarded-For` (`$proxy_add_x_forwarded_for`), `X-Real-IP`, `X-Forwarded-Proto`; request and response buffering off; read and send timeouts 300 s |
+| `/api/` | Proxy to `http://api:8080`; sets `X-Forwarded-For` (`$proxy_add_x_forwarded_for`, after the server-level `real_ip` step, see [other limits](#other-limits)), `X-Real-IP`, `X-Forwarded-Proto`; request and response buffering off; read and send timeouts 300 s |
 | `= /health` | Proxy to the API |
 
 Server-wide: `client_max_body_size 110m`; `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`. No CSP or HSTS header is set. `api` is resolved lazily through Docker DNS, so nginx can start first.
@@ -320,7 +320,7 @@ Keys (`InviteKeyService`):
 
 `POST /api/Admin/users/{id}/disable` enables lockout, sets `LockoutEnd` to `DateTimeOffset.MaxValue` and rotates the stamp. A user counts as disabled when `LockoutEnd` is more than 50 years away (`IsDisabled`), which distinguishes it from a brute-force lockout. Enabling clears `LockoutEnd` and the failed-access count.
 
-While disabled: tokens are rejected, login returns the generic 401, user-to-user shares in either direction stop working, and the user cannot be chosen as a share recipient. Public links are not affected ([section 5](#5-sharing)).
+While disabled: tokens are rejected, login returns the generic 401, user-to-user shares in either direction stop working, and the user cannot be chosen as a share recipient. Public links return 404 until the user is enabled ([section 5](#5-sharing)).
 
 ## 4. Storage
 
@@ -410,8 +410,9 @@ Both kinds of share are removed when the item is purged (cascade) and when the o
 
 1. The link matches the token, is active and is unexpired.
 2. The file is found through the query filter, so a trashed file returns 404. The link works again if the file is restored.
+3. The owner exists and is not disabled (`IUserDirectory`), else 404 `Share.NotFound`. The link works again after the owner is enabled.
 
-Owner state is not checked, so links keep working while the owner is disabled. Failures on `info` always return 404. The Angular page at `/share/:token` uses these endpoints.
+Failures on `info` always return 404. The Angular page at `/share/:token` uses these endpoints.
 
 ### User share validation
 
@@ -579,7 +580,7 @@ All policies are in `backend/src/ArcanoCore.API/Program.cs`. Each is a fixed win
 | `user-api` | 120 | User id, else remote IP | `AdminController`, `UserSharesController`, `SharedController` |
 | `user-share-create` | 20 | User id, else remote IP | `POST /api/UserShares` (replaces `user-api` on that action) |
 
-The remote IP comes from forwarded headers only when `ForwardedHeaders:KnownProxies` is set. See [rate limiting behind a proxy](#other-limits).
+The remote IP comes from forwarded headers only when `ForwardedHeaders:KnownProxies` is set. In production, nginx in `web` resolves the client first. See [rate limiting behind a proxy](#other-limits).
 
 ## 9. Audit logging
 
@@ -792,7 +793,6 @@ Accounts and sessions:
 
 Sharing:
 
-- Public links keep working while the owner is disabled.
 - Public links target files only.
 - Public-link tokens are stored in plain text.
 - `POST /api/UserShares` reveals whether an email is registered.
@@ -809,7 +809,8 @@ Storage:
 
 Rate limiting behind a proxy:
 
-- `Program.cs` does not set `ForwardLimit`, whose framework default is 1, so the API processes only the rightmost `X-Forwarded-For` entry. With a TLS proxy in front of `web`, as [DEPLOY.md](DEPLOY.md#5-tls-in-front) requires, nginx appends the proxy's address as the rightmost entry. From the code, IP-keyed policies would then see the proxy's address rather than the client's. This has not been checked on a running stack.
+- `Program.cs` does not set `ForwardLimit`, whose framework default is 1, so the API processes only the rightmost `X-Forwarded-For` entry. `frontend/nginx.conf` therefore resolves the client first: `set_real_ip_from 172.28.0.1` with `real_ip_header X-Forwarded-For` and `real_ip_recursive off` makes `$remote_addr` the rightmost entry when the connection comes from the Docker gateway, and that address is what nginx appends. Earlier, client-supplied entries are ignored. Checked on throwaway containers with the real API ([WBS 1.20](../backend/wbs/WBS.md)).
+- Anything that reaches the published port from the gateway address can set its own client IP: processes on the Docker host, and containers on other Docker networks using a host address (observed). A TLS proxy elsewhere has another source address and needs an edit, see [DEPLOY.md](DEPLOY.md#5-tls-in-front). Until then its address is used for all clients, and the header is not trusted.
 - `Public` downloads count each request, including each `Range` request, against `public-download`.
 - Authenticated `Files`, `Folders`, `Uploads` and `Share` routes have no rate limit.
 

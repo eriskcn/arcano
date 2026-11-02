@@ -18,12 +18,14 @@ public class ShareService : IShareService
     private readonly IApplicationDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly ICurrentUser _currentUser;
+    private readonly IUserDirectory _users;
 
-    public ShareService(IApplicationDbContext dbContext, IStorageService storageService, ICurrentUser currentUser)
+    public ShareService(IApplicationDbContext dbContext, IStorageService storageService, ICurrentUser currentUser, IUserDirectory users)
     {
         _dbContext = dbContext;
         _storageService = storageService;
         _currentUser = currentUser;
+        _users = users;
     }
 
     private Guid CurrentOwnerId => Guid.TryParse(_currentUser.UserId, out var ownerId) ? ownerId : Guid.Empty;
@@ -129,7 +131,15 @@ public class ShareService : IShareService
         }
 
         // The query filter hides trashed files, so a link to a trashed file stops working.
-        return await _dbContext.FileMetadatas.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);
+        var file = await _dbContext.FileMetadatas.FirstOrDefaultAsync(f => f.Id == fileId, cancellationToken);
+        if (file == null)
+        {
+            return null;
+        }
+
+        // Checked per request, so a link stops while the owner is disabled and works again after enable.
+        var owners = await _users.GetByIdsAsync([file.OwnerId], cancellationToken);
+        return owners.TryGetValue(file.OwnerId, out var owner) && !owner.IsDisabled ? file : null;
     }
 
     private async Task<bool> OwnsFileAsync(Guid fileId, CancellationToken cancellationToken)
