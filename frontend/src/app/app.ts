@@ -234,6 +234,7 @@ export class App implements OnInit {
   private moreSubscription?: Subscription;
   readonly actionError = this.actions.actionError;
   readonly uploadState = this.actions.uploadState;
+  readonly cancelUpload = () => this.actions.cancelUpload();
   readonly actionBusy = this.actions.actionBusy;
   readonly clipboard = this.actions.clipboard;
 
@@ -351,7 +352,8 @@ export class App implements OnInit {
   selectNav(key: NavItem): void {
     const changed = key !== this.activeNav();
     this.activeNav.set(key);
-    if (changed) {
+    // Re-selecting the active section also returns to its root.
+    if (changed || this.folderPath().length) {
       this.folderPath.set([]);
       this.loadFiles();
     }

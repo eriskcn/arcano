@@ -46,6 +46,19 @@ describe('FileActionsService', () => {
     http.verify();
   });
 
+  it('cancelUpload stops the remaining uploads, clears progress and reloads', () => {
+    upload(new File(['a'], 'a.txt'), new File(['b'], 'b.txt'));
+    http.expectOne(`${api}/Files/upload`).event({ type: HttpEventType.UploadProgress, loaded: 1, total: 4 });
+    expect(service.uploadState()).not.toBeNull();
+
+    service.cancelUpload();
+
+    expect(service.uploadState()).toBeNull();
+    expect(service.actionBusy()).toBe(false);
+    expect(host.reload).toHaveBeenCalledTimes(1);
+    http.expectNone(`${api}/Files/upload`);
+  });
+
   it('reports a failed upload and continues', () => {
     upload(new File(['a'], 'a.txt'));
     http.expectOne(`${api}/Files/upload`).flush('no', { status: 400, statusText: 'Bad Request' });

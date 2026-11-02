@@ -1,6 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, PLATFORM_ID, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, catchError, finalize, map, of, share, tap } from 'rxjs';
 import { environment } from '../environments/environment';
 
@@ -19,6 +20,7 @@ const REFRESH_WINDOW_MS = 10 * 60 * 1000;
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly router = inject(Router);
   private readonly storageKey = 'arcano.auth.token';
   private verifiedToken: string | null = null;
   private refreshing$: Observable<void> | null = null;
@@ -145,6 +147,16 @@ export class AuthService {
     this.verifiedToken = null;
     this.token.set(null);
     this.email.set(null);
+  }
+
+  // A 401 on a request that carried `sentToken`. Only the first one for the current token signs out; later ones are no-ops.
+  sessionExpired(sentToken: string | null): void {
+    if (!sentToken || this.token() !== sentToken) {
+      return;
+    }
+    this.logout();
+    this.setSignInNotice('Your session has ended. Sign in again.');
+    void this.router.navigateByUrl('/signin');
   }
 
   validateSession(): Observable<boolean> {

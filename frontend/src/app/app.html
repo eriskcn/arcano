@@ -255,6 +255,17 @@
       <span class="material-symbols-rounded" style="font-size: 22px">menu</span>
     </button>
 
+    <!-- Up one folder; the breadcrumb is hidden below sm -->
+    <button
+      *ngIf="folderPath().length"
+      (click)="goToFolder(folderPath().length - 1)"
+      class="sm:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer"
+      aria-label="Up one folder"
+      title="Up one folder"
+    >
+      <span class="material-symbols-rounded" style="font-size: 22px">arrow_upward</span>
+    </button>
+
     <!-- Breadcrumb -->
     <div class="hidden sm:flex items-center gap-1 text-sm min-w-0 flex-shrink-0">
       <ng-container *ngFor="let crumb of breadcrumb(); let i = index">
@@ -523,7 +534,7 @@
           <!-- Loading / error / action error -->
           <div *ngIf="showFiles() && filesLoading()" class="px-4 py-3 text-xs font-medium text-gray-500" role="status">Loading your files...</div>
           <div *ngIf="uploadState() as u" class="px-4 py-3 text-xs font-medium text-gray-600" role="status">
-            <div class="flex justify-between gap-3"><span class="truncate">Uploading {{ u.name }}</span><span>{{ u.index }} of {{ u.total }}</span></div>
+            <div class="flex justify-between gap-3"><span class="truncate">Uploading {{ u.name }}</span><span class="flex items-center gap-3">{{ u.index }} of {{ u.total }}<button type="button" (click)="cancelUpload()" class="underline cursor-pointer">Cancel</button></span></div>
             <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div class="h-full bg-blue-500 transition-all" [style.width.%]="u.percent" role="progressbar" [attr.aria-valuenow]="u.percent" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
@@ -659,7 +670,7 @@
                       (click)="showContextMenu(file, $event); $event.stopPropagation()"
                       [attr.aria-label]="'More actions for ' + file.name"
                       [attr.aria-haspopup]="'menu'"
-                      class="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
+                      class="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
                     >
                       <span class="material-symbols-rounded" style="font-size: 16px">more_vert</span>
                     </button>
@@ -732,7 +743,7 @@
                   (click)="showContextMenu(file, $event); $event.stopPropagation()"
                   [attr.aria-label]="'More actions for ' + file.name"
                   [attr.aria-haspopup]="'menu'"
-                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-gray-200 text-gray-400 transition-all cursor-pointer"
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 p-0.5 rounded-md hover:bg-gray-200 text-gray-400 transition-all cursor-pointer"
                 >
                   <span class="material-symbols-rounded" style="font-size: 14px">more_vert</span>
                 </button>

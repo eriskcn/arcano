@@ -28,6 +28,21 @@ export function fileErrorMessage(error: unknown, fallback: string): string {
       return 'Not enough storage space.';
     case 'File.InvalidName':
       return 'Enter a valid file name.';
+    case 'File.TooLarge':
+      return 'File is too large.';
+    case 'File.Empty':
+      return 'File is empty.';
+    case 'File.NameTooLong':
+      return 'File name is too long (255 characters at most).';
+    case 'File.ContentTypeRequired':
+    case 'File.ContentTypeTooLong':
+      return 'File type is not supported.';
+    case 'Upload.TooManyOpen':
+      return 'Too many uploads in progress. Finish or cancel one first.';
+    case 'Upload.NotFound':
+    case 'Upload.BadPart':
+    case 'Upload.Incomplete':
+      return 'The upload was interrupted. Please try again.';
     default:
       return fallback;
   }

@@ -1,6 +1,6 @@
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable, catchError, concat, concatMap, filter, from, map, of, switchMap, throwError, timer } from 'rxjs';
+import { Observable, catchError, concat, concatMap, filter, finalize, from, map, of, switchMap, tap, throwError, timer } from 'rxjs';
 import { environment } from '../environments/environment';
 
 export interface FileDto {
@@ -108,13 +108,22 @@ export class FilesService {
               );
             }),
           );
+          // Unsubscribing before completion (Cancel) aborts the session so it frees its quota and slot.
+          let settled = false;
           return concat(chunks, this.http.post<unknown>(`${url}/${id}/complete`, {}).pipe(map(() => 100))).pipe(
-            catchError(error =>
-              this.http.delete(`${url}/${id}`).pipe(
+            tap({ complete: () => (settled = true) }),
+            finalize(() => {
+              if (!settled) {
+                this.http.delete(`${url}/${id}`).subscribe({ error: () => undefined });
+              }
+            }),
+            catchError(error => {
+              settled = true;
+              return this.http.delete(`${url}/${id}`).pipe(
                 catchError(() => of(null)),
                 switchMap(() => throwError(() => error)),
-              ),
-            ),
+              );
+            }),
           );
         }),
       );

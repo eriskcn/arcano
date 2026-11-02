@@ -26,8 +26,8 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend:** builds; 143 domain tests and 49 API tests pass (re-run 2026-11-02). The integration suite has 33 tests; in the last run (an agent run on throwaway containers) 28 passed and 5 S3 tests were skipped. It needs a real PostgreSQL and SeaweedFS (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database) and was **not re-run** on 2026-11-02; the earlier 33-pass result was on 2026-11-01.
-- **Frontend:** 215 unit tests in 20 files pass (re-run 2026-11-02). The production build was last run with the 200-spec state (WBS 9.16) and was not re-run for this report.
+- **Backend:** builds; 143 domain tests and 50 API tests pass (re-run 2026-11-02). The integration suite has 33 tests; in the last run (an agent run on throwaway containers) 28 passed and 5 S3 tests were skipped. It needs a real PostgreSQL and SeaweedFS (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database) and was **not re-run** on 2026-11-02; the earlier 33-pass result was on 2026-11-01.
+- **Frontend:** 225 unit tests in 21 files pass (re-run 2026-11-02). `ng build` succeeds at 523.46 kB initial (budget 540 kB).
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off (historical: before group mode, see below); change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (2026-10-31):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser. Fixes from 2026-11-02 (sign-up key notice kept after redirect, Ctrl/Shift selection, notices when folders are skipped in bulk actions, folder-zip too-large message, public links of a disabled owner) are covered by unit tests only, not browser-tested. The client-IP fix behind a proxy (`set_real_ip_from` in `frontend/nginx.conf`, `docs/DEPLOY.md` section 5) was checked on throwaway containers with the real API and a plain-HTTP nginx proxy, not with real TLS.
 
@@ -113,12 +113,10 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 From the latest read-only review (2026-11-02). Each was confirmed by reading the code or scripts; none was reproduced.
 
-- **Dead session:** `auth.interceptor.ts` has no 401 handling, so after the token is revoked or expires, requests fail with errors and there is no redirect to sign-in (only the route guard signs out).
-- **Touch:** the row "more actions" button is `opacity-0 group-hover:opacity-100` (list and grid), so it is invisible without a mouse hover.
-- **Upload slot held after a closed tab:** an open chunked upload session reserves its file size against the quota and counts towards `MaxOpenSessions` (3) until it is aborted or swept after 24 hours; the UI has no cancel button (only an automatic abort when a request errors in the page).
-- **Failed logins lock users out:** Identity's default lockout (5 failures) applies, and token validation rejects locked users, so anyone who can guess an email (10 attempts per minute per IP) can sign a user out of every session for the lockout period.
-- **Navigation:** `selectNav` does nothing when the section is already active, so clicking My Files inside a folder does not go to the root; below `sm` the breadcrumb is hidden, so phones have no way up a folder except the browser back button or changing section.
-- **Upload errors:** `fileErrorMessage` maps only 413, `Storage.QuotaExceeded` and `File.InvalidName`; other server reasons (for example `Upload.TooManyOpen`) show the generic "Unable to upload ..." text.
+- **Upload slot held after a closed tab:** an open chunked upload session reserves its file size against the quota and counts towards `MaxOpenSessions` (3) until it is aborted or swept after 24 hours. The new Cancel button aborts it, but closing the tab or navigating away mid-upload still leaves it held.
+- **Details below `xl`:** the Details toggle and the preview panel are `hidden xl:flex`, so Details is unreachable on tablets and phones.
+
+Fixed on branch `fix/open-issues` (unit-tested, not browser-tested; none checked on a touch device): the dead-session redirect on a 401 (with a "Your session has ended" notice), the row action button on touch, My Files returning to the root and an "Up one folder" button below `sm`, server error codes mapped to messages for uploads, an upload Cancel button, and failed-login lockout no longer invalidating issued tokens (only an admin-disabled user's token is rejected; the wiring of the token check is not covered by an integration test, which was not run).
 
 Data-safety risks, not tested:
 

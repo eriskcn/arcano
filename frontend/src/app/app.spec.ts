@@ -287,6 +287,19 @@ describe('App', () => {
     http.verify();
   });
 
+  it('should return to the root when the active section is selected again inside a folder', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    app.folderPath.set([{ id: 'f1', name: 'Projects' }, { id: 'f2', name: 'Reports' }]);
+
+    app.selectNav(app.activeNav());
+
+    expect(app.folderPath()).toEqual([]);
+    http.expectOne(r => r.url.endsWith('/Files')).flush([]);
+    http.expectOne(r => r.url.endsWith('/Folders')).flush([]);
+    http.verify();
+  });
+
   it('should search with q after a debounce and return to the folder view when cleared', () => {
     vi.useFakeTimers();
     const fixture = TestBed.createComponent(App);

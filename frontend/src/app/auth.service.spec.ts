@@ -1,6 +1,7 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { AuthService } from './auth.service';
 import { authInterceptor } from './auth.interceptor';
 import { environment } from '../environments/environment';
@@ -288,5 +289,36 @@ describe('AuthService', () => {
 
       expect(auth.token()).toBeNull();
     });
+  });
+  it('sessionExpired signs out once, sets the notice and goes to sign-in', () => {
+    const auth = TestBed.inject(AuthService);
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const http = TestBed.inject(HttpTestingController);
+    const token = createToken();
+    auth.login('person@arcano.test', 'secret123').subscribe();
+    http.expectOne(`${environment.apiBaseUrl}/Auth/login`).flush({ token });
+
+    auth.sessionExpired(token);
+    auth.sessionExpired(token);
+
+    expect(auth.token()).toBeNull();
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith('/signin');
+    expect(auth.takeSignInNotice()).toBe('Your session has ended. Sign in again.');
+  });
+
+  it('sessionExpired ignores a 401 for a token that is no longer current', () => {
+    const auth = TestBed.inject(AuthService);
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const http = TestBed.inject(HttpTestingController);
+    const token = createToken();
+    auth.login('person@arcano.test', 'secret123').subscribe();
+    http.expectOne(`${environment.apiBaseUrl}/Auth/login`).flush({ token });
+
+    auth.sessionExpired('older-token');
+
+    expect(auth.token()).toBe(token);
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

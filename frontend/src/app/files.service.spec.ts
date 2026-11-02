@@ -265,6 +265,27 @@ describe('FilesService', () => {
       expect(state.done).toBe(true);
     });
 
+    it('should abort the session when the subscriber unsubscribes mid-upload', () => {
+      const http = TestBed.inject(HttpTestingController);
+      const sub = TestBed.inject(FilesService).uploadChunked(file, id).subscribe();
+      http.expectOne(url).flush({ id: sid, chunkSize: 10 });
+      http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 204, statusText: 'No Content' });
+      http.expectOne(`${url}/${sid}/parts/2`);
+      sub.unsubscribe();
+      const abort = http.expectOne(`${url}/${sid}`);
+      expect(abort.request.method).toBe('DELETE');
+      abort.flush(null, { status: 204, statusText: 'No Content' });
+    });
+
+    it('should not abort after a completed upload', () => {
+      const { http } = start();
+      for (const n of [1, 2, 3]) {
+        http.expectOne(`${url}/${sid}/parts/${n}`).flush(null, { status: 204, statusText: 'No Content' });
+      }
+      http.expectOne(`${url}/${sid}/complete`).flush({ id });
+      http.verify();
+    });
+
     it('should abort the session when a chunk keeps failing', async () => {
       const { http, state } = start();
       http.expectOne(`${url}/${sid}/parts/1`).flush(null, { status: 500, statusText: 'Server Error' });
