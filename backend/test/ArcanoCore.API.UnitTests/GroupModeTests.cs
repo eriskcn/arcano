@@ -11,6 +11,7 @@ using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
 using ArcanoCore.Domain.Entities;
+using ArcanoCore.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -134,7 +135,7 @@ public class GroupModeTests
 
         Assert.IsType<UnauthorizedObjectResult>(await env.Controller.Login(new LoginRequest("b@example.com", Password)));
         Assert.True(b.IsDisabled());
-        // Token validation (AddInfrastructure) rejects locked-out users; a refresh is refused the same way.
+        // Token validation (AddInfrastructure) rejects disabled users; a refresh is refused the same way.
         env.Controller.ControllerContext = new ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext
@@ -146,6 +147,28 @@ public class GroupModeTests
 
         Assert.IsType<NoContentResult>(await admin.Enable(b.Id));
         Assert.IsType<OkObjectResult>(await env.Controller.Login(new LoginRequest("b@example.com", Password)));
+    }
+
+    [Fact]
+    public async Task FailedLoginLockout_KeepsIssuedTokenValid_ButDisabledUserTokenIsRejected()
+    {
+        var env = AuthControllerTests.CreateEnv();
+        await Register(env.Controller, "a@example.com");
+        await env.Controller.Register(new RegisterRequest("b@example.com", Password, await NewKey(env)));
+        var a = await User(env, "a@example.com");
+        var b = await User(env, "b@example.com");
+        var stamp = b.SecurityStamp;
+
+        for (var i = 0; i < 5; i++)
+        {
+            await env.Controller.Login(new LoginRequest("b@example.com", "Wrong-Passw0rd"));
+        }
+        Assert.True(await env.UserManager.IsLockedOutAsync(b));
+        Assert.IsType<UnauthorizedObjectResult>(await env.Controller.Login(new LoginRequest("b@example.com", Password)));
+        Assert.True(UserAccountState.IsTokenValid(b, stamp));
+
+        Assert.IsType<NoContentResult>(await Admin(env, a.Id).Disable(b.Id));
+        Assert.False(UserAccountState.IsTokenValid(b, stamp));
     }
 
     [Fact]
