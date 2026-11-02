@@ -10,39 +10,39 @@ Build the Angular web client for Arcano personal cloud storage. Backend implemen
 
 ## Task Hierarchy
 ### 1. Foundation and Layout
-- [x] **1.1 Desktop-style UI shell — Complete**
+- [x] **1.1 Desktop-style UI shell — Completed**
   - Sidebar, breadcrumbs, toolbar, file grid/list, and details panel.
   - Responsive sidebar and navigation; file context menus support details and favorite actions.
-- [x] **1.2 Selection management — Complete**
+- [x] **1.2 Selection management — Completed**
   - Single, Ctrl-toggle, Shift-range, and Escape-to-clear selection.
   - Pointer-drag marquee selection in list and grid views.
 
 ### 2. Authentication and User Access
-- [x] **2.1 Authentication and session — Complete**
+- [x] **2.1 Authentication and session — Completed**
   - Login/register UI, token/session handling, and protected routes.
   - Login and registration use the verified backend contracts; protected and anonymous routes are guarded.
-  - No role-specific UI is exposed because the current token has no role claims; API authorization remains authoritative.
+  - The Admin entry shows only when the token's `role` claim is Admin; API authorization remains authoritative.
 - [x] **2.2 User profile and quota — Completed (unit-tested, not verified in a browser)**
   - The signed-in email is displayed from the authenticated token. The sidebar storage box shows used and limit from `GET /api/Account/storage` and refreshes after upload, delete, restore, permanent delete, and empty trash. A quota error on upload shows "Not enough storage space."
-- [x] **2.3 Sign-up and reset with a key — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Sign-up page asks for the key (not required for the first account on a fresh server); a reset page takes a reset key and a new password. Replaces the "Sign-up is disabled" message with the `Auth.InviteInvalid` message. Route `/reset`, reached from the sign-in link "Have a reset key?". The key field is shown unless `GET Auth/setup` says `requiresKey: false`; if that call fails the field stays visible.
+- [x] **2.3 Sign-up and reset with a key — Completed (unit-tested; API contract verified end to end; browser-tested 2026-11-02, see 9.19).** Sign-up page asks for the key (not required for the first account on a fresh server); a reset page takes a reset key and a new password. Replaces the "Sign-up is disabled" message with the `Auth.InviteInvalid` message. Route `/reset`, reached from the sign-in link "Have a reset key?". The key field is shown unless `GET Auth/setup` says `requiresKey: false`; if that call fails the field stays visible.
 
-### 3. Admin Storage and User Management (unit-tested; API contract verified end to end; not browser-tested)
+### 3. Admin Storage and User Management (unit-tested; API contract verified end to end; browser-tested 2026-11-02, see 9.19)
 Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a solo user never needs it.
-- [x] **3.1 Admin dialog: user list — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Users with used storage and quota, disabled state. `admin-dialog.component.ts` + `admin.service.ts`; the Admin sidebar entry shows only when `AuthService.isAdmin` (role claim) is true.
-- [x] **3.2 User quota management — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Edit a user's quota.
-- [x] **3.3 User lifecycle controls — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Disable, enable and delete a user (with confirmation; the last admin is protected by the API).
-- [x] **3.4 Invite and reset keys — Completed (unit-tested; API contract verified end to end; UI not browser-tested).** Generate a join key (with the member's quota and expiry) or a reset key for a user, show it once with a copy button, list open keys and revoke them.
+- [x] **3.1 Admin dialog: user list — Completed (unit-tested; API contract verified end to end; browser-tested, see 9.19).** Users with used storage and quota, disabled state. `admin-dialog.component.ts` + `admin.service.ts`; the Admin sidebar entry shows only when `AuthService.isAdmin` (role claim) is true.
+- [x] **3.2 User quota management — Completed (unit-tested; API contract verified end to end; browser-tested, see 9.19).** Edit a user's quota.
+- [x] **3.3 User lifecycle controls — Completed (unit-tested; API contract verified end to end; disable, enable and the last-admin guard browser-tested, see 9.19; deleting a member from this dialog is not recorded).** Disable, enable and delete a user (with confirmation; the last admin is protected by the API).
+- [x] **3.4 Invite and reset keys — Completed (unit-tested; API contract verified end to end; browser-tested except the clipboard Copy button, see 9.19).** Generate a join key (with the member's quota and expiry) or a reset key for a user, show it once with a copy button, list open keys and revoke them.
 
 ### 4. File Explorer Workflows
-- [x] **4.1 Core file listing and actions — Completed (unit-tested, not verified in a browser)**
+- [x] **4.1 Core file listing and actions — Completed (unit-tested; main flows checked in a browser, see 9.1 and 9.3)**
   - Lists the current user's files; download, rename, favorite, and delete (to the trash) use the secured backend APIs.
   - Favorites, Recent, and Home load the matching server views. The search box searches by name on the server across all folders.
   - The Trash view lists trashed files with Restore and Delete forever, plus Empty trash. Folder star is now saved by the backend (`PUT api/Folders/{id}/star`, optimistic with revert on failure).
   - Folder navigation, create, rename, and move are tracked in 4.4.
-- [x] **4.2 Keyboard actions — Completed (unit-tested, not verified in a browser)**
+- [x] **4.2 Keyboard actions — Completed (unit-tested; Delete, Ctrl+Z, Ctrl+X and Ctrl+V checked in a browser, see 9.1)**
   - Ctrl+A selects all; Delete moves selected files to the trash; Shift+Delete deletes forever (Trash view only); Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste files into the current folder; Ctrl+Z undoes the last delete, move or paste (in memory, last 20); F2 renames. Ignored while typing in a field or with a dialog open.
-  - Files only: folders are not copied, cut or deleted by keyboard. The context-menu "Move to" is not undoable. Ctrl+C and Ctrl+X take over the browser shortcut whenever files are selected. Undo is not cleared on sign-out.
-- [x] **4.3 Drag and drop — Completed (unit-tested, not verified in a browser)**
+  - Folders are not copied or cut. Delete skips folders in a mixed selection; one folder selected alone goes through the delete confirmation (9.16). Ctrl+C and Ctrl+X take over the browser shortcut whenever files are selected.
+- [x] **4.3 Drag and drop — Completed (unit-tested; checked in a browser with synthetic drag events, see 9.3)**
   - No backend work was needed: upload with `folderId`, `PUT /api/Files/{id}/folder`, and `PUT /api/Folders/{id}` already exist.
   - [x] **4.3.1 Drop files to upload — Completed.** Dropping OS files on the list or grid area uploads them into the current folder, using the same sequential path as the Upload button. A drop on a folder row uploads into that folder.
   - [x] **4.3.2 Drag a file onto a folder — Completed.** Moves the file with `moveFile`. Dragging a selected file moves the whole selection.
@@ -60,18 +60,18 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
   - The "Folders" filter chip (`filterChips` in `app.ts`) filters the loaded items by `type === 'folder'`, so it works on real folder data and applies to the current folder only.
 
 ### 5. File Sharing
-- [x] **5.1 Share-link management — Completed for files (unit-tested, not verified in a browser).** A Share button in the details panel opens a dialog to create a link (never, 1, 7, or 30 days), copy it, and revoke it. Replaces the earlier mock dialog. Password and folder sharing are not included.
-- [x] **5.2 Public share view — Completed (unit-tested, not verified in a browser).** Route `/share/:token` needs no login. It shows the file name and size, a Download button, and an inline preview (image, media, text only), or "This link is invalid or has expired." Download errors show no message yet.
-- [x] **5.3 Share with people and "Shared with me" — Completed (unit-tested, not browser-tested).** The Share dialog has a People section: add a registered user by email (read-only), list and remove people. A "Shared with me" nav item (sidebar and drawer only; the mobile bottom bar does not show it) lists incoming shares with read-only browsing of shared folders, preview, download, folder zip, and a confirmation to remove a share. Backend: 1.18. Initial bundle 520 kB; the warning budget in `angular.json` was raised from 500 kB to 540 kB.
+- [x] **5.1 Share-link management — Completed for files (unit-tested; create and revoke checked in a browser, see 9.1 and 9.19).** A Share button in the details panel opens a dialog to create a link (never, 1, 7, or 30 days), copy it, and revoke it. Replaces the earlier mock dialog. Password and folder sharing are not included.
+- [x] **5.2 Public share view — Completed (unit-tested; opened anonymously in a browser, see 9.1).** Route `/share/:token` needs no login. It shows the file name and size, a Download button, and an inline preview (image, media, text only), or "This link is invalid or has expired." A failed download shows a message (7.1).
+- [x] **5.3 Share with people and "Shared with me" — Completed (unit-tested; browser-tested 2026-11-02, see 9.19).** The Share dialog has a People section: add a registered user by email (read-only), list and remove people. A "Shared with me" nav item (sidebar and drawer only; the mobile bottom bar does not show it) lists incoming shares with read-only browsing of shared folders, preview, download, folder zip, and a confirmation to remove a share. Backend: 1.18. Initial bundle 520 kB at the time; the warning budget in `angular.json` was raised from 500 kB to 540 kB.
 
 ### 6. Media and Document Previews
-- Current state: the side preview panel (desktop, toggled from the toolbar) shows the selected item's details; file content renders in the preview popup (6.1).
+- Current state: the side preview panel (desktop, toggled from the toolbar; a sheet below `xl`, 9.17) shows the selected item's details; file content renders in the preview popup (6.1).
 - Approach: fetch the file bytes through the authenticated download endpoint, then show them with a local object URL. No backend change is needed.
-- Constraint: never render uploaded HTML or SVG inline. Uploads come from other users, so inline rendering would run their script in the app's origin. Only images, PDF, text, audio, and video are previewed; everything else shows the download action.
-- [x] **6.1 Preview host — Completed (unit-tested, not verified in a browser).** A Preview button in the details panel opens `app-file-preview` in a popup (`app-modal`) for one selected file. The side panel shows details only. The preview has loading, error, and ready states, cancels stale requests, and revokes object URLs.
+- Constraint: never render uploaded HTML or SVG inline. Uploads come from other users, so inline rendering would run their script in the app's origin. Only images, text, audio, and video are previewed; everything else shows the download action.
+- [x] **6.1 Preview host — Completed (unit-tested; previews checked in a browser, see 9.3).** A Preview button in the details panel opens `app-file-preview` in a popup (`app-modal`) for one selected file. The side panel shows details only. The preview has loading, error, and ready states, cancels stale requests, and revokes object URLs.
 - [x] **6.2 Image viewer — Completed.** PNG, JPEG, GIF, WebP, and BMP render from an object URL.
 - [x] **6.3 Audio/video player — Completed.** Native `audio` and `video` elements. Files over 25 MB show "Preview unavailable" with the download action.
-- [ ] **6.4 PDF viewer — Deferred (not supported now; revisit later).** PDFs show the download action only. Revisit the library or browser-native approach when this is prioritized.
+- [ ] **6.4 PDF viewer — Not Started (not supported now; revisit later).** PDFs show the download action only. Revisit the library or browser-native approach when this is prioritized.
 - [x] **6.5 Text/code viewer — Completed for plain text.** Text, Markdown, CSV, and JSON show the first 100 KB with a truncation note. Code-specific highlighting is not included.
 - [x] **6.6 Preview tests — Completed.** Covers the type rules, blocked HTML and SVG, the size cap, PDF (no request), request cancellation, the error state, and object URL revocation.
 
@@ -82,8 +82,8 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 - [x] **7.3 Item 10 (frontend part): duplicated error parsing — Completed (unit-tested, not verified in a browser).** `fileErrorMessage`, `folderErrorMessage` and `shareErrorMessage` repeat the same error-code extraction. This is a cleanup, not a bug. **Fixed:** One `errorBody()` helper in `app.ts`.
 
 ### 8. Large Files
-- [x] **8.1 Upload progress — Completed (unit-tested, not verified in a browser).** `FilesService.upload` emits 0-100. A block above the file list shows the file name, "n of m", and a progress bar for both the Upload button and drag-and-drop. A 413 shows "File is too large." with no hard-coded size.
-- [x] **8.2 Resumable uploads — Completed for retry within one session (unit-tested, not verified in a browser).** Files over 8 MiB upload in 8 MiB chunks through `uploadChunked`. A failed chunk waits 500 ms, asks the server which parts are stored, and retries up to 3 times; if it still fails, the session is aborted. Progress stays at 99% until the file is complete. A page reload does not resume.
+- [x] **8.1 Upload progress — Completed (unit-tested; the progress bar checked in a browser, see 9.3).** `FilesService.upload` emits 0-100. A block above the file list shows the file name, "n of m", and a progress bar for both the Upload button and drag-and-drop. A 413 shows "File is too large." with no hard-coded size.
+- [x] **8.2 Resumable uploads — Completed for retry within one session (unit-tested; a 20 MiB chunked upload checked in a browser, see 9.1).** Files over 8 MiB upload in 8 MiB chunks through `uploadChunked`. A failed chunk waits 500 ms, asks the server which parts are stored, and retries up to 3 times; if it still fails, the session is aborted. Progress stays at 99% until the file is complete. A page reload does not resume.
 
 ## Dependencies
 - The frontend API client and protected routes depend on stable backend routes, request/response contracts, and authentication behavior.
@@ -101,23 +101,23 @@ Depends on backend WBS 1.16 (admin and invite keys). Visible to admins only; a s
 
 ## Status
 - The desktop UI shell and the backend-connected workflows are implemented; browser verification is recorded in section 9.
-- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin) and 2.3 are built and unit-tested (236 specs in 21 files, 2026-11-02; the sharing UI is not browser-tested); the API contract was verified end to end, but the UI was not browser-tested. Uploading from a phone works (9.11).
-- **End-to-end product status: Not Complete.** Backend readiness and verification are tracked separately in the backend WBS.
+- **Frontend workflow status: In Progress.** The desktop shell (1.1), selection management (1.2), and authentication/session (2.1) are implemented. User quota (2.2), core file actions (4.1), folders (4.4), drag and drop (4.3), and previews (6) are built and unit-tested; the main flows were checked in a browser (section 9). Section 3 (admin), 2.3 and sharing (5) are built and unit-tested (236 specs in 21 files and `ng build` 527.48 kB on `8a27870`), and were browser-tested on 2026-11-02 (9.19); the API contract was verified end to end. Uploading from a phone works (9.11).
+- **End-to-end product status: In Progress.** Backend readiness and verification are tracked separately in the backend WBS.
 
 ## Scope and Prioritization
-The listed admin dashboard, advanced keyboard operations, password-protected sharing, and broad media support are planned backlog, not first-release blockers unless explicitly prioritized. No scope reduction or new product requirements are approved by this WBS review.
+Password-protected sharing and broader media support, such as PDF preview, are planned backlog, not first-release blockers unless explicitly prioritized. No scope reduction or new product requirements are approved by this WBS review.
 
 ## Review Record
 Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment pass; implementation and verification were not performed. Keep statuses evidence-based and update them after code changes and relevant checks.
 
 ### 9. Browser verification (2026-10-31)
 - [x] **9.1 Main flows checked in a browser — Completed.** Sign-in, folder create, small and 20 MiB chunked upload (hash identical), Make a copy, right-click menu, image preview, share create/open anonymously/revoke, Delete and Ctrl+Z, Ctrl+X/Ctrl+V and Ctrl+Z.
-- [x] **9.2 Escape closes dialogs — Fixed.** Found in the browser: Escape did not close the share or preview dialog and cleared the selection behind it. `ModalComponent` now closes on Escape and the page handler ignores Escape while a dialog is open. 2 new specs.
+- [x] **9.2 Escape closes dialogs — Completed.** Found in the browser: Escape did not close the share or preview dialog and cleared the selection behind it. `ModalComponent` now closes on Escape and the page handler ignores Escape while a dialog is open. 2 new specs.
 - [x] **9.3 Later browser pass — Completed.** Sign-up page, Trash view, drag and drop (real mouse drags were unreliable, but synthetic drag events worked), previews of text, image, audio and video (PDF shows download only), the upload progress bar, marquee selection and the mobile layout were checked. Not re-checked after the fixes in 9.4 and 9.10: the confirmation dialogs, double-click preview and the account settings dialog.
-- [x] **9.4 Small issues seen — Fixed.** The clipped Share button, the floating "+" covering the "Shared" tab (that tab was later removed, see 9.12), audio files labelled "Document", double-click not opening the preview, the folder page heading, the sign-up error message and the missing delete confirmations were fixed afterwards (see 9.10). The "Copy of" file name is a backend change (backend WBS 1.13 finding 12). Not confirmed fixed: a 1-pixel image previews at 1 px.
-- [x] **9.5 Chunked upload without a file type — Fixed (audit finding 3).** Browsers give an empty type for unknown extensions (`.iso`, `.log`), and the server rejected the upload start with 400. `uploadChunked` now sends `application/octet-stream` when the type is empty. 1 new spec; the server's 400 for an empty type was checked live.
+- [x] **9.4 Small issues seen — Completed.** The clipped Share button, the floating "+" covering the "Shared" tab (that tab was later removed, see 9.12), audio files labelled "Document", double-click not opening the preview, the folder page heading, the sign-up error message and the missing delete confirmations were fixed afterwards (see 9.10). The "Copy of" file name is a backend change (backend WBS 1.13 finding 12). Not confirmed fixed: a 1-pixel image previews at 1 px.
+- [x] **9.5 Chunked upload without a file type — Completed (audit finding 3).** Browsers give an empty type for unknown extensions (`.iso`, `.log`), and the server rejected the upload start with 400. `uploadChunked` now sends `application/octet-stream` when the type is empty. 1 new spec; the server's 400 for an empty type was checked live.
 - [x] **9.6 Token renewal during long uploads — Completed (audit finding 5; unit-tested, API checked live, not checked in a browser).** When the login token has under 10 minutes left, the HTTP interceptor renews it through `POST Auth/refresh` before sending the request; concurrent requests share one renewal, and a failed renewal falls through to the existing 401 handling. Chunked uploads benefit automatically. 4 new specs.
-- [x] **9.7 `AppShell` split by job — Completed (audit finding 8; unit-tested, main flows re-checked in a browser).** `file-actions.service.ts` now holds the clipboard, the undo stack, the bulk, trash, paste and copy actions, and upload (progress, chunked switch, 413 message); `http-errors.ts` holds the shared error parsing; `context-menu.component.ts` holds the right-click menu (clamping, keyboard, move list); `share-dialog.component.ts` holds the share dialog. `app.ts` went from 1,352 to 1,137 lines and `app.html` from 1,006 to 932 (snapshot at the time; now 1,188 and 961 lines after later features); 126 specs passed at the time. No behaviour change intended. Still in `app.ts`: sign-in and sign-up pages, explorer loading, folder actions, `moveItems`, selection and marquee, drag and drop, and the shortcut handler; splitting those needs a shared explorer-state store.
+- [x] **9.7 `AppShell` split by job — Completed (audit finding 8; unit-tested, main flows re-checked in a browser).** `file-actions.service.ts` now holds the clipboard, the undo stack, the bulk, trash, paste and copy actions, and upload (progress, chunked switch, 413 message); `http-errors.ts` holds the shared error parsing; `context-menu.component.ts` holds the right-click menu (clamping, keyboard, move list); `share-dialog.component.ts` holds the share dialog. `app.ts` went from 1,352 to 1,137 lines and `app.html` from 1,006 to 932 (snapshot at the time; both have grown since); 126 specs passed at the time. No behaviour change intended. Still in `app.ts`: sign-in and sign-up pages, explorer loading, folder actions, `moveItems`, selection and marquee, drag and drop, and the shortcut handler; splitting those needs a shared explorer-state store.
 - [x] **9.8 Dead `App.moveFile()` removed (audit finding 11).** Nothing in the template or specs called it; moves go through `moveItems` and the clipboard. 20 lines deleted; 126 specs and the build passed at the time.
 - [x] **9.9 Production web image (release blocker; verified on a throwaway production stack).** `frontend/Dockerfile` builds the app with `environment.production.ts` (`apiBaseUrl: '/api'`, same origin) and serves it with nginx, which proxies `/api` and `/health` to the API; `auth.interceptor.ts` now compares against `location.origin`. Development still uses `http://localhost:5000/api`. A 90 MB upload through nginx worked. Sign-up shows the server's message when sign-up is disabled. 128 specs passed at the time.
 - [x] **9.10 Should-fix round (2026-10-31) — Completed (unit-tested).**
@@ -151,3 +151,6 @@ Reviewed with the backend WBS on 2026-10-30. This is a documentation alignment p
   - Admin dialog: "Loading..." under Members and Invite keys until the first responses; the generate-key quota and expiry fields reset when the dialog closes (they stay filled after a generate, to issue several keys alike).
   - "Shared with me" loading state already existed in the component; a spec was added. The blank second seen in the browser was not explained.
   - Not changed: sign-up has no confirm-password field, touch targets under 44 px, the persistent "Folders were skipped" banner, no notice after account deletion, no Grid/List toggle below `sm`.
+- [x] **9.19 Browser pass (2026-11-02) — Completed (throwaway production stack, built-in browser pane at 375, 768 and 1440 px).**
+  - Checked: sign-up with invite keys (wrong, short password, reuse; key not left in the page), lockout (existing token survives), reset key, Admin dialog (keys, quota, disable/enable, last-admin guard), Settings (change password, sign out everywhere, delete account), "Shared with me" (browse, preview, zip), People section and public link (create, revoke), dead-session redirect with notice, upload Cancel, upload abort on navigating away, My Files to root and "Up one folder", row buttons on touch emulation, Details sheet below `xl`, folder-skipped notices, Ctrl/Shift selection, readable `Upload.TooManyOpen` message. No functional bug found.
+  - Not driven: real touch, real file chooser, a real tab close (navigation instead), the clipboard Copy button, the 429 message in the UI, an expired reset key, a measured overlap of the Details sheet and the bottom nav at 375 px. The follow-ups in 9.18 came after this pass.
