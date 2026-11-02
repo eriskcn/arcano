@@ -42,6 +42,9 @@ chmod 600 "$dir/env.production"
 img="$("${DC[@]}" config --images | grep -i seaweedfs)"
 { echo "$img"; docker image inspect --format '{{.Id}}' "$img"; } > "$dir/seaweedfs-image.txt"
 
+# copying is done: bring services back now, not after the upload; the cleared list keeps the trap from starting them again
+restart; STOPPED=()
+
 # off-host copy; set -e makes a failure abort the script (and skip pruning)
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
   rclone copy "$dir" "$BACKUP_RCLONE_REMOTE/$(basename "$dir")"
