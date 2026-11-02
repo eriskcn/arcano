@@ -57,6 +57,8 @@
             />
             <button
               type="button"
+              [attr.aria-label]="showSignInPassword() ? 'Hide password' : 'Show password'"
+              [attr.aria-pressed]="showSignInPassword()"
               (click)="showSignInPassword.set(!showSignInPassword())"
               class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -151,6 +153,8 @@
             />
             <button
               type="button"
+              [attr.aria-label]="showSignUpPassword() ? 'Hide password' : 'Show password'"
+              [attr.aria-pressed]="showSignUpPassword()"
               (click)="showSignUpPassword.set(!showSignUpPassword())"
               class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -341,8 +345,8 @@
       </button>
 
       <!-- Notifications -->
-      <button class="relative p-2 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer">
-        <span class="material-symbols-rounded" style="font-size: 20px">notifications</span>
+      <button aria-label="Notifications" class="relative p-2 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer">
+        <span class="material-symbols-rounded" style="font-size: 20px" aria-hidden="true">notifications</span>
         <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full border-2 border-white"></span>
       </button>
 

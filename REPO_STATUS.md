@@ -27,9 +27,10 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 ## What is verified
 
 - **Backend:** builds; 143 domain tests and 50 API tests pass (re-run 2026-11-02). The integration suite has 33 tests; in the last run (an agent run on throwaway containers) 28 passed and 5 S3 tests were skipped. It needs a real PostgreSQL and SeaweedFS (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database) and was **not re-run** on 2026-11-02; the earlier 33-pass result was on 2026-11-01.
-- **Frontend:** 231 unit tests in 21 files pass (2026-11-02). `ng build` succeeds at 526.13 kB initial (budget 540 kB).
+- **Frontend:** 236 unit tests in 21 files pass (2026-11-02). `ng build` succeeds at 527.48 kB initial (budget 540 kB).
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off (historical: before group mode, see below); change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (2026-10-31):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in a browser. Fixes from 2026-11-02 (sign-up key notice kept after redirect, Ctrl/Shift selection, notices when folders are skipped in bulk actions, folder-zip too-large message, public links of a disabled owner) are covered by unit tests only, not browser-tested. The client-IP fix behind a proxy (`set_real_ip_from` in `frontend/nginx.conf`, `docs/DEPLOY.md` section 5) was checked on throwaway containers with the real API and a plain-HTTP nginx proxy, not with real TLS.
+- **Browser pass (2026-11-02, throwaway production stack, built-in browser pane at 375, 768 and 1440 px):** sign-up with invite keys (wrong, short password, reuse; key not left in the page), lockout (existing token survives), reset key, Admin dialog (keys, quota, disable/enable, last-admin guard), Settings (change password, sign out everywhere, delete account), "Shared with me" (browse, preview, zip), People section and public link (create, revoke), dead-session redirect with notice, upload Cancel, upload abort on navigating away, My Files to root and "Up one folder", row buttons on touch emulation, Details sheet below `xl`, folder-skipped notices, Ctrl/Shift selection, readable `Upload.TooManyOpen` message. No functional bug found. Not driven: real touch, real file chooser, a real tab close (navigation instead), the clipboard Copy button, the 429 message in the UI, an expired reset key, a measured overlap of the Details sheet and the bottom nav at 375 px. The accessibility and loading-state fixes made after this pass are unit-tested only.
 
 ## Browser-pass bugs: fixed, and what is left
 
@@ -88,7 +89,7 @@ Not verified: the UI in a browser, S3 object removal when a member is deleted, a
 - **Downloads:** owner and public downloads support HTTP Range (206 checked against real SeaweedFS in an integration test).
 - **Uploads:** failed multipart aborts keep the session and cleanup retries them; a retried `complete` after success returns the existing file; cancellation is no longer misreported.
 - **Audit log:** `Audit {Event} actor= target=` lines in the API log for key, user and quota actions; no table, no key material.
-- Not verified: the new UI and flows in a browser (a browser pass is running; the maintainer will add its result); HTTP status mapping of UserShares/Shared is covered by stub-service unit tests (Admin and Auth key paths were already in GroupModeTests); `/api/Shared`, `/api/UserShares` and `/api/Admin` are rate limited (policy `user-api`, 120 per minute per user; `POST api/UserShares` also `user-share-create`, 20 per minute per user), checked by reading `Program.cs` and the controller attributes; the 429 over HTTP was not run; the share zip over real Kestrel; the bootstrap audit line; whether the new tests fail before the change.
+- Not verified: the sharing UI was covered by the 2026-11-02 browser pass; HTTP status mapping of UserShares/Shared is covered by stub-service unit tests (Admin and Auth key paths were already in GroupModeTests); `/api/Shared`, `/api/UserShares` and `/api/Admin` are rate limited (policy `user-api`, 120 per minute per user; `POST api/UserShares` also `user-share-create`, 20 per minute per user), checked by reading `Program.cs` and the controller attributes; the 429 over HTTP was not run; the share zip over real Kestrel; the bootstrap audit line; whether the new tests fail before the change.
 
 ## Documentation
 
@@ -102,10 +103,8 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 - Real TLS in front of `web`, and `web` behind a real proxy.
 - The GitHub Actions workflow on GitHub (the YAML parses; no run seen, no pull request).
-- The sharing UI (People section, "Shared with me") in a real browser.
-- The Settings dialog, the confirmation dialogs and double-click preview in a real browser (unit tests only).
 - Real touch input on mobile, keyboard accessibility, and a restore of the file volume while uploads are running.
-- Everything in the 2026-11-02 fixes list above in a browser (unit tests only).
+- The accessibility labels and loading states added after the 2026-11-02 browser pass (unit tests only).
 - The integration suite on 2026-11-02 (not re-run).
 - Test instances: the Angular dev server may still be running on port 4200 and an API on port 5000.
 
@@ -117,7 +116,7 @@ From the latest read-only review (2026-11-02). Each was confirmed by reading the
 - **Closed-tab abort is best effort:** the page sends a keepalive abort on `pagehide`, but a crash, a killed mobile browser, a lost network or an expired token still leaves the session holding quota and a slot until the 24 h sweep.
 - **Details sheet below `xl`:** unit-tested for toggle and close paths only; it has no backdrop or focus trap, and its layout over the bottom nav and floating button at 375 and 768 px was not checked.
 
-Fixed on branch `fix/open-issues` (unit-tested, not browser-tested; none checked on a touch device): the dead-session redirect on a 401 (with a "Your session has ended" notice), the row action button on touch, My Files returning to the root and an "Up one folder" button below `sm`, server error codes mapped to messages for uploads, an upload Cancel button, and the Details panel below `xl` (a sheet from a new toggle), an abort of the open chunked upload on tab close, failed-login lockout no longer invalidating issued tokens (only an admin-disabled user's token is rejected; the wiring of the token check is not covered by an integration test, which was not run).
+Fixed on branch `fix/open-issues` (unit-tested and covered by the 2026-11-02 browser pass, with touch only emulated): the dead-session redirect on a 401 (with a "Your session has ended" notice), the row action button on touch, My Files returning to the root and an "Up one folder" button below `sm`, server error codes mapped to messages for uploads, an upload Cancel button, and the Details panel below `xl` (a sheet from a new toggle), an abort of the open chunked upload on tab close, failed-login lockout no longer invalidating issued tokens (only an admin-disabled user's token is rejected; the wiring of the token check is not covered by an integration test, which was not run).
 
 Data-safety risks, not tested:
 

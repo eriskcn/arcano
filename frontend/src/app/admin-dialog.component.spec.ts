@@ -30,6 +30,25 @@ describe('AdminDialogComponent', () => {
 
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
+  it('shows Loading until the first responses arrive, then the lists', () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const fixture = TestBed.createComponent(AdminDialogComponent);
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const http = TestBed.inject(HttpTestingController);
+    expect(el.querySelector('[data-loading-users]')).not.toBeNull();
+    expect(el.querySelector('[data-loading-keys]')).not.toBeNull();
+    expect(el.textContent).not.toContain('No open keys.');
+
+    http.expectOne(`${base}/users`).flush([alice]);
+    http.expectOne(`${base}/keys`).flush([]);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-loading-users]')).toBeNull();
+    expect(el.querySelector('[data-loading-keys]')).toBeNull();
+    expect(el.textContent).toContain('No open keys.');
+  });
+
   it('renders members with sizes, the disabled badge and open keys', () => {
     const { el } = setup();
     const rows = el.querySelectorAll('[data-member]');
@@ -214,6 +233,22 @@ describe('AdminDialogComponent', () => {
     fixture.componentRef.setInput('open', false);
     fixture.detectChanges();
     expect(dialog.newKey()).toBeNull();
+  });
+
+  it('keeps the generate-key settings after a generate but resets them when the dialog closes', () => {
+    const { fixture, dialog, http } = setup();
+    dialog.joinQuota.set(5);
+    dialog.joinDays.set(10);
+    dialog.createJoinKey();
+    http.expectOne(`${base}/keys`).flush({ id: 'k4', key: 'j', type: 'Join', expiresAtUtc: null }, { status: 201, statusText: 'Created' });
+    http.expectOne(`${base}/keys`).flush([]);
+    expect(dialog.joinQuota()).toBe(5);
+    expect(dialog.joinDays()).toBe(10);
+
+    fixture.componentRef.setInput('open', false);
+    fixture.detectChanges();
+    expect(dialog.joinQuota()).toBeNull();
+    expect(dialog.joinDays()).toBeNull();
   });
 
   it('warns when the signed-in admin targets their own account', () => {

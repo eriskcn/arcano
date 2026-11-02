@@ -22,6 +22,7 @@ const GB = 1024 ** 3;
 
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-gray-900">Members</h3>
+          <p *ngIf="!usersLoaded()" class="text-xs text-gray-500" role="status" data-loading-users>Loading...</p>
           <ul class="divide-y divide-gray-100 rounded-xl border border-gray-100">
             <li *ngFor="let user of users()" class="p-3 space-y-2" data-member>
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -81,7 +82,8 @@ const GB = 1024 ** 3;
               <button type="button" (click)="revoke(key)" [disabled]="busy()" class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer disabled:opacity-60 disabled:cursor-default">Revoke</button>
             </li>
           </ul>
-          <p *ngIf="!keys().length" class="text-xs text-gray-500">No open keys.</p>
+          <p *ngIf="!keysLoaded()" class="text-xs text-gray-500" role="status" data-loading-keys>Loading...</p>
+          <p *ngIf="keysLoaded() && !keys().length" class="text-xs text-gray-500">No open keys.</p>
         </section>
       </div>
     </app-modal>
@@ -108,6 +110,8 @@ export class AdminDialogComponent {
 
   readonly users = signal<AdminUser[]>([]);
   readonly keys = signal<AdminKey[]>([]);
+  readonly usersLoaded = signal(false);
+  readonly keysLoaded = signal(false);
   readonly error = signal('');
   readonly busy = signal(false);
   readonly editingId = signal<string | null>(null);
@@ -141,9 +145,16 @@ export class AdminDialogComponent {
       if (this.open()) {
         this.newKey.set(null);
         this.error.set('');
+        this.usersLoaded.set(false);
+        this.keysLoaded.set(false);
         this.load();
       } else {
         this.newKey.set(null);
+        // The generate-key settings stay after a generate (several keys with the same settings) but not across dialog sessions.
+        this.joinQuota.set(null);
+        this.joinDays.set(null);
+        this.joinQuotaBad.set(false);
+        this.joinDaysBad.set(false);
       }
     });
   }
@@ -228,8 +239,8 @@ export class AdminDialogComponent {
   private load(): void {
     const seq = ++this.usersSeq;
     this.admin.users().subscribe({
-      next: users => seq === this.usersSeq && this.users.set(users),
-      error: (error: unknown) => seq === this.usersSeq && this.fail(error),
+      next: users => seq === this.usersSeq && (this.users.set(users), this.usersLoaded.set(true)),
+      error: (error: unknown) => seq === this.usersSeq && (this.usersLoaded.set(true), this.fail(error)),
     });
     this.loadKeys();
   }
@@ -237,8 +248,8 @@ export class AdminDialogComponent {
   private loadKeys(): void {
     const seq = ++this.keysSeq;
     this.admin.keys().subscribe({
-      next: keys => seq === this.keysSeq && this.keys.set(keys),
-      error: (error: unknown) => seq === this.keysSeq && this.fail(error),
+      next: keys => seq === this.keysSeq && (this.keys.set(keys), this.keysLoaded.set(true)),
+      error: (error: unknown) => seq === this.keysSeq && (this.keysLoaded.set(true), this.fail(error)),
     });
   }
 

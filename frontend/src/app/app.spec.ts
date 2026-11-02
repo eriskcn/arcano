@@ -495,6 +495,28 @@ describe('App', () => {
     http.verify();
   });
 
+  it('gives the password toggles, the bell and nothing else icon-only an accessible name', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+    fixture.detectChanges();
+    const toggle = () => el.querySelector('button[aria-label$="password"]') as HTMLButtonElement;
+    expect(toggle().getAttribute('aria-label')).toBe('Show password');
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+    toggle().click();
+    fixture.detectChanges();
+    expect(toggle().getAttribute('aria-label')).toBe('Hide password');
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+
+    app.page.set('signup');
+    fixture.detectChanges();
+    expect(toggle().getAttribute('aria-label')).toBe('Show password');
+
+    app.page.set('app');
+    fixture.detectChanges();
+    expect(el.querySelector('button[aria-label="Notifications"]')).not.toBeNull();
+  });
+
   describe('details below xl', () => {
     const openSelected = () => {
       const fixture = TestBed.createComponent(App);
