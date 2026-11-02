@@ -208,7 +208,7 @@ Use any of these:
 
 The count of selected items appears under the section title. Press Esc to clear the selection.
 
-Some actions apply only to the files in a selection and skip any folders: **Copy**, **Cut**, **Move to trash** and the Delete key. **Move to…** and the favorites action apply to files and folders.
+Some actions apply only to the files in a selection and skip any folders: **Copy**, **Cut**, **Move to trash** and the Delete key. When folders are skipped, the app shows "Folders were skipped. Act on them one at a time." **Move to…** and the favorites action apply to files and folders.
 
 ### The right-click menu
 
@@ -247,10 +247,8 @@ Right-click the file and select **Move to trash**, or select it and press Delete
 
 ### Delete a folder
 
-1. Right-click the folder and select **Move to trash**.
+1. Right-click the folder and select **Move to trash**, or select only that folder and press Delete.
 2. Select **Delete folder** to confirm.
-
-The Delete key does not work on folders.
 
 The folder and its subfolders are removed, and all their files go to the Trash. The folders do not appear in the Trash and cannot be restored. Only the files can.
 
@@ -424,10 +422,10 @@ Shortcuts do not work while you type in a field or while a dialog is open. On a 
 | Ctrl+A | Select everything in the list | |
 | Enter | Open the selected folder | One folder selected. Does nothing if a button or field has focus. |
 | F2 | Rename | One item selected. Not in Trash. |
-| Delete | Move selected files to Trash | Files only. Not in Trash. |
+| Delete | Move selected files to Trash | Skips folders, except one folder selected alone, which asks you to confirm deleting it. Not in Trash. |
 | Shift+Delete | Delete selected files forever | In Trash only. Asks you to confirm. |
-| Ctrl+C | Copy selected files | Files only. Not in Trash. |
-| Ctrl+X | Cut selected files | Files only. Not in Trash. |
+| Ctrl+C | Copy selected files | Skips folders and says so. Not in Trash. |
+| Ctrl+X | Cut selected files | Skips folders and says so. Not in Trash. |
 | Ctrl+V | Paste files | In My Files only. |
 | Ctrl+Z | Undo | See below. |
 | Esc | Close the open menu or dialog, or clear the selection | |
@@ -527,7 +525,7 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 | Not enough storage space. | The file does not fit in your limit. | Free some space. See [Storage](#storage). |
 | File is too large. | The server refused the upload because of its size. | Ask the person who runs the server. |
 | Unable to upload (file name). Please try again. | The upload failed. Common causes are listed below. | Check the causes below, then try again. |
-| Unable to download (name). Please try again. | The download failed. For a folder in **Shared with me**, it may hold more than 5,000 files. | Try again, or download smaller subfolders. |
+| Unable to download (name). Please try again. | The download failed. | Try again. |
 | This folder has too many files to download as a zip. | A zip cannot hold more than 5,000 files. | Download smaller subfolders. |
 | A folder with this name already exists here. | Folder names must be unique in one place. | Choose another name. |
 | Enter a valid folder name. / Enter a valid file name. | The name is empty or over 255 characters. | Change the name. |

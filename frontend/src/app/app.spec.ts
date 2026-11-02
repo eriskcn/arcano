@@ -1167,6 +1167,113 @@ describe('App', () => {
       expect(http.expectOne(`${api}/Files/1/restore`).request.method).toBe('POST');
     });
 
+    describe('with folders selected', () => {
+      const skipped = 'Folders were skipped. Act on them one at a time.';
+      const folder = (id: string): FileItem => ({ ...sampleFiles[0], id, name: `Folder ${id}`, type: 'folder' });
+      const setupFolders = (...ids: string[]) => {
+        const { app, http } = setup();
+        app.folders.set([folder('f1'), folder('f2')]);
+        ids.forEach((id, index) => app.selectFile(id, index ? new MouseEvent('click', { ctrlKey: true }) : undefined));
+        return { app, http };
+      };
+      const menuEntry = (app: App, item: FileItem, label: string) => {
+        app.showContextMenu(item, new MouseEvent('contextmenu'));
+        return app.contextMenu()!.entries.find(entry => entry.label === label);
+      };
+
+      it('Delete on a mix trashes the file only and the message survives the reload', () => {
+        const { app, http } = setupFolders('f1', '1');
+
+        expect(press('Delete').defaultPrevented).toBe(true);
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        http.expectNone(`${api}/Files/f1`);
+        settle(http);
+
+        expect(app.actionError()).toBe(skipped);
+      });
+
+      it('Ctrl+C and Ctrl+X on a mix keep the file only and show the message', () => {
+        const { app } = setupFolders('f1', '1');
+
+        for (const key of ['c', 'x']) {
+          app.actionError.set('');
+          press(key, { ctrlKey: true });
+          expect(app.clipboard()?.items.map(item => item.id)).toEqual(['1']);
+          expect(app.actionError()).toBe(skipped);
+        }
+      });
+
+      it('Delete on one folder asks to confirm through deleteFile', () => {
+        const { app, http } = setupFolders('f1');
+
+        expect(press('Delete').defaultPrevented).toBe(true);
+
+        expect(app.pendingTrash()?.title).toBe('Delete folder');
+        expect(app.actionError()).toBe('');
+        http.verify();
+      });
+
+      it('Delete on several folders shows the message and runs nothing', () => {
+        const { app, http } = setupFolders('f1', 'f2');
+
+        press('Delete');
+
+        expect(app.pendingTrash()).toBeNull();
+        expect(app.actionError()).toBe(skipped);
+        expect(app.selectedIds().size).toBe(2);
+        http.verify();
+      });
+
+      it('Ctrl+C on only folders shows the message and leaves the clipboard alone', () => {
+        const { app } = setupFolders('f1');
+
+        press('c', { ctrlKey: true });
+
+        expect(app.clipboard()).toBeNull();
+        expect(app.actionError()).toBe(skipped);
+      });
+
+      it('the menu sends a lone folder to confirmation, and a mix to trash with the message', () => {
+        const { app, http } = setupFolders('f1');
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+        expect(app.pendingTrash()?.title).toBe('Delete folder');
+        expect(app.actionError()).toBe('');
+        app.pendingTrash.set(null);
+        http.verify();
+
+        app.selectFile('1', new MouseEvent('click', { ctrlKey: true }));
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        settle(http);
+        expect(app.actionError()).toBe(skipped);
+      });
+
+      it('the menu on several folders offers no Copy or Cut, and Move to trash shows the message', () => {
+        const { app, http } = setupFolders('f1', 'f2');
+
+        expect(menuEntry(app, folder('f1'), 'Copy')).toBeUndefined();
+        expect(menuEntry(app, folder('f1'), 'Cut')).toBeUndefined();
+        menuEntry(app, folder('f1'), 'Move to trash')!.run();
+
+        expect(app.actionError()).toBe(skipped);
+        http.verify();
+      });
+
+      it('a files-only selection shows no message', () => {
+        const { app, http } = setupFolders('1', '2');
+
+        press('c', { ctrlKey: true });
+        press('x', { ctrlKey: true });
+        expect(app.actionError()).toBe('');
+
+        press('Delete');
+        http.expectOne(`${api}/Files/1`).flush(null, { status: 204, statusText: 'No Content' });
+        http.expectOne(`${api}/Files/2`).flush(null, { status: 204, statusText: 'No Content' });
+        settle(http);
+        expect(app.actionError()).toBe('');
+      });
+    });
+
     it('Shift+Delete deletes forever only in Trash', () => {
       const { app, http } = setup();
       app.selectFile('1');

@@ -79,4 +79,20 @@ describe('SharedWithMeComponent', () => {
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['hello']));
   });
+
+  it('explains a shared folder with too many files, read from the Blob error body', async () => {
+    const { cmp, http } = setup();
+    const fail = (body: string) => {
+      cmp.downloadFolder('s1', 'f1', 'Photos');
+      http.expectOne(`${api}/Shared/s1/folders/f1/download`).flush(new Blob([body], { type: 'application/json' }), { status: 400, statusText: 'Bad Request' });
+    };
+
+    fail(JSON.stringify({ code: 'Folder.TooLarge', message: 'Folder holds more than 5000 files.' }));
+    await vi.waitFor(() => expect(cmp.error()).toBe('This folder has too many files to download as a zip.'));
+
+    for (const body of [JSON.stringify({ code: 'Folder.NotFound', message: 'Not found.' }), '<html>Bad Gateway</html>', 'null']) {
+      fail(body);
+      await vi.waitFor(() => expect(cmp.error()).toBe('Unable to download Photos.zip. Please try again.'));
+    }
+  });
 });

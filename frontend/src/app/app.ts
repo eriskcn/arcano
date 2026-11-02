@@ -672,14 +672,19 @@ export class App implements OnInit {
         );
       }
     } else if (key === 'delete') {
-      handled = !trash && selected.length > 0;
+      handled = !trash && this.selectedIds().size > 0;
       if (handled) {
-        this.actions.trashSelected();
+        const one = this.selectedFile();
+        if (this.selectedIds().size === 1 && one?.type === 'folder') {
+          this.deleteFile(one);
+        } else {
+          this.actions.trashSelected();
+        }
       }
     } else if (key === 'f2' && !trash && this.selectedIds().size === 1 && this.selectedFile()) {
       this.startRenameFolder(this.selectedFile()!);
       handled = true;
-    } else if (mod && (key === 'c' || key === 'x') && !trash && selected.length > 0) {
+    } else if (mod && (key === 'c' || key === 'x') && !trash && this.selectedIds().size > 0) {
       this.actions.toClipboard(key === 'c' ? 'copy' : 'cut');
       handled = true;
     } else if (mod && key === 'v' && this.activeNav() === 'my-files' && this.clipboard()) {
