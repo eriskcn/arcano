@@ -14,6 +14,8 @@ tar tzf "$src/seaweedfs.tar.gz" > /dev/null
 
 ENV_FILE="${ENV_FILE:-.env.production}" # the compose file has required variables, so every compose call needs it
 [ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found (set ENV_FILE=...)" >&2; exit 1; }
+# a missing bind-mount source makes Docker create a directory there, and seaweedfs then runs without credentials
+[ -f backend/seaweedfs/s3.prod.json ] || { echo "backend/seaweedfs/s3.prod.json is missing (Docker would create a directory in its place). Run: scripts/gen-s3-config.sh $ENV_FILE" >&2; exit 1; }
 DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 VOLUME=arcano_seaweedfs_data
 KEYS_VOLUME=arcano_api_keys
@@ -23,7 +25,10 @@ KEYS_VOLUME=arcano_api_keys
 "${DC[@]}" exec -T postgres pg_restore --list < "$src/db.dump" > /dev/null
 
 "${DC[@]}" stop web api seaweedfs
-"${DC[@]}" exec -T postgres pg_restore -U postgres -d arcanocore --clean --if-exists --no-owner < "$src/db.dump"
+trap 'echo "restore failed with the services stopped; fix the error and run this script again" >&2' ERR
+# Empty the schema first: --clean only drops what the dump knows, so tables added by later migrations (and their foreign keys) would block it.
+"${DC[@]}" exec -T postgres psql -U postgres -d arcanocore -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+"${DC[@]}" exec -T postgres pg_restore -U postgres -d arcanocore --exit-on-error --single-transaction --no-owner < "$src/db.dump"
 # wipe then extract (dotfiles included)
 docker run --rm -v "$VOLUME":/data -v "$src":/backup:ro alpine \
   sh -c 'find /data -mindepth 1 -delete && tar xzf /backup/seaweedfs.tar.gz -C /data'

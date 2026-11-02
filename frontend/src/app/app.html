@@ -255,6 +255,17 @@
       <span class="material-symbols-rounded" style="font-size: 22px">menu</span>
     </button>
 
+    <!-- Up one folder; the breadcrumb is hidden below sm -->
+    <button
+      *ngIf="folderPath().length"
+      (click)="goToFolder(folderPath().length - 1)"
+      class="sm:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors cursor-pointer"
+      aria-label="Up one folder"
+      title="Up one folder"
+    >
+      <span class="material-symbols-rounded" style="font-size: 22px">arrow_upward</span>
+    </button>
+
     <!-- Breadcrumb -->
     <div class="hidden sm:flex items-center gap-1 text-sm min-w-0 flex-shrink-0">
       <ng-container *ngFor="let crumb of breadcrumb(); let i = index">
@@ -482,9 +493,22 @@
             (click)="previewOpen.set(!previewOpen())"
             [ngClass]="previewOpen() ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-500'"
             class="hidden xl:flex p-2 rounded-lg transition-colors cursor-pointer"
+            [attr.aria-expanded]="previewOpen()"
+            aria-label="Toggle details"
             title="Toggle preview"
           >
             <span class="material-symbols-rounded" style="font-size: 18px">dock_to_right</span>
+          </button>
+          <button
+            *ngIf="selectedFile()"
+            (click)="detailsSheetOpen.set(!detailsSheetOpen())"
+            [ngClass]="detailsSheetOpen() ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100 text-gray-500'"
+            [attr.aria-expanded]="detailsSheetOpen()"
+            aria-label="Toggle details"
+            class="xl:hidden p-2 rounded-lg transition-colors cursor-pointer"
+            title="Details"
+          >
+            <span class="material-symbols-rounded" style="font-size: 18px">info</span>
           </button>
         </div>
       </div>
@@ -523,7 +547,7 @@
           <!-- Loading / error / action error -->
           <div *ngIf="showFiles() && filesLoading()" class="px-4 py-3 text-xs font-medium text-gray-500" role="status">Loading your files...</div>
           <div *ngIf="uploadState() as u" class="px-4 py-3 text-xs font-medium text-gray-600" role="status">
-            <div class="flex justify-between gap-3"><span class="truncate">Uploading {{ u.name }}</span><span>{{ u.index }} of {{ u.total }}</span></div>
+            <div class="flex justify-between gap-3"><span class="truncate">Uploading {{ u.name }}</span><span class="flex items-center gap-3">{{ u.index }} of {{ u.total }}<button type="button" (click)="cancelUpload()" class="underline cursor-pointer">Cancel</button></span></div>
             <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
               <div class="h-full bg-blue-500 transition-all" [style.width.%]="u.percent" role="progressbar" [attr.aria-valuenow]="u.percent" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
@@ -659,7 +683,7 @@
                       (click)="showContextMenu(file, $event); $event.stopPropagation()"
                       [attr.aria-label]="'More actions for ' + file.name"
                       [attr.aria-haspopup]="'menu'"
-                      class="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
+                      class="opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-all cursor-pointer"
                     >
                       <span class="material-symbols-rounded" style="font-size: 16px">more_vert</span>
                     </button>
@@ -732,7 +756,7 @@
                   (click)="showContextMenu(file, $event); $event.stopPropagation()"
                   [attr.aria-label]="'More actions for ' + file.name"
                   [attr.aria-haspopup]="'menu'"
-                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-gray-200 text-gray-400 transition-all cursor-pointer"
+                  class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 p-0.5 rounded-md hover:bg-gray-200 text-gray-400 transition-all cursor-pointer"
                 >
                   <span class="material-symbols-rounded" style="font-size: 14px">more_vert</span>
                 </button>
@@ -743,6 +767,13 @@
 
         <!-- Preview panel — desktop -->
         <div *ngIf="previewOpen() && showFiles()" class="hidden xl:flex">
+          <ng-container *ngTemplateOutlet="detailsPanel" />
+        </div>
+        <!-- Details sheet — below xl, same panel -->
+        <div *ngIf="detailsSheetOpen() && selectedFile() && showFiles()" class="xl:hidden fixed inset-y-0 right-0 z-[45] flex max-w-full shadow-2xl">
+          <ng-container *ngTemplateOutlet="detailsPanel" />
+        </div>
+        <ng-template #detailsPanel>
           <aside *ngIf="!selectedFile()" class="w-72 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col items-center justify-center p-8 text-center">
             <div class="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
               <span class="material-symbols-rounded text-gray-400" style="font-size: 28px">preview</span>
@@ -755,7 +786,7 @@
             <!-- Header -->
             <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <span class="text-sm font-semibold text-gray-800">Details</span>
-              <button (click)="previewOpen.set(false)" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+              <button (click)="closeDetails()" aria-label="Close details" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
                 <span class="material-symbols-rounded" style="font-size: 18px">close</span>
               </button>
             </div>
@@ -887,7 +918,7 @@
               </button>
             </div>
           </aside>
-        </div>
+        </ng-template>
       </div>
     </main>
   </div>

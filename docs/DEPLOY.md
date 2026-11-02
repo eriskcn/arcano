@@ -61,8 +61,9 @@ The nginx inside the `web` image caps request bodies at 110m (`client_max_body_s
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
 scripts/backup.sh               # db.dump, seaweedfs.tar.gz, api_keys.tar.gz, env.production (mode 600), seaweedfs-image.txt in backups/<UTC time>/, keeps BACKUP_KEEP=7
-scripts/backup.sh --stop-api    # stops api briefly for a consistent DB/files pair
+scripts/backup.sh --stop-api    # stops api and seaweedfs while copying (restarted afterwards, also on failure): consistent DB/files pair, uploads fail meanwhile
 ```
+Without `--stop-api` the script warns on stderr: the database is dumped first and the files are tarred while uploads continue, so the restore can contain orphan objects (files without a database row; measured: 26 during an upload loop). They are harmless leaked storage: nothing reclaims them. Use `--stop-api` (and in cron) for a consistent pair.
 The backups contain secrets (`env.production`); `backups/` is created with mode 700 and is gitignored.
 
 Off-host copy: install and configure `rclone`, then set `BACKUP_RCLONE_REMOTE` (e.g. `s3remote:arcano-backups`) in the environment of the script. After each backup it runs `rclone copy <dir> $BACKUP_RCLONE_REMOTE/<timestamp>`; if that fails the script exits non-zero (and skips pruning).
@@ -76,6 +77,16 @@ Restore (destructive; validates the archives first, then stops web/api, replaces
 ```
 scripts/restore.sh backups/<timestamp> --yes
 ```
+`restore.sh` exits before stopping anything if `backend/seaweedfs/s3.prod.json` is missing (Docker would create a directory there instead of mounting the file).
+
+Restore on a fresh host (`s3.prod.json` is generated, not part of the backup; `env.production` is):
+```
+git clone <repo> /opt/arcano && cd /opt/arcano
+cp <backup dir>/env.production .env.production
+scripts/gen-s3-config.sh .env.production
+docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml up -d --build
+scripts/restore.sh <backup dir> --yes
+```
 
 ## 7. Upgrade
 ```
@@ -84,6 +95,8 @@ git pull
 docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 Database migrations run when the API starts.
+
+Rollback: `scripts/restore.sh backups/<timestamp> --yes` with the backup taken before the upgrade. It empties the database schema first, so a backup from before the upgrade restores over the upgraded database; accounts, keys and shares created after that backup are lost, and files are restored too. Then start the code you want: the upgraded code applies its migrations again at startup (tested). Running the old code against the restored database was not tested. If `restore.sh` fails it leaves the services stopped; fix the error and run it again.
 
 Upgrading an install that already has accounts (from before invite keys): the migration gives every existing account a profile but makes nobody admin. Set `BOOTSTRAP_ADMIN_EMAIL=you@example.com` in `.env.production` (it becomes `Auth:BootstrapAdminEmail`) and run `up -d` again. It only promotes when no admin exists yet; remove it afterwards. Without it the API logs a warning at startup and sign-up stays closed.
 

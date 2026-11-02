@@ -1,6 +1,7 @@
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable, catchError, concat, concatMap, filter, from, map, of, switchMap, throwError, timer } from 'rxjs';
+import { Observable, catchError, concat, concatMap, filter, finalize, from, map, of, switchMap, tap, throwError, timer } from 'rxjs';
+import { AuthService } from './auth.service';
 import { environment } from '../environments/environment';
 
 export interface FileDto {
@@ -20,6 +21,7 @@ export type FilesView = 'all' | 'starred' | 'recent';
 @Injectable({ providedIn: 'root' })
 export class FilesService {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
   private readonly baseUrl = `${environment.apiBaseUrl}/Files`;
 
   /** One page of files, newest first; a page shorter than FILES_PAGE_SIZE is the last. */
@@ -108,13 +110,32 @@ export class FilesService {
               );
             }),
           );
+          // Unsubscribing before completion (Cancel) aborts the session so it frees its quota and slot.
+          let settled = false;
+          // Closing the tab skips unsubscribe, so abort on pagehide. keepalive lets the DELETE outlive the page; best-effort only.
+          const abortOnHide = () => {
+            const token = this.auth.tokenForRequest();
+            if (!settled && token) {
+              settled = true;
+              void fetch(`${url}/${id}`, { method: 'DELETE', keepalive: true, headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+            }
+          };
+          window.addEventListener('pagehide', abortOnHide);
           return concat(chunks, this.http.post<unknown>(`${url}/${id}/complete`, {}).pipe(map(() => 100))).pipe(
-            catchError(error =>
-              this.http.delete(`${url}/${id}`).pipe(
+            tap({ complete: () => (settled = true) }),
+            finalize(() => {
+              window.removeEventListener('pagehide', abortOnHide);
+              if (!settled) {
+                this.http.delete(`${url}/${id}`).subscribe({ error: () => undefined });
+              }
+            }),
+            catchError(error => {
+              settled = true;
+              return this.http.delete(`${url}/${id}`).pipe(
                 catchError(() => of(null)),
                 switchMap(() => throwError(() => error)),
-              ),
-            ),
+              );
+            }),
           );
         }),
       );

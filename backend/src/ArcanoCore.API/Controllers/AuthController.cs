@@ -258,7 +258,7 @@ public class AuthController : ApiControllerBase
         }
 
         var user = await _userManager.FindByIdAsync(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
-        if (user == null || await _userManager.IsLockedOutAsync(user))
+        if (user == null || user.IsDisabled())
         {
             return Unauthorized(new Error("Auth.SessionExpired", "Session expired."));
         }

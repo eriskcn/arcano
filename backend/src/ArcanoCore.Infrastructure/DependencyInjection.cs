@@ -86,7 +86,7 @@ public static class DependencyInjection
                 IssuerSigningKey = new SymmetricSecurityKey(key),
                 ClockSkew = TimeSpan.Zero
             };
-            // Reject tokens whose security stamp no longer matches (logout / password change) or whose user is gone or locked out.
+            // Reject tokens whose security stamp no longer matches (logout / password change) or whose user is gone or disabled (a brute-force lockout does not count).
             // Tokens without the claim (issued before this check existed) are invalid.
             options.Events = new JwtBearerEvents
             {
@@ -95,7 +95,7 @@ public static class DependencyInjection
                     var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<IdentityUser<Guid>>>();
                     var stamp = context.Principal?.FindFirstValue(AuthClaims.SecurityStamp);
                     var user = await userManager.FindByIdAsync(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
-                    if (user == null || string.IsNullOrEmpty(stamp) || stamp != user.SecurityStamp || await userManager.IsLockedOutAsync(user))
+                    if (!UserAccountState.IsTokenValid(user, stamp))
                     {
                         context.Fail("Token is no longer valid.");
                     }

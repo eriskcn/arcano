@@ -1,6 +1,6 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, Observable, catchError, concatMap, from, tap } from 'rxjs';
+import { EMPTY, Observable, Subject, catchError, concatMap, from, takeUntil, tap } from 'rxjs';
 import type { FileItem } from './app';
 import { FilesService } from './files.service';
 import { fileErrorMessage } from './http-errors';
@@ -27,6 +27,7 @@ export class FileActionsService {
   readonly uploadState = signal<{ name: string; index: number; total: number; percent: number } | null>(null);
   readonly clipboard = signal<{ mode: 'copy' | 'cut'; items: FileItem[]; sourceFolderId: string | null } | null>(null);
   private undoStack: (() => void)[] = [];
+  private readonly cancelUpload$ = new Subject<void>();
 
   bind(host: FileActionsHost): void {
     this.host = host;
@@ -135,6 +136,11 @@ export class FileActionsService {
       });
   }
 
+  // Stops the running upload; an open chunked session is aborted by FilesService.
+  cancelUpload(): void {
+    this.cancelUpload$.next();
+  }
+
   uploadFiles(selected: File[], folderId: string | null = this.host.currentFolderId()): void {
     if (selected.length === 0 || this.actionBusy()) {
       return;
@@ -151,6 +157,7 @@ export class FileActionsService {
             return EMPTY;
           }),
         )),
+        takeUntil(this.cancelUpload$),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe({
