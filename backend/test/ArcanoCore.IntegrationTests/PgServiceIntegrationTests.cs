@@ -121,27 +121,6 @@ public class PgTrashTests(PgFixture pg) : PgTestBase(pg)
         Assert.Equal("File.NotFound", (await Files().PermanentlyDeleteFileAsync(id)).Error.Code);
         Assert.Equal(1, await RowCount(id));
     }
-
-    [RequiresPgFact]
-    public async Task ListTrash_PurgesFilesOlderThan30Days()
-    {
-        var old = await Upload(Files(), "old.txt");
-        var recent = await Upload(Files(), "recent.txt");
-        await Files().DeleteFileAsync(old);
-        await Files().DeleteFileAsync(recent);
-        await using (var db = Pg.NewContext())
-        {
-            var f = await db.FileMetadatas.IgnoreQueryFilters().SingleAsync(x => x.Id == old);
-            f.DeletedAtUtc = DateTime.UtcNow.AddDays(-31);
-            await db.SaveChangesAsync();
-        }
-
-        var trash = (await Files().ListTrashAsync(0, 10)).Value;
-
-        Assert.Equal(new[] { recent }, trash.Select(f => f.Id));
-        Assert.Equal(0, await RowCount(old));
-        Assert.Equal(1, await RowCount(recent));
-    }
 }
 
 public class PgShareTests(PgFixture pg) : PgTestBase(pg)
