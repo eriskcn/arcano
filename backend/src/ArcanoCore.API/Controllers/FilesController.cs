@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
+using ArcanoCore.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +25,7 @@ public class FilesController : ApiControllerBase
     {
         if (file == null || file.Length == 0)
         {
-            return BadRequest("No file uploaded.");
+            return BadRequest(new Error("File.Empty", "File content cannot be empty."));
         }
 
         using var stream = file.OpenReadStream();
