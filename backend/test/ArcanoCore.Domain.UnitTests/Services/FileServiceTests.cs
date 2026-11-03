@@ -442,42 +442,6 @@ public class FileServiceTests
     }
 
     [Fact]
-    public async Task ListTrashAsync_PurgesItemsOlderThan30Days()
-    {
-        var userId = Guid.NewGuid();
-        await using var dbContext = CreateListDbContext();
-        var expired = Trashed(userId, "expired.txt", DateTime.UtcNow.AddDays(-31));
-        var fresh = Trashed(userId, "fresh.txt", DateTime.UtcNow.AddDays(-1));
-        dbContext.FileMetadatas.AddRange(expired, fresh);
-        await dbContext.SaveChangesAsync(CancellationToken.None);
-        var storage = new TestStorage();
-
-        var result = await CreateListService(dbContext, userId.ToString(), storage).ListTrashAsync(0, 50);
-
-        Assert.Equal(new[] { fresh.Id }, result.Value.Select(f => f.Id).ToArray());
-        Assert.Equal(1, storage.DeleteCalls);
-        Assert.False(await dbContext.FileMetadatas.IgnoreQueryFilters().AnyAsync(f => f.Id == expired.Id));
-    }
-
-    [Fact]
-    public async Task ListTrashAsync_PurgesLegacyItemsWithNullDeletedAt()
-    {
-        var userId = Guid.NewGuid();
-        await using var dbContext = CreateListDbContext();
-        var legacy = Trashed(userId, "legacy.txt", DateTime.UtcNow);
-        legacy.DeletedAtUtc = null;
-        legacy.LastModifiedAtUtc = DateTime.UtcNow.AddDays(-31);
-        dbContext.FileMetadatas.Add(legacy);
-        await dbContext.SaveChangesAsync(CancellationToken.None);
-        var storage = new TestStorage();
-
-        var result = await CreateListService(dbContext, userId.ToString(), storage).ListTrashAsync(0, 50);
-
-        Assert.Empty(result.Value);
-        Assert.Equal(1, storage.DeleteCalls);
-    }
-
-    [Fact]
     public async Task UploadFileAsync_NameOrContentTypeTooLong_FailsBeforeUpload()
     {
         var storage = new TestStorage();

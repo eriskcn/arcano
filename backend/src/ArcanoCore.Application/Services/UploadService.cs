@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArcanoCore.Application.Services;
 
-// Chunked uploads on top of S3 multipart. shortcut: abandoned sessions are swept only when their owner starts another upload; add a background sweep if owners never return.
+// Chunked uploads on top of S3 multipart. `CleanupService` sweeps abandoned sessions; starting an upload also sweeps that owner's.
 public class UploadService : IUploadService
 {
     public const long ChunkSize = 8 * 1024 * 1024; // above S3's 5 MiB minimum part size
