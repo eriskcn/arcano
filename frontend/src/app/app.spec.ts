@@ -17,7 +17,6 @@ const sampleFiles: FileItem[] = ['1', '2', '3', '4', '5', '6'].map(id => ({
   size: '1 KB',
   modified: 'Jul 22, 2026',
   starred: false,
-  shared: false,
 }));
 
 const folderItem = (id: string, name: string): FileItem => ({
@@ -27,7 +26,6 @@ const folderItem = (id: string, name: string): FileItem => ({
   size: null,
   modified: 'Jul 22, 2026',
   starred: false,
-  shared: false,
 });
 
 // jsdom has no DragEvent or DataTransfer, so drag events are plain objects with the fields the handlers read.
@@ -237,7 +235,7 @@ describe('App', () => {
   it('should star a folder through the API and revert when it fails', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
-    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: null, modified: '', starred: false, shared: false }]);
+    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: null, modified: '', starred: false }]);
 
     app.toggleFileStar('f1');
     expect(app.folders()[0].starred).toBe(true);
@@ -677,7 +675,7 @@ describe('App', () => {
     const http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
     app.page.set('app');
-    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: '—', modified: 'Oct 31, 2026', starred: false, shared: false }]);
+    app.folders.set([{ id: 'f1', name: 'Images', type: 'folder', size: '—', modified: 'Oct 31, 2026', starred: false }]);
     app.files.set([]);
     fixture.detectChanges();
 

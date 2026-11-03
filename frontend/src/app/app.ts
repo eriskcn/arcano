@@ -45,7 +45,6 @@ export interface FileItem {
   size: string | null;
   modified: string;
   starred: boolean;
-  shared: boolean;
   contentType?: string;
   fileSize?: number;
 }
@@ -84,7 +83,6 @@ const toFileItem = (file: FileDto): FileItem => ({
   size: formatFileSize(file.fileSize),
   modified: formatDate(file.lastModifiedAtUtc ?? file.createdAtUtc),
   starred: file.isStarred,
-  shared: false,
   contentType: file.contentType,
   fileSize: file.fileSize,
 });
@@ -96,7 +94,6 @@ const toFolderItem = (folder: FolderDto): FileItem => ({
   size: null,
   modified: formatDate(folder.createdAtUtc),
   starred: folder.isStarred,
-  shared: false,
 });
 
 @Component({
