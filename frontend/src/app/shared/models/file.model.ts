@@ -1,17 +1,5 @@
 export type FileType = 'folder' | 'document' | 'image' | 'video' | 'archive' | 'spreadsheet' | 'pdf' | 'audio' | 'code' | 'text';
 
-export interface FileItem {
-  id: string;
-  name: string;
-  type: FileType;
-  size: string | null;
-  sizeBytes?: number;
-  modified: string;
-  starred: boolean;
-  shared: boolean;
-  parentId?: string | null;
-}
-
 export type UserRole = 'admin' | 'user';
 
 export interface UserProfile {

@@ -53,7 +53,7 @@ ArcanoCore.API -> ArcanoCore.Infrastructure -> ArcanoCore.Application -> ArcanoC
 
 | Project | Contains | Notes |
 |---|---|---|
-| Domain | Entities, `BaseEntity`, `Result`/`Error`, `EmailNormalizer` | No project references. `Common/PasswordHasher.cs` (BCrypt) is only used by its tests; accounts use the Identity hasher. |
+| Domain | Entities, `BaseEntity`, `Result`/`Error`, `EmailNormalizer` | No project references. |
 | Application | Services (`Services/`), DTOs (`Common/Models/`), ports (`Common/Interfaces/`) | References EF Core: services query `DbSet`s through `IApplicationDbContext`. There is no repository layer. |
 | Infrastructure | `ApplicationDbContext`, EF configurations and migrations, `SeaweedStorageService`, Identity and JWT setup, `CleanupService` | Implements the ports. |
 | API | Controllers, admin authorization, exception middleware, `Program.cs` | Auth and admin controllers use `UserManager` and `IApplicationDbContext` directly; `HealthController` uses `ApplicationDbContext` and `IAmazonS3` directly. |
