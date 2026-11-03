@@ -1,0 +1,11 @@
+{
+  "identities": [
+    {
+      "name": "arcano",
+      "credentials": [
+        { "accessKey": "any_key", "secretKey": "any_secret" }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

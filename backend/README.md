@@ -15,8 +15,11 @@ Boilerplate ASP.NET Core Web API project targeting .NET 10 based on Clean Archit
 ## Quickstart Guide
 
 ### 1. Build and Run via Docker Compose
-To build the API docker image and orchestrate the whole stack (PostgreSQL, SeaweedFS, API):
+To build the API docker image and orchestrate the whole stack (PostgreSQL, SeaweedFS, API), first create the two gitignored SeaweedFS files, otherwise Docker creates directories in their place:
 ```bash
+cp seaweedfs/s3.json.example seaweedfs/s3.json
+cp seaweedfs/security.toml.example seaweedfs/security.toml
+sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" seaweedfs/security.toml
 docker compose up --build -d
 ```
 
