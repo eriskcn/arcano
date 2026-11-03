@@ -6,7 +6,7 @@ import { FileActionsHost, FileActionsService } from './file-actions.service';
 import { environment } from '../environments/environment';
 
 const api = environment.apiBaseUrl;
-const doc = (id: string): FileItem => ({ id, name: `File ${id}.txt`, type: 'document', size: '1 KB', modified: '', starred: false, shared: false });
+const doc = (id: string): FileItem => ({ id, name: `File ${id}.txt`, type: 'document', size: '1 KB', modified: '', starred: false });
 
 describe('FileActionsService', () => {
   let service: FileActionsService;

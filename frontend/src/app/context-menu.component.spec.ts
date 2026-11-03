@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ContextMenuComponent, ContextMenuModel } from './context-menu.component';
 import { FileItem, MenuEntry } from './app';
 
-const file = (id: string): FileItem => ({ id, name: `File ${id}`, type: 'document', size: '1 KB', modified: '', starred: false, shared: false });
+const file = (id: string): FileItem => ({ id, name: `File ${id}`, type: 'document', size: '1 KB', modified: '', starred: false });
 
 describe('ContextMenuComponent', () => {
   const create = (patch: Partial<ContextMenuModel> = {}, entries?: MenuEntry[]) => {
