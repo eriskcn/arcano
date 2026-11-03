@@ -110,7 +110,7 @@ public class FileService : IFileService
             {
                 try
                 {
-                    await _storageService.DeleteAsync(storageKey, cancellationToken);
+                    await _storageService.DeleteAsync(storageKey, CancellationToken.None);
                 }
                 catch (Exception)
                 {
@@ -364,7 +364,7 @@ public class FileService : IFileService
 
         try
         {
-            await _storageService.DeleteAsync(file.StorageKey, cancellationToken);
+            await _storageService.DeleteAsync(file.StorageKey, CancellationToken.None);
         }
         catch (Exception)
         {
@@ -449,7 +449,7 @@ public class FileService : IFileService
             {
                 try
                 {
-                    await _storageService.DeleteAsync(storageKey, cancellationToken);
+                    await _storageService.DeleteAsync(storageKey, CancellationToken.None);
                 }
                 catch (Exception)
                 {

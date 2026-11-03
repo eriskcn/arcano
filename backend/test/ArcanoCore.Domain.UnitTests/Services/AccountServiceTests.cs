@@ -67,22 +67,38 @@ public class AccountServiceTests
         Assert.Empty(_context.FileMetadatas.IgnoreQueryFilters());
     }
 
+    [Fact]
+    public async Task DeleteUserDataAsync_StorageCalls_IgnoreRequestCancellation()
+    {
+        _context.AddRange(new FileMetadata { Id = Guid.NewGuid(), OwnerId = _userId, StorageKey = "k" },
+            new UploadSession { Id = Guid.NewGuid(), OwnerId = _userId, StorageKey = "part", StorageUploadId = "u1" });
+        await _context.SaveChangesAsync(default);
+        using var cts = new CancellationTokenSource();
+
+        await new AccountService(_context, _storage, _storage).DeleteUserDataAsync(_userId, cts.Token);
+
+        Assert.Equal([false, false], _storage.TokensCancelable);
+    }
+
     private sealed class FakeStorage : IStorageService, IMultipartStorage
     {
         public List<string> Deleted { get; } = [];
         public List<string> Aborted { get; } = [];
         public bool Fail { get; set; }
+        public List<bool> TokensCancelable { get; } = [];
 
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default)
         {
             if (Fail) throw new InvalidOperationException();
             Deleted.Add(key);
+            TokensCancelable.Add(cancellationToken.CanBeCanceled);
             return Task.CompletedTask;
         }
 
         public Task AbortAsync(string key, string uploadId, CancellationToken cancellationToken = default)
         {
             Aborted.Add(key);
+            TokensCancelable.Add(cancellationToken.CanBeCanceled);
             return Task.CompletedTask;
         }
 
