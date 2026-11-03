@@ -23,7 +23,10 @@ mkdir -p "$dir"
 
 STOPPED=()
 restart() { [ ${#STOPPED[@]} -eq 0 ] || "${DC[@]}" start "${STOPPED[@]}"; }
-trap restart EXIT # restarts whatever was stopped, also on failure
+copied=0
+# on failure: drop the partial dir (it would count toward BACKUP_KEEP and push out good backups) and restart whatever was stopped
+cleanup() { [ "$copied" = 1 ] || rm -rf "$dir"; restart; }
+trap cleanup EXIT
 if [ "$STOP_API" = 1 ]; then
   STOPPED=(seaweedfs api) # started in this order
   "${DC[@]}" stop api seaweedfs
@@ -41,6 +44,7 @@ chmod 600 "$dir/env.production"
 # record the exact seaweedfs image so a restore can use the same one
 img="$("${DC[@]}" config --images | grep -i seaweedfs)"
 { echo "$img"; docker image inspect --format '{{.Id}}' "$img"; } > "$dir/seaweedfs-image.txt"
+copied=1
 
 # copying is done: bring services back now, not after the upload; the cleared list keeps the trap from starting them again
 restart; STOPPED=()
