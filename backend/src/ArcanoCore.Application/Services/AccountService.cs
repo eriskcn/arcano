@@ -40,13 +40,14 @@ public class AccountService : IAccountService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Rows are gone, so a storage failure only orphans an object; do not fail the user.
+        // None: a client disconnect must not skip the deletes, or the objects are orphaned.
         foreach (var file in files)
         {
-            try { await _storageService.DeleteAsync(file.StorageKey, cancellationToken); } catch (Exception) { }
+            try { await _storageService.DeleteAsync(file.StorageKey, CancellationToken.None); } catch (Exception) { }
         }
         foreach (var session in sessions)
         {
-            try { await _multipart.AbortAsync(session.StorageKey, session.StorageUploadId, cancellationToken); } catch (Exception) { }
+            try { await _multipart.AbortAsync(session.StorageKey, session.StorageUploadId, CancellationToken.None); } catch (Exception) { }
         }
     }
 }
