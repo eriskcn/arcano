@@ -493,7 +493,7 @@ describe('App', () => {
     http.verify();
   });
 
-  it('gives the password toggles, the bell and nothing else icon-only an accessible name', () => {
+  it('gives the password toggles and the avatar icon-only an accessible name', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
     const el = fixture.nativeElement as HTMLElement;
@@ -512,7 +512,7 @@ describe('App', () => {
 
     app.page.set('app');
     fixture.detectChanges();
-    expect(el.querySelector('button[aria-label="Notifications"]')).not.toBeNull();
+    expect(el.querySelector('button[aria-label^="Signed in as"]')).not.toBeNull();
   });
 
   describe('details below xl', () => {
