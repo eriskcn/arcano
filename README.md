@@ -18,10 +18,11 @@ A personal cloud-storage application monorepo, also usable by a small trusted gr
 
 Prerequisites: .NET 10 SDK and Docker with Compose. The API requires `Jwt:Secret` (environment variable `Jwt__Secret`) with at least 32 UTF-8 bytes; export `JWT_SECRET` before using the full-stack Compose setup.
 
-The dev Compose file mounts `backend/seaweedfs/security.toml`, which is gitignored. Create it from the example before `docker compose up`, otherwise Docker creates a directory in its place:
+The dev Compose file mounts `backend/seaweedfs/s3.json` and `backend/seaweedfs/security.toml`, which are gitignored. Create them from the examples before `docker compose up`, otherwise Docker creates a directory in their place and SeaweedFS fails to start:
 
 ```bash
 cd backend
+cp seaweedfs/s3.json.example seaweedfs/s3.json
 cp seaweedfs/security.toml.example seaweedfs/security.toml
 sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" seaweedfs/security.toml
 ```

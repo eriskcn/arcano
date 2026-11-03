@@ -28,6 +28,7 @@ services:
       - "127.0.0.1:8333:8333" # S3 gateway
     volumes:
       - seaweedfs_data:/data
+      # s3.json is gitignored too: cp seaweedfs/s3.json.example seaweedfs/s3.json (a missing file becomes a directory)
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
       # security.toml is gitignored; create it first or Docker creates a directory in its place:
       #   cp seaweedfs/security.toml.example seaweedfs/security.toml && sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" seaweedfs/security.toml
