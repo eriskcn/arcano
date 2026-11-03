@@ -34,6 +34,8 @@ public class ExceptionHandlingMiddleware
             if (context.Response.HasStarted)
             {
                 _logger.LogWarning("The response has already started; cannot write the error response.");
+                // Cut the connection so a half-sent body (a zip) is not mistaken for a complete download.
+                context.Abort();
                 return;
             }
 
