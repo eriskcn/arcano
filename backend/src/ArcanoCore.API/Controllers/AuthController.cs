@@ -98,34 +98,45 @@ public class AuthController : ApiControllerBase
                 UserName = normalizedEmail
             };
 
-            var result = await _userManager.CreateAsync(user, request.Password);
-            if (!result.Succeeded)
-            {
-                // The key was not used up by a failed sign-up.
-                if (invite != null)
-                {
-                    await _inviteKeys.ReleaseAsync(invite.Id);
-                }
-
-                // Same message for duplicates so sign-up does not reveal which emails exist.
-                if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
-                {
-                    return BadRequest(new Error("Auth.RegisterFailed", "Could not create account."));
-                }
-
-                var firstError = result.Errors.FirstOrDefault();
-                var description = firstError?.Description ?? "User creation failed.";
-                return BadRequest(new Error("Auth.RegisterFailed", description));
-            }
-
             try
             {
-                _dbContext.UserProfiles.Add(new UserProfile { UserId = user.Id, IsAdmin = isFirst, QuotaBytes = invite?.QuotaBytes });
-                await _dbContext.SaveChangesAsync(CancellationToken.None);
+                var result = await _userManager.CreateAsync(user, request.Password);
+                if (!result.Succeeded)
+                {
+                    // The key was not used up by a failed sign-up.
+                    if (invite != null)
+                    {
+                        await _inviteKeys.ReleaseAsync(invite.Id);
+                    }
+
+                    // Same message for duplicates so sign-up does not reveal which emails exist.
+                    if (result.Errors.Any(e => e.Code is "DuplicateEmail" or "DuplicateUserName"))
+                    {
+                        return BadRequest(new Error("Auth.RegisterFailed", "Could not create account."));
+                    }
+
+                    var firstError = result.Errors.FirstOrDefault();
+                    var description = firstError?.Description ?? "User creation failed.";
+                    return BadRequest(new Error("Auth.RegisterFailed", description));
+                }
+
+                UserProfile? profile = null;
+                try
+                {
+                    profile = new UserProfile { UserId = user.Id, IsAdmin = isFirst, QuotaBytes = invite?.QuotaBytes };
+                    _dbContext.UserProfiles.Add(profile);
+                    await _dbContext.SaveChangesAsync(CancellationToken.None);
+                }
+                catch
+                {
+                    _dbContext.UserProfiles.Remove(profile!); // else the key release below retries this failed insert
+                    await _userManager.DeleteAsync(user); // no account without a profile
+                    throw;
+                }
             }
-            catch
+            catch when (invite != null)
             {
-                await _userManager.DeleteAsync(user); // no account without a profile
+                await _inviteKeys.ReleaseAsync(invite.Id); // a crash must not use up the key
                 throw;
             }
 
@@ -164,12 +175,20 @@ public class AuthController : ApiControllerBase
             return StatusCode(403, new Error("Auth.InviteInvalid", "The key is invalid, expired or already used."));
         }
 
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
-        if (!result.Succeeded)
+        try
         {
-            await _inviteKeys.ReleaseAsync(consumed.Value.Id);
-            return BadRequest(new Error("Auth.PasswordInvalid", result.Errors.FirstOrDefault()?.Description ?? "Password reset failed."));
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
+            if (!result.Succeeded)
+            {
+                await _inviteKeys.ReleaseAsync(consumed.Value.Id);
+                return BadRequest(new Error("Auth.PasswordInvalid", result.Errors.FirstOrDefault()?.Description ?? "Password reset failed."));
+            }
+        }
+        catch
+        {
+            await _inviteKeys.ReleaseAsync(consumed.Value.Id); // a crash must not use up the key
+            throw;
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
