@@ -261,17 +261,6 @@ public class FileService : IFileService
             return Result<IReadOnlyList<FileListItemDto>>.Failure(new Error("File.Unauthorized", "A valid user ID is required."));
         }
 
-        // shortcut: expired items are purged when the trash is listed, move to a background job if the trash must be purged without anyone opening it
-        var cutoff = DateTime.UtcNow.AddDays(-30);
-        var expired = await _dbContext.FileMetadatas
-            .IgnoreQueryFilters()
-            .Where(f => f.OwnerId == ownerId && f.IsDeleted && (f.DeletedAtUtc ?? f.LastModifiedAtUtc ?? f.CreatedAtUtc) < cutoff)
-            .ToListAsync(cancellationToken);
-        foreach (var file in expired)
-        {
-            await PurgeAsync(file, cancellationToken);
-        }
-
         var files = await _dbContext.FileMetadatas
             .IgnoreQueryFilters()
             .AsNoTracking()

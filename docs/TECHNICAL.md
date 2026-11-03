@@ -448,7 +448,7 @@ Creating a share:
 | Trashed files | `DeletedAtUtc ?? LastModifiedAtUtc ?? CreatedAtUtc` older than 30 days | Delete the row, then the object. If the object delete fails it is logged and the object is orphaned. |
 | Soft-deleted folders | `LastModifiedAtUtc ?? CreatedAtUtc` older than 30 days, and no file or child folder rows of any state remain | Delete the row. The loop reaches parents after their children are gone. |
 
-The session lifetime counts from creation, so an upload still in progress after 24 hours is aborted. Two related paths do the same work for one user: `GET /api/Files/trash` purges that user's expired files, and starting an upload sweeps that user's stale sessions.
+The session lifetime counts from creation, so an upload still in progress after 24 hours is aborted. Starting an upload also sweeps that user's stale sessions. With `Cleanup:Enabled` false, expired trash is never purged.
 
 ## 7. API reference
 
@@ -642,7 +642,7 @@ Fixed in code:
 | Parts per upload | 10,000 | `UploadService.MaxParts` |
 | Open sessions per user | 3 | `UploadService.MaxOpenSessions` |
 | Upload session lifetime | 24 hours | `UploadService`, `CleanupService` |
-| Trash retention | 30 days | `CleanupService`, `FileService.ListTrashAsync` |
+| Trash retention | 30 days | `CleanupService` |
 | Zip file cap | 5,000 files | `FolderService.MaxZipFiles` |
 | Page size | Default 50, max 100 | Controllers |
 
@@ -775,10 +775,8 @@ From `git grep -E '(shortcut|ponytail):'`. There are no `ponytail:` comments in 
 | `backend/src/ArcanoCore.API/Controllers/FoldersController.cs:70` | Zip writes are synchronous and block one thread per download |
 | `backend/src/ArcanoCore.API/Controllers/UserSharesController.cs:94` | Same blocking zip write for shared folders |
 | `backend/src/ArcanoCore.Application/Services/FileService.cs:23` | Upload lock is per process; the quota check is race-free only on one instance |
-| `backend/src/ArcanoCore.Application/Services/FileService.cs:264` | Comment says expired trash is purged only when listed. Outdated: `CleanupService` also purges it. |
-| `backend/src/ArcanoCore.Application/Services/FileService.cs:361` | A failed purge save leaves the entity tracked as Deleted, so a retry in the same scope fails again |
-| `backend/src/ArcanoCore.Application/Services/FileService.cs:422` | Copy streams the object through the API |
-| `backend/src/ArcanoCore.Application/Services/UploadService.cs:15` | Comment says abandoned sessions are swept only on the owner's next upload. Outdated: `CleanupService` also sweeps them. |
+| `backend/src/ArcanoCore.Application/Services/FileService.cs:350` | A failed purge save leaves the entity tracked as Deleted, so a retry in the same scope fails again |
+| `backend/src/ArcanoCore.Application/Services/FileService.cs:411` | Copy streams the object through the API |
 | `backend/src/ArcanoCore.Infrastructure/Jobs/CleanupService.cs:85` | A permanently failing abort is retried every pass with no attempt cap |
 
 ### Single API instance only
