@@ -173,6 +173,24 @@ public class FileServiceTests
         Assert.Equal(1, storage.UploadCalls);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public async Task UploadFileAsync_DefaultsToOctetStream_WhenContentTypeIsBlank(string? contentType)
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateListDbContext();
+
+        var result = await CreateListService(dbContext, userId.ToString(), new TestStorage())
+            .UploadFileAsync(new FileUploadDto(new MemoryStream([1]), "file.bin", contentType!, 1));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("application/octet-stream", result.Value.ContentType);
+        var saved = await dbContext.FileMetadatas.SingleAsync(f => f.Id == result.Value.Id);
+        Assert.Equal("application/octet-stream", saved.ContentType);
+    }
+
     [Fact]
     public async Task UploadFileAsync_ReturnsFolderNotFound_WhenFolderBelongsToAnotherUser()
     {
