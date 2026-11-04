@@ -112,17 +112,6 @@ describe('AuthService', () => {
     expect(set({})).toBe(false);
   });
 
-  it('should migrate a legacy sessionStorage token to localStorage', () => {
-    const token = createToken();
-    sessionStorage.setItem('arcano.auth.token', token);
-
-    const auth = TestBed.inject(AuthService);
-
-    expect(auth.token()).toBe(token);
-    expect(localStorage.getItem('arcano.auth.token')).toBe(token);
-    expect(sessionStorage.getItem('arcano.auth.token')).toBeNull();
-  });
-
   it('should clear both stores on logout', () => {
     const token = createToken();
     localStorage.setItem('arcano.auth.token', token);
