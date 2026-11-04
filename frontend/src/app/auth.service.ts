@@ -214,16 +214,6 @@ export class AuthService {
     let token: string | null = null;
     try {
       token = this.storage()?.getItem(this.storageKey) ?? null;
-      if (!token) {
-        // One-time migration from the previous per-tab sessionStorage location.
-        token = window.sessionStorage?.getItem(this.storageKey) ?? null;
-        if (token && this.hasValidExpiry(token)) {
-          this.storage()?.setItem(this.storageKey, token);
-        }
-        if (token) {
-          window.sessionStorage.removeItem(this.storageKey);
-        }
-      }
     } catch {
       return token && this.hasValidExpiry(token) ? token : null;
     }

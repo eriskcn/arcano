@@ -90,12 +90,11 @@ Then the request pipeline, in this exact order:
 | 1 | `UseForwardedHeaders` (`XForwardedFor`, `XForwardedProto`; trusted proxies only) | Only when `ForwardedHeaders:KnownProxies` is non-empty |
 | 2 | `ExceptionHandlingMiddleware` | Always |
 | 3 | `UseSwagger`, `UseSwaggerUI` (at `/swagger`) | Development environment only |
-| 4 | `UseHttpsRedirection` | Always |
-| 5 | `UseCors` | Always |
-| 6 | `UseAuthentication` | Always |
-| 7 | `UseRateLimiter` | Always; after authentication so per-user policies can read the user id |
-| 8 | `UseAuthorization` | Always |
-| 9 | `MapControllers` | Always |
+| 4 | `UseCors` | Always |
+| 5 | `UseAuthentication` | Always |
+| 6 | `UseRateLimiter` | Always; after authentication so per-user policies can read the user id |
+| 7 | `UseAuthorization` | Always |
+| 8 | `MapControllers` | Always |
 
 `ExceptionHandlingMiddleware` returns `application/problem+json` with status 500 and a generic message. It logs and writes nothing if the response has already started, and treats a client abort as a debug-level event.
 
@@ -684,7 +683,7 @@ Angular 22 with standalone components and signals, Tailwind CSS, Vitest. Everyth
 
 `auth.service.ts`, `auth.interceptor.ts`, `auth.guards.ts`:
 
-- The token is in `localStorage` under `arcano.auth.token`, with a one-time migration from the older `sessionStorage` location. If storage is blocked it stays in memory.
+- The token is in `localStorage` under `arcano.auth.token`. If storage is blocked it stays in memory.
 - `authInterceptor` adds `Authorization: Bearer` only to requests whose origin and path match the configured API.
 - When the token has under 10 minutes left, the interceptor calls `POST /Auth/refresh` before sending. Concurrent callers share one in-flight refresh. If it fails, the old token is sent.
 - `authenticatedGuard` and `anonymousOnlyGuard` call `validateSession()`, which verifies each new token once with `GET /Auth/session`, and signs out on 401. An expired token is dropped locally.
