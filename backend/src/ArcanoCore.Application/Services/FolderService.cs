@@ -248,7 +248,7 @@ public class FolderService : IFolderService
             paths[folder.Id] = parentPath + UniqueName(used, parentPath, SanitizeName(folder.Name)) + "/";
         }
 
-        await using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
+        var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
         foreach (var path in paths.Values.Where(p => p.Length > 0))
         {
             zip.CreateEntry(path);
@@ -263,6 +263,8 @@ public class FolderService : IFolderService
             await source.CopyToAsync(target, cancellationToken);
         }
 
+        // Not `await using`: a failed copy must not write the central directory, so the partial archive is rejected.
+        await zip.DisposeAsync();
         return Result.Success();
     }
 

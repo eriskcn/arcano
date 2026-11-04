@@ -146,6 +146,26 @@ public class FolderServiceTests
     }
 
     [Fact]
+    public async Task WriteZipAsync_StorageFailsMidCopy_LeavesInvalidArchive()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var storage = new FakeStorage { FailKey = "k2" };
+        var service = new FolderService(dbContext, new FolderTestCurrentUser(userId.ToString()), storage);
+        var top = await CreateFolderAsync(service, "Top", null);
+        AddFile(dbContext, userId, top.Id, "k1", "a.txt");
+        AddFile(dbContext, userId, top.Id, "k2", "b.txt");
+        await dbContext.SaveChangesAsync();
+        storage.Data["k1"] = "one"u8.ToArray();
+
+        using var output = new MemoryStream();
+        await Assert.ThrowsAsync<IOException>(() => service.WriteZipAsync(top.Id, output));
+
+        output.Position = 0;
+        Assert.Throws<InvalidDataException>(() => new ZipArchive(output));
+    }
+
+    [Fact]
     public async Task WriteZipAsync_ChildNamedBeforeParent_Succeeds()
     {
         var userId = Guid.NewGuid();
@@ -200,9 +220,10 @@ public class FolderServiceTests
     private sealed class FakeStorage : IStorageService
     {
         public Dictionary<string, byte[]> Data { get; } = new();
+        public string? FailKey { get; set; }
         public Task<string> UploadAsync(Stream stream, string fileName, string contentType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Stream> DownloadAsync(string key, CancellationToken cancellationToken = default) =>
-            Task.FromResult<Stream>(new MemoryStream(Data.GetValueOrDefault(key) ?? []));
+            key == FailKey ? throw new IOException("storage failed") : Task.FromResult<Stream>(new MemoryStream(Data.GetValueOrDefault(key) ?? []));
         public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
