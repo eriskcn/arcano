@@ -246,9 +246,9 @@ Setup: `backend/src/ArcanoCore.Infrastructure/DependencyInjection.cs`. Endpoints
 
 ### Passwords and emails
 
-- Identity Core with `RequiredLength = 8`, no character-class requirements, `RequireUniqueEmail = true`. Lockout options are not set, so Identity defaults apply.
+- Identity Core with `RequiredLength = 8`, no character-class requirements, `RequireUniqueEmail = true`. Failed logins are not counted by Identity lockout; see the login throttle below. Lockout is used only to disable a user.
 - `EmailNormalizer` trims and lowercases. For Gmail it maps `googlemail.com` to `gmail.com` and removes dots and `+tag`; for Outlook, Hotmail and Live it removes `+tag`. The normalized value is stored as both `Email` and `UserName`, and `CustomLookupNormalizer` applies the same rule to lookups.
-- Login returns the same 401 for unknown email, wrong password and locked account, and hashes against a dummy hash for unknown emails so timing is similar. Sign-up returns the same error for duplicates.
+- Login returns the same 401 for unknown email, wrong password, disabled account and a blocked email + IP pair, and hashes against a dummy hash for unknown emails so timing is similar. Sign-up returns the same error for duplicates.
 
 ### JWT
 
@@ -787,7 +787,7 @@ The design assumes one API process. State held per process: `FileService.UploadL
 
 Accounts and sessions:
 
-- A brute-force lockout refuses sign-in and password verification in `AccountController` for its duration; issued tokens stay valid. Failed attempts come from `Login` and from password verification in `AccountController`.
+- `LoginThrottle` is an in-memory singleton keyed by client IP + email. 5 failures block that pair for 5 minutes (sliding), and a success clears it. It covers `Login` and password verification in `AccountController`, so a stranger cannot lock another person out; issued tokens stay valid. It resets on API restart and is per instance.
 - There is no email. Forgotten passwords use Reset keys. An admin can reset any user's password, including another admin's (see the trust model in [DEPLOY.md](DEPLOY.md#not-covered)).
 - No endpoint promotes or demotes an admin after bootstrap.
 

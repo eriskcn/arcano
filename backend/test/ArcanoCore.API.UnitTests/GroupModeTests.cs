@@ -150,7 +150,7 @@ public class GroupModeTests
     }
 
     [Fact]
-    public async Task FailedLoginLockout_KeepsIssuedTokenValid_ButDisabledUserTokenIsRejected()
+    public async Task FailedLogins_KeepIssuedTokenValid_ButDisabledUserTokenIsRejected()
     {
         var env = AuthControllerTests.CreateEnv();
         await Register(env.Controller, "a@example.com");
@@ -163,7 +163,7 @@ public class GroupModeTests
         {
             await env.Controller.Login(new LoginRequest("b@example.com", "Wrong-Passw0rd"));
         }
-        Assert.True(await env.UserManager.IsLockedOutAsync(b));
+        Assert.False(await env.UserManager.IsLockedOutAsync(b)); // failures are throttled per IP + email, not locked on the account
         Assert.IsType<UnauthorizedObjectResult>(await env.Controller.Login(new LoginRequest("b@example.com", Password)));
         Assert.True(UserAccountState.IsTokenValid(b, stamp));
 

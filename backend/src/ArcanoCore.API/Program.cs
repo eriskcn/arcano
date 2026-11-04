@@ -102,6 +102,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AdminPolicy.Name, policy => policy.RequireAuthenticatedUser().AddRequirements(new AdminRequirement()));
 builder.Services.AddScoped<IAuthorizationHandler, AdminHandler>();
+builder.Services.AddSingleton<LoginThrottle>();
 
 // Persist DataProtection keys in containers (volume mounted at /app/keys); outside containers use the framework default.
 var keysPath = builder.Configuration["DataProtection:KeysPath"]

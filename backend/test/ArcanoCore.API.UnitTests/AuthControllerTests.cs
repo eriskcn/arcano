@@ -50,10 +50,11 @@ public class AuthControllerTests
     }
 
     [Fact]
-    public async Task Login_AfterFiveWrongPasswords_RejectsCorrectPassword()
+    public async Task Login_AfterFiveWrongPasswords_BlocksSameIpAndEmail()
     {
         var controller = CreateController();
         await controller.Register(new RegisterRequest(Email, Password));
+        FromIp(controller, "10.0.0.1");
 
         for (var i = 0; i < 5; i++)
         {
@@ -61,6 +62,29 @@ public class AuthControllerTests
         }
 
         Assert.IsType<UnauthorizedObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
+    }
+
+    [Fact]
+    public async Task Login_FiveWrongPasswordsFromOneIp_DoNotBlockOwnerFromAnotherIp()
+    {
+        var controller = CreateController();
+        await controller.Register(new RegisterRequest(Email, Password));
+        FromIp(controller, "10.0.0.1");
+        for (var i = 0; i < 5; i++)
+        {
+            await controller.Login(new LoginRequest(Email, "Wrong-Passw0rd"));
+        }
+
+        FromIp(controller, "10.0.0.2");
+
+        Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
+    }
+
+    private static void FromIp(ControllerBase controller, string ip)
+    {
+        var http = new DefaultHttpContext();
+        http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(ip);
+        controller.ControllerContext = new ControllerContext { HttpContext = http };
     }
 
     [Fact]

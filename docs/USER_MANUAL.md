@@ -508,7 +508,7 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 
 | Message or problem | Meaning | What to do |
 |---|---|---|
-| Invalid email or password. | The details are wrong. This is also shown if the account is disabled or temporarily locked after repeated wrong passwords. | Check your details. If it keeps happening, wait a few minutes, then ask an admin. |
+| Invalid email or password. | The details are wrong. This is also shown if the account is disabled, or blocked for 5 minutes after 5 wrong passwords for this email from your network. | Check your details. If it keeps happening, wait 5 minutes, then ask an admin. |
 | Too many attempts. Wait a minute and try again. | More than 10 sign-in, sign-up or reset attempts came from your network in one minute. | Wait a minute. |
 | Unable to connect to the server. Check your connection and try again. | The browser cannot reach the server. | Check your connection. |
 | This invite key is invalid, expired or already used. | The key cannot be used. | Ask an admin for a new key. |
