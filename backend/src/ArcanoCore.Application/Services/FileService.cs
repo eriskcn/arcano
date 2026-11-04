@@ -40,6 +40,12 @@ public class FileService : IFileService
 
     public async Task<Result<FileResponseDto>> UploadFileAsync(FileUploadDto dto, CancellationToken cancellationToken = default)
     {
+        // A part without Content-Type would be stored as '' and make every download fail with 500.
+        if (string.IsNullOrWhiteSpace(dto.ContentType))
+        {
+            dto = dto with { ContentType = "application/octet-stream" };
+        }
+
         if (dto.Content == null || dto.Content.Length == 0)
         {
             return Result<FileResponseDto>.Failure(new Error("File.Empty", "File content cannot be empty."));

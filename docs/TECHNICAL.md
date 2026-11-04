@@ -334,7 +334,7 @@ One flat bucket (`Storage:BucketName`), created lazily on first upload. Every ob
 
 `POST /api/Files/upload` (multipart form), `FileService.UploadFileAsync`:
 
-1. Validate name (max 255), content type (max 100) and target folder.
+1. Validate name (max 255), content type (max 100; a blank one becomes `application/octet-stream`) and target folder.
 2. Take the per-user upload lock, which is held for the whole S3 transfer.
 3. Check quota, upload the object.
 4. Re-check the folder (fall back to the root if it was deleted meanwhile), insert the row.
