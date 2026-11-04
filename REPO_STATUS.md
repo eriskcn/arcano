@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
 **Assessment date:** 2026-11-04
-**Repository state:** `main` contains pull requests through #44, at `4f7de54`. Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut) and `v0.2.0`.
+**Repository state:** `main` contains pull requests through #50, at `cd41a46`. Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut) and `v0.2.0`.
 
 ## Overview
 
@@ -26,8 +26,8 @@ Arcano is a monorepo for a personal cloud-storage application: an ASP.NET Core (
 
 ## What is verified
 
-- **Backend, on `4f7de54`:** builds; 134 domain tests and 53 API tests passed, 0 skipped. The integration tests run in CI (last seen on `4f7de54`: success); they were not re-run locally for this update, and the last local count was 33 (5 S3 and 28 PostgreSQL) on `8a27870`. The integration suite needs a real PostgreSQL and SeaweedFS (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database); it ran on throwaway containers with the dev S3 identity.
-- **Frontend, on `4f7de54` plus the removal of the Sort and Filter buttons:** 236 unit tests in 21 files pass. `ng build` succeeds at 525.40 kB initial (budget 540 kB). `npm audit --omit=dev` reports 0 vulnerabilities.
+- **Backend, on `cd41a46`:** builds; 137 domain tests and 53 API tests passed, 0 skipped. CI on `main` ran all 32 integration tests with real PostgreSQL and SeaweedFS: 32 passed, 0 skipped. The integration suite needs a real PostgreSQL and SeaweedFS (`ARCANO_IT_S3=1`, `ARCANO_IT_PG`; each test class uses its own throwaway database); it ran on throwaway containers with the dev S3 identity.
+- **Frontend, on `cd41a46`:** 235 unit tests in 21 files pass. `ng build` succeeds at 525.22 kB initial (budget 540 kB). `npm audit --omit=dev` reported 0 vulnerabilities on 2026-11-04 (not re-run for this update).
 - **Production stack, run twice on throwaway volumes (2026-10-31):** `docker-compose.prod.yml` came up with only `web` published; migrations created the schema on an empty database; the API container runs as a non-root user (`uid=1654`), its Compose healthcheck gates `web`, and `/health` reports the database and storage. Through nginx: a 90 MB single upload and a 20 MiB chunked upload with matching hashes; sign-up on/off (historical: before group mode, see below); change password (the old token stops working at once), sign out everywhere, refresh; folder delete (contents go to the Trash) and zip download; account deletion (no rows left); the background cleanup job removing an aged trashed file and an abandoned upload session; backup and restore.
 - **Browser pass (2026-10-31):** sign-up and its errors, the Trash view, drag and drop, previews of text, image, audio, video (PDF shows download only), the progress bar on a 60 MB chunked upload, marquee selection, mobile and tablet layouts. The fixes made afterwards (below) are covered by unit tests; the confirmation dialogs, double-click preview and the new Settings dialog were not re-checked in that pass (Settings is in the 2026-11-02 pass below). Fixes from 2026-11-02 (sign-up key notice kept after redirect, Ctrl/Shift selection, notices when folders are skipped in bulk actions, folder-zip too-large message, public links of a disabled owner) are covered by unit tests; of these the 2026-11-02 pass below drove the selection and the folder-skipped notices. The client-IP fix behind a proxy (`set_real_ip_from` in `frontend/nginx.conf`, `docs/DEPLOY.md` section 5) was checked on throwaway containers with the real API and a plain-HTTP nginx proxy; real TLS was later verified on a throwaway stack with Caddy and with nginx.
 - **Browser pass (2026-11-02, throwaway production stack, built-in browser pane at 375, 768 and 1440 px):** sign-up with invite keys (wrong, short password, reuse; key not left in the page), lockout (existing token survives), reset key, Admin dialog (keys, quota, disable/enable, last-admin guard), Settings (change password, sign out everywhere, delete account), "Shared with me" (browse, preview, zip), People section and public link (create, revoke), dead-session redirect with notice, upload Cancel, upload abort on navigating away, My Files to root and "Up one folder", row buttons on touch emulation, Details sheet below `xl`, folder-skipped notices, Ctrl/Shift selection, readable `Upload.TooManyOpen` message. No functional bug found. Not driven: real touch, real file chooser, a real tab close (navigation instead), the clipboard Copy button, the 429 message in the UI, an expired reset key, a measured overlap of the Details sheet and the bottom nav at 375 px. The accessibility and loading-state fixes made after this pass are unit-tested only.
@@ -106,7 +106,7 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 ## Known open issues
 
-Open on GitHub (2026-11-04): #33, #34, #35, #36, #37, #39, #41, #42, #43; none is fixed. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
+Open on GitHub (2026-11-04): #37 (large downloads are held in browser memory before saving; not measured in a real browser) and #42 (the `package.json` version waits for the tag). The whole-project audit of 2026-11-04 filed #32-#43; all the others were fixed in #44-#50. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
 
 - **Closed-tab abort is best effort:** the page sends a keepalive abort on `pagehide`, but a crash, a killed mobile browser, a lost network or an expired token still leaves the session holding quota and a slot until the 24 h sweep.
 - **Details sheet below `xl`:** it has no backdrop or focus trap, and its overlap with the bottom nav at 375 px was not measured.
