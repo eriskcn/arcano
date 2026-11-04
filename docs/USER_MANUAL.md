@@ -146,6 +146,8 @@ Phones do not show the path. To go up one level on a phone, tap the **Up one fol
 
 The browser saves the file only after all of it has been fetched. There is no progress bar, so a large file can take a while.
 
+The whole file is held in the browser's memory until then. Very large files (several GB) may fail on a device with little free memory. This limit has not been measured. If a download fails, close other tabs and try again, or use a computer with more memory.
+
 ### Download a folder as a zip
 
 1. Right-click the folder.
