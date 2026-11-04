@@ -25,6 +25,7 @@ public class AccountController : ApiControllerBase
     private readonly UserManager<IdentityUser<Guid>> _userManager;
     private readonly IConfiguration _configuration;
     private readonly IApplicationDbContext _dbContext;
+    private readonly LoginThrottle _throttle;
 
     public AccountController(
         IStorageQuotaService quotaService,
@@ -32,8 +33,10 @@ public class AccountController : ApiControllerBase
         ICurrentUser currentUser,
         UserManager<IdentityUser<Guid>> userManager,
         IConfiguration configuration,
-        IApplicationDbContext dbContext)
+        IApplicationDbContext dbContext,
+        LoginThrottle? throttle = null)
     {
+        _throttle = throttle ?? new LoginThrottle();
         _quotaService = quotaService;
         _accountService = accountService;
         _currentUser = currentUser;
@@ -42,21 +45,22 @@ public class AccountController : ApiControllerBase
         _dbContext = dbContext;
     }
 
-    // Counts failures toward lockout like sign-in; a locked account gets the plain wrong-password response so lockout is not revealed.
+    // Failures are counted per IP + email like sign-in (not per account), so a stranger cannot lock the owner out; a blocked caller gets the plain wrong-password response.
     private async Task<bool> VerifyPasswordAsync(IdentityUser<Guid> user, string? password)
     {
-        if (string.IsNullOrEmpty(password) || await _userManager.IsLockedOutAsync(user))
+        var key = LoginThrottle.Key(HttpContext, user.Email ?? "");
+        if (string.IsNullOrEmpty(password) || _throttle.IsBlocked(key) || await _userManager.IsLockedOutAsync(user))
         {
             return false;
         }
 
         if (!await _userManager.CheckPasswordAsync(user, password))
         {
-            await _userManager.AccessFailedAsync(user);
+            _throttle.Fail(key);
             return false;
         }
 
-        await _userManager.ResetAccessFailedCountAsync(user);
+        _throttle.Clear(key);
         return true;
     }
 

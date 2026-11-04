@@ -36,14 +36,17 @@ public class AuthController : ApiControllerBase
     private readonly IApplicationDbContext _dbContext;
     private readonly IInviteKeyService _inviteKeys;
     private readonly ILogger<AuthController> _logger;
+    private readonly LoginThrottle _throttle;
 
     public AuthController(
         UserManager<IdentityUser<Guid>> userManager,
         IConfiguration configuration,
         IApplicationDbContext dbContext,
         IInviteKeyService inviteKeys,
-        ILogger<AuthController>? logger = null)
+        ILogger<AuthController>? logger = null,
+        LoginThrottle? throttle = null)
     {
+        _throttle = throttle ?? new LoginThrottle();
         _logger = logger ?? NullLogger<AuthController>.Instance;
         _userManager = userManager;
         _configuration = configuration;
@@ -213,6 +216,13 @@ public class AuthController : ApiControllerBase
         }
         var normalizedEmail = normalizedResult.Value;
 
+        // Wrong passwords are counted per IP + email (not per account), so a stranger cannot lock the owner out.
+        var throttleKey = LoginThrottle.Key(HttpContext, normalizedEmail);
+        if (_throttle.IsBlocked(throttleKey))
+        {
+            return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
+        }
+
         // 2. Find User
         var user = await _userManager.FindByEmailAsync(normalizedEmail);
         if (user == null)
@@ -222,7 +232,7 @@ public class AuthController : ApiControllerBase
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
-        // Locked-out accounts get the same response as a wrong password so lockout is not revealed.
+        // Disabled accounts (admin lockout) get the same response as a wrong password so it is not revealed.
         if (await _userManager.IsLockedOutAsync(user))
         {
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
@@ -232,11 +242,11 @@ public class AuthController : ApiControllerBase
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, request.Password);
         if (!isPasswordValid)
         {
-            await _userManager.AccessFailedAsync(user);
+            _throttle.Fail(throttleKey);
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
-        await _userManager.ResetAccessFailedCountAsync(user);
+        _throttle.Clear(throttleKey);
 
         // 4. Generate JWT Token
         var token = JwtTokens.Create(_configuration, user, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), await _dbContext.IsAdminAsync(user.Id));

@@ -82,7 +82,7 @@ public class AccountControllerTests
     }
 
     [Fact]
-    public async Task Delete_WithRepeatedWrongPassword_LocksAccountEvenForCorrectPassword()
+    public async Task Delete_WithRepeatedWrongPassword_BlocksThisCallerButNotTheAccount()
     {
         var (controller, userManager, accounts) = await Setup();
 
@@ -92,22 +92,9 @@ public class AccountControllerTests
         }
 
         var user = (await userManager.FindByEmailAsync(Email))!;
-        Assert.True(await userManager.IsLockedOutAsync(user));
+        Assert.False(await userManager.IsLockedOutAsync(user));
         Assert.IsType<BadRequestObjectResult>(await controller.Delete(new DeleteAccountRequest(Password), default));
         Assert.False(accounts.Deleted);
-    }
-
-    [Fact]
-    public async Task ChangePassword_WithCorrectCurrent_ResetsFailureCount()
-    {
-        var (controller, userManager, _) = await Setup();
-        await controller.ChangePassword(new ChangePasswordRequest("Wrong-Passw0rd", "N3w-Passw0rd"));
-        var user = (await userManager.FindByEmailAsync(Email))!;
-        Assert.Equal(1, await userManager.GetAccessFailedCountAsync(user));
-
-        Assert.IsType<OkObjectResult>(await controller.ChangePassword(new ChangePasswordRequest(Password, "N3w-Passw0rd")));
-
-        Assert.Equal(0, await userManager.GetAccessFailedCountAsync(user));
     }
 
     [Fact]
