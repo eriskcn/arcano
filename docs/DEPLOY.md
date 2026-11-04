@@ -25,6 +25,23 @@ Open the site and sign up. On an empty install the first account needs no key an
 
 After that, sign-up needs a single-use invite key. As admin, open the admin page, create a Join key (optionally with a storage quota for the new member), and send it to them; it is shown once and expires after 7 days by default. A member who forgot their password gets a Reset key the same way (there is no email, so this is how passwords are reset). Admins can also set quotas, disable or delete users there. Admins cannot read other users' files, and the last admin cannot be deleted or disabled.
 
+### Forgot the admin password
+If the only admin forgot the password, nobody can issue a Reset key in the UI, so create one in the database. A Reset key is the SHA-256 of the key text, as UPPERCASE hex, stored in table `InviteKey`. It is single-use and expires after 1 hour. Run from the repo root:
+```
+KEY=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')
+HASH=$(printf %s "$KEY" | sha256sum | cut -d' ' -f1 | tr a-f A-F)
+docker compose -p arcano --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+  psql -U postgres -d arcanocore -c "INSERT INTO \"InviteKey\" (\"Id\",\"KeyHash\",\"Type\",\"TargetUserId\",\"ExpiresAtUtc\",\"CreatedById\",\"CreatedAtUtc\") SELECT gen_random_uuid(), '$HASH', 'Reset', \"Id\", now() + interval '1 hour', \"Id\", now() FROM \"AspNetUsers\" WHERE \"NormalizedEmail\" = 'ADMIN@EXAMPLE.COM'"
+echo "$KEY"
+```
+Replace `ADMIN@EXAMPLE.COM` with the admin's email in UPPERCASE; `INSERT 0 1` means it found the user. Then set the new password (at least 8 characters) through the public URL:
+```
+curl -i -H 'Content-Type: application/json' -d "{\"key\":\"$KEY\",\"newPassword\":\"<new password>\"}" https://drive.example.com/api/Auth/reset
+```
+`204` means done; `403` means the key is wrong, used or expired. Every old session is signed out.
+
+Five wrong passwords for one email from one address block that pair for 5 minutes (kept in memory, so restarting the API clears it). If login fails right after the reset, wait 5 minutes or restart the API. Admin and reset actions are logged as `Audit` lines in the API log.
+
 ## 5. TLS in front
 `web` speaks plain HTTP; the proxy must forward `X-Forwarded-For` and `X-Forwarded-Proto` to `WEB_BIND:WEB_PORT`. Never expose `WEB_BIND` publicly (e.g. `0.0.0.0` without a firewall): the nginx in `web` trusts `X-Forwarded-Proto`, so direct clients could spoof it. `PUBLIC_ORIGIN` must equal the public https URL.
 
@@ -32,6 +49,7 @@ Caddy:
 ```
 drive.example.com {
     reverse_proxy 127.0.0.1:8080
+    header Strict-Transport-Security "max-age=31536000"
 }
 ```
 (Caddy sets X-Forwarded-For/Proto itself.)
@@ -46,10 +64,13 @@ location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     client_max_body_size 0;
+    add_header Strict-Transport-Security "max-age=31536000" always;
 }
 ```
 `proxy_http_version 1.1` is needed because nginx talks HTTP/1.0 to the app by default and then cannot pass on a broken download, so a failed folder zip could look complete.
 Add `listen 443 ssl;` and certificates as usual.
+
+HSTS: the `Strict-Transport-Security` line in both examples makes browsers use HTTPS only for a year. Add it only after HTTPS works, because browsers will refuse plain HTTP for that long.
 
 Client IP (per-IP rate limits): `frontend/nginx.conf` trusts `X-Forwarded-For` only from `set_real_ip_from 172.28.0.1`, the Docker gateway of the compose subnet, which is where a proxy on the Docker host arrives from. It uses the rightmost entry, the one your proxy appends, so the proxy must append or replace the header (both examples above do). If the proxy runs elsewhere, change that address and rebuild `web`:
 - On another host (`WEB_BIND` not loopback, firewalled to the proxy): the proxy's IP as `web` sees it.
@@ -114,7 +135,7 @@ Startup rule when no admin exists: if `Auth:BootstrapAdminEmail` is set, that us
 ## Not covered
 - No high availability; run a single API instance only.
 - The `chrislusf/seaweedfs` image is pinned by digest in `docker-compose.prod.yml` (the dev compose still uses `:latest`, and no version tag could be determined offline); bump the digest deliberately and take a backup first. Each backup records the image used in `seaweedfs-image.txt`.
-- No email: forgotten passwords are reset with an admin-issued Reset key (step 4).
+- No email: forgotten passwords are reset with an admin-issued Reset key (step 4); if the only admin forgot theirs, see "Forgot the admin password".
 - Sessions last at most 24 hours; access tokens expire after `Jwt:ExpiryInMinutes` (default 60).
 - Tokens are revoked by sign-out-everywhere, a password change or reset, and disabling a user; rotating `JWT_SECRET` logs everyone out.
 - Trust model: an admin can issue a Reset key for any user, including other admins, and sign in as them. Admins cannot otherwise read other users' files. Members can share files and folders with each other by email (read-only) and can probe whether an email is registered. Admin and key actions are written as `Audit` lines to the API container log (`docker compose logs api | grep Audit`); log rotation keeps about 30 MB (3 files of 10 MB), so audit history is limited to that. Fine for a trusted group.
