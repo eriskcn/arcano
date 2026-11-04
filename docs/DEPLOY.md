@@ -40,12 +40,15 @@ nginx:
 ```
 location / {
     proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     client_max_body_size 0;
 }
 ```
+`proxy_http_version 1.1` is needed because nginx talks HTTP/1.0 to the app by default and then cannot pass on a broken download, so a failed folder zip could look complete.
 Add `listen 443 ssl;` and certificates as usual.
 
 Client IP (per-IP rate limits): `frontend/nginx.conf` trusts `X-Forwarded-For` only from `set_real_ip_from 172.28.0.1`, the Docker gateway of the compose subnet, which is where a proxy on the Docker host arrives from. It uses the rightmost entry, the one your proxy appends, so the proxy must append or replace the header (both examples above do). If the proxy runs elsewhere, change that address and rebuild `web`:
