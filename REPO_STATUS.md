@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
 **Assessment date:** 2026-11-04
-**Repository state:** `main` contains pull requests through #50, at `cd41a46`. Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut) and `v0.2.0`.
+**Repository state:** `main` contains pull requests through #51, plus the `v1.0.0` release change (`package.json` version 1.0.0). Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut), `v0.2.0`, and `v1.0.0` once this change is merged and tagged. The pre-tag check on a throwaway production stack passed on 2026-11-04 (login throttle, zip failure, admin recovery, empty content type, backup and restore).
 
 ## Overview
 
@@ -106,7 +106,7 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 ## Known open issues
 
-Open on GitHub (2026-11-04): #37 (large downloads are held in browser memory before saving; not measured in a real browser) and #42 (the `package.json` version waits for the tag). The whole-project audit of 2026-11-04 filed #32-#43; all the others were fixed in #44-#50. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
+Open on GitHub (2026-11-05): #37 only. Large downloads are held in browser memory before saving. It was not measured in a real browser, and it is accepted as a documented limit for `v1.0.0` (see the download section of `docs/USER_MANUAL.md`). The whole-project audit of 2026-11-04 filed #32-#43; all the others were fixed in #44-#50. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
 
 - **Closed-tab abort is best effort:** the page sends a keepalive abort on `pagehide`, but a crash, a killed mobile browser, a lost network or an expired token still leaves the session holding quota and a slot until the 24 h sweep.
 - **Details sheet below `xl`:** it has no backdrop or focus trap, and its overlap with the bottom nav at 375 px was not measured.
