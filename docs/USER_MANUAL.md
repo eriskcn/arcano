@@ -333,7 +333,7 @@ If you move a file to the Trash, its links stop working. If you restore the file
 
 They must have an account on this server and it must not be disabled. You cannot share with yourself.
 
-The **Details** panel always shows "Only you" next to **Shared**, even for shared items. To see who has access, open the **Share** dialog.
+The **Details** panel does not show who has access. To see that, open the **Share** dialog.
 
 ### What a user recipient can and cannot do
 
@@ -531,7 +531,8 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 | File type is not supported. | The server refused the file type your browser reported, for example one over 100 characters. | Ask the person who runs the server. |
 | Too many uploads in progress. Finish or cancel one first. | You already have 3 large uploads open. An upload left open when a page closed can stay open for up to 24 hours, and can use up your available space during that time. | Finish or cancel your upload, or wait for the open ones to end. |
 | The upload was interrupted. Please try again. | The server no longer has the upload, or a piece is missing or the wrong size. | Start the upload again. |
-| Unable to upload (file name). Please try again. | The upload failed. One cause is an empty (0-byte) file, which cannot be uploaded. | Check the file, then try again. |
+| Unable to upload (file name). Please try again. | The upload failed. | Check the file, then try again. |
+| File is empty. | The file has 0 bytes, which cannot be uploaded. | Choose a file with content. |
 | Unable to download (name). Please try again. | The download failed. | Try again. |
 | This folder has too many files to download as a zip. | A zip cannot hold more than 5,000 files. | Download smaller subfolders. |
 | A folder with this name already exists here. | Folder names must be unique in one place. | Choose another name. |
@@ -539,7 +540,7 @@ Be careful with your own row, which shows the warning "This is your account. Dis
 | A folder cannot be moved into itself or one of its subfolders. | The target is inside the folder you are moving. | Choose another target. |
 | No folders to move to | The current folder has no subfolders, and you are at the top level. | Use drag and drop or cut and paste, or create a folder first. |
 | Preview unavailable. | The file type or size has no preview, or loading failed. | Select **Download**. See [Previews](#previews). |
-| The Sort, Filter, notifications and profile buttons do nothing. | These controls have no function yet. | Use the filter buttons under the title, such as **Images**. |
+| The profile button at the bottom of the sidebar does nothing. | It only shows your email. | Use **Settings** for your account. |
 
 ### Sharing
 
