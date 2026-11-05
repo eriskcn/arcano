@@ -845,6 +845,25 @@ describe('App', () => {
     http.verify();
   });
 
+  it('should highlight the folder row under a drag in the list view', () => {
+    const fixture = TestBed.createComponent(App);
+    const app = fixture.componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    fixture.detectChanges();
+    app.page.set('app');
+    app.files.set(sampleFiles);
+    app.folders.set([folderItem('f1', 'Projects')]);
+    fixture.detectChanges();
+    app.startDrag(dragEvent(), app.files()[0]);
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('tr[data-file-id="f1"]') as HTMLElement;
+    row.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    expect(row.classList).toContain('bg-blue-100');
+    http.verify();
+  });
+
   it('should show a clear message for an invalid invite key and send the key', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);

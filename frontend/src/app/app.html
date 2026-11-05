@@ -634,12 +634,10 @@
                   (dragover)="dragOverFolder($event, file)"
                   (dragleave)="leaveTarget(file.id)"
                   (drop)="dropOnFolder($event, file)"
-                  [class.ring-2]="isDropTarget(file.id)"
-                  [class.ring-blue-400]="isDropTarget(file.id)"
                   [attr.data-file-id]="file.id"
                   [attr.aria-selected]="selectedIds().has(file.id)"
                   (contextmenu)="showContextMenu(file, $event)"
-                  [ngClass]="selectedIds().has(file.id) ? 'bg-blue-50' : 'hover:bg-gray-50'"
+                  [ngClass]="isDropTarget(file.id) ? 'bg-blue-100 outline outline-2 -outline-offset-2 outline-blue-400' : selectedIds().has(file.id) ? 'bg-blue-50' : 'hover:bg-gray-50'"
                   class="border-b border-gray-50 cursor-pointer select-none group transition-colors"
                 >
                   <td class="pl-4 py-2.5">
