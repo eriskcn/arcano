@@ -81,6 +81,40 @@ Check: in `docker compose -p arcano logs web`, the first field of a request thro
 
 The nginx inside the `web` image caps request bodies at 110m (`client_max_body_size` in `frontend/nginx.conf`). If you set `MAX_UPLOAD_BYTES` above ~110 MiB, raise that value too and rebuild.
 
+### Cloudflare Tunnel (no open ports, no certificates)
+Cloudflare terminates HTTPS and `cloudflared` on the host connects out to it, so the host needs no port forwarding or certificate. Keep a small Caddy between the tunnel and `web`: it sets the client IP and the scheme itself, so nothing a client sends can reach `web` as a trusted header.
+
+Flow: `browser -> Cloudflare -> cloudflared -> Caddy 127.0.0.1:8081 -> web 127.0.0.1:8080`
+
+Caddy (`/etc/caddy/Caddyfile`; plain HTTP on loopback only, Cloudflare provides the HTTPS):
+```
+{
+    auto_https off
+}
+http://127.0.0.1:8081 {
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-For {header.CF-Connecting-IP}
+        header_up X-Forwarded-Proto https
+    }
+}
+```
+`cloudflared` (`/etc/cloudflared/config.yml`, after `cloudflared tunnel login`, `tunnel create arcano` and `tunnel route dns arcano drive.example.com`):
+```
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: drive.example.com
+    service: http://127.0.0.1:8081
+  - service: http_status:404
+```
+Set `PUBLIC_ORIGIN=https://drive.example.com`. Run `cloudflared` and Caddy as services so they start on boot.
+
+- **Client IP:** without the `CF-Connecting-IP` line every request arrives from Cloudflare, all users share one rate-limit bucket, and anyone who knows an email can lock that account out of login for 5 minutes. Do the check from the paragraph above: the first field of a `web` log line must be the client's IP.
+- **Never expose Caddy's port:** it trusts `CF-Connecting-IP` from whoever connects. Keep it on `127.0.0.1`, and do not point the tunnel at `web` directly.
+- **Limits:** Cloudflare's Free and Pro plans cap one request body at 100 MB. Uploads go in 8 MiB chunks, so this does not affect them.
+- **Terms and privacy:** Cloudflare can read traffic it terminates. Its terms restrict serving large amounts of non-HTML content on some plans; read the current terms before storing lots of media this way. If the tunnel or the account has a problem, remote access stops and LAN access still works.
+- This setup has not been tested against a real Cloudflare account.
+
 ## 6. Backup and restore
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
