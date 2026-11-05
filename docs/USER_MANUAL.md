@@ -168,7 +168,7 @@ Names can be up to 255 characters.
 Use any of these:
 
 - **Menu:** right-click an item, select **Move to…**, then choose a target. The list only shows folders inside the current folder, plus **My Files** if you are in a subfolder.
-- **Drag:** drag an item onto a folder, or onto a name in the path at the top.
+- **Drag:** drag an item onto a folder, or onto a name in the path at the top. The folder under the pointer is highlighted.
 - **Cut and paste (files only):** select **Cut** or press Ctrl+X. Go to the target folder in My Files, then press Ctrl+V or right-click empty space and select **Paste**.
 
 Cut and paste can reach any folder. Use it when the target is not in the **Move to…** list.

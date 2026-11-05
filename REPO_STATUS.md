@@ -1,7 +1,7 @@
 # Arcano Repository Status Report
 
-**Assessment date:** 2026-11-04
-**Repository state:** `main` contains pull requests through #51, plus the `v1.0.0` release change (`package.json` version 1.0.0). Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut), `v0.2.0`, and `v1.0.0` once this change is merged and tagged. The pre-tag check on a throwaway production stack passed on 2026-11-04 (login throttle, zip failure, admin recovery, empty content type, backup and restore).
+**Assessment date:** 2026-11-05
+**Repository state:** `main` contains pull requests through #54. Tags: `v0.1.0` (commit `7374246`, the earlier personal-use cut), `v0.2.0`, and `v1.0.0` (commit `25841eb`, the first production-ready release; no GitHub release page published). The pre-tag check on a throwaway production stack passed on 2026-11-04 (login throttle, zip failure, admin recovery, empty content type, backup and restore). After the tag: #53 regrouped the Settings dialog into cards and made the folder row under a drag visible in the list view (checked in the browser pane against a throwaway stack, with drag events fired from script; unit-tested); #54 added a Cloudflare Tunnel section to `docs/DEPLOY.md` (not tested against a real Cloudflare account).
 
 ## Overview
 
@@ -39,7 +39,7 @@ Fixed (unit-tested): the clipped Share button, the floating "+" covering the "Sh
 Also fixed: **uploading from a phone** (the floating button on phones now opens the file picker; from tablet width up the header Upload button is used). Checked in a browser at 375 and 768 px, including an upload through the same input.
 
 Still open:
-1. **Dragging with a real mouse** onto a folder worked once and then failed on later tries, although synthetic drag events always worked. This may be a limit of the automation tool; check by hand.
+1. **Dragging with a real mouse** onto a folder worked once and then failed on later tries, although synthetic drag events always worked. This may be a limit of the automation tool; check by hand. The list-view drop highlight added in #53 was also only checked with synthetic events.
 
 ## Release blockers (2026-10-31): now addressed, verified on a throwaway production stack
 
