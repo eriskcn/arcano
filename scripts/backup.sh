@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Usage: scripts/backup.sh [--stop-api]
 # Writes backups/<UTC timestamp>/{db.dump,seaweedfs.tar.gz,api_keys.tar.gz,env.production,seaweedfs-image.txt};
-# keeps newest BACKUP_KEEP (default 7). If BACKUP_RCLONE_REMOTE is set, also copies the dir there with rclone.
+# keeps newest BACKUP_KEEP (default 7). If BACKUP_RCLONE_REMOTE is set, also copies the dir there with rclone
+# and prunes the remote to the newest BACKUP_KEEP timestamp dirs (other names there are never touched).
+# The dir is written as backups/.partial-<timestamp> and renamed only when complete, so a power loss never leaves a dir that counts.
 # Consistency: DB and object data are copied at slightly different moments. For a point-in-time
 # consistent pair pass --stop-api (api and seaweedfs are stopped while copying, then started);
 # otherwise uploads during the backup can leave orphan objects (files without rows).
@@ -19,8 +21,11 @@ STOP_API=0
 [ "${1:-}" = "--stop-api" ] && STOP_API=1
 
 umask 077
-dir="backups/$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$dir"
+ts="$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p backups
+rm -rf backups/.partial-* # left by a killed run; assumes one backup at a time (no lock)
+dir="backups/.partial-$ts"
+mkdir "$dir"
 
 STOPPED=()
 restart() { [ ${#STOPPED[@]} -eq 0 ] || "${DC[@]}" start "${STOPPED[@]}"; }
@@ -45,6 +50,7 @@ chmod 600 "$dir/env.production"
 # record the exact seaweedfs image so a restore can use the same one
 img="$("${DC[@]}" config --images | grep -i seaweedfs)"
 { echo "$img"; docker image inspect --format '{{.Id}}' "$img"; } > "$dir/seaweedfs-image.txt"
+mv "$dir" "backups/$ts"; dir="backups/$ts"
 copied=1
 
 # copying is done: bring services back now, not after the upload; the cleared list keeps the trap from starting them again
@@ -54,6 +60,9 @@ restart; STOPPED=()
 if [ -n "${BACKUP_RCLONE_REMOTE:-}" ]; then
   rclone copy "$dir" "$BACKUP_RCLONE_REMOTE/$(basename "$dir")"
   echo "copied $dir to $BACKUP_RCLONE_REMOTE"
+  # same prune on the remote; a failure exits non-zero (the local backup stays, local pruning is skipped)
+  rclone lsf --dirs-only "$BACKUP_RCLONE_REMOTE" | { grep -E '^[0-9]{8}T[0-9]{6}Z/$' || true; } | sort | head -n -"$KEEP" |
+    while read -r old; do rclone purge "$BACKUP_RCLONE_REMOTE/${old%/}"; done
 fi
 
 # prune: timestamp dir names sort chronologically
