@@ -119,7 +119,7 @@ Set `PUBLIC_ORIGIN=https://drive.example.com`. Run `cloudflared` and Caddy as se
 Both scripts read `.env.production` (override with `ENV_FILE=path`) because the compose file has required variables.
 ```
 scripts/backup.sh               # db.dump, seaweedfs.tar.gz, api_keys.tar.gz, env.production (mode 600), seaweedfs-image.txt in backups/<UTC time>/, keeps BACKUP_KEEP=7
-scripts/backup.sh --stop-api    # stops api and seaweedfs while copying (restarted before the off-host copy, also on failure): consistent DB/files pair, uploads fail meanwhile
+scripts/backup.sh --stop-api    # stops api and seaweedfs while copying (restarted before the off-host copy, also on failure; `restart: always` brings them back after a reboot mid-backup): consistent DB/files pair, uploads fail meanwhile
 ```
 Without `--stop-api` the script warns on stderr: the database is dumped first and the files are tarred while uploads continue, so the restore can contain orphan objects (files without a database row; measured: 26 during an upload loop). They are harmless leaked storage: nothing reclaims them. Use `--stop-api` (and in cron) for a consistent pair.
 The backups contain secrets (`env.production`); `backups/` is created with mode 700 and is gitignored.

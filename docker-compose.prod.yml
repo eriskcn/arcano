@@ -31,7 +31,7 @@ services:
 
   seaweedfs:
     image: chrislusf/seaweedfs@sha256:fc9f76fa993ad69966ffeb2f65d0318fcae39c6f8e20cf68ef7b3a5cb97769e5 # pinned digest of the :latest image used in dev; bump deliberately
-    restart: unless-stopped
+    restart: always # always: a backup interrupted by a reboot must not leave it stopped
     logging: *logging
     # Credentials come ONLY from the generated s3.prod.json (scripts/gen-s3-config.sh).
     # security.toml (dev filer JWT signing) is intentionally not mounted: the filer is not reachable from outside.
@@ -50,7 +50,7 @@ services:
     build:
       context: ./backend
       dockerfile: src/ArcanoCore.API/Dockerfile
-    restart: unless-stopped
+    restart: always # always: a backup interrupted by a reboot must not leave it stopped
     logging: *logging
     expose:
       - "8080"
