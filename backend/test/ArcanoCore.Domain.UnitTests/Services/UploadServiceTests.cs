@@ -182,6 +182,25 @@ public class UploadServiceTests
     }
 
     [Fact]
+    public async Task CompleteAsync_SecondCallDuringFirst_ReturnsTheSavedFile()
+    {
+        var service = CreateService(_ownerId);
+        var id = (await service.StartAsync(new UploadStartDto("a.bin", "a/b", 10, null))).Value.Id;
+        await service.UploadPartAsync(id, 1, new MemoryStream(new byte[10]), 10);
+        // The second call has its own context (as a separate request would), reads the session, then waits on the lock.
+        var second = new UploadService(new TestContext(_context.DatabaseName), _multipart, _storage, new FakeUser(_ownerId.ToString()), new FakeQuota(null));
+        Task<Result<FileResponseDto>>? secondCall = null;
+        _multipart.OnComplete = () => secondCall ??= second.CompleteAsync(id);
+
+        var first = await service.CompleteAsync(id);
+        var retry = await secondCall!;
+
+        Assert.True(retry.IsSuccess);
+        Assert.Equal(first.Value, retry.Value);
+        Assert.Empty(_storage.DeleteTokens);
+    }
+
+    [Fact]
     public async Task AbortAsync_S3Failure_KeepsSessionForCleanupRetry()
     {
         var service = CreateService(_ownerId);
@@ -283,8 +302,9 @@ public class UploadServiceTests
         }
     }
 
-    private sealed class TestContext : DbContext, IApplicationDbContext
+    private sealed class TestContext(string? databaseName = null) : DbContext, IApplicationDbContext
     {
+        public string DatabaseName { get; } = databaseName ?? Guid.NewGuid().ToString();
         public DbSet<FileMetadata> Files => Set<FileMetadata>();
         public DbSet<UploadSession> Sessions => Set<UploadSession>();
         public DbSet<FileMetadata> FileMetadatas => Files;
@@ -295,6 +315,6 @@ public class UploadServiceTests
         public DbSet<InviteKey> InviteKeys => throw new NotSupportedException();
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
-            optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
+            optionsBuilder.UseInMemoryDatabase(DatabaseName);
     }
 }

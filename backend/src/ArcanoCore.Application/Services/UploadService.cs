@@ -185,14 +185,7 @@ public class UploadService : IUploadService
         var session = await FindOwnedSessionAsync(id, cancellationToken);
         if (session == null)
         {
-            // Retry after a successful complete: the file was saved with the session id as its id.
-            var ownerId = CurrentOwnerId;
-            var done = ownerId == Guid.Empty
-                ? null
-                : await _dbContext.FileMetadatas.FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId, cancellationToken);
-            return done == null
-                ? Fail<FileResponseDto>("Upload.NotFound", "Upload not found.")
-                : Result<FileResponseDto>.Success(new FileResponseDto(done.Id, done.FileName, done.ContentType, done.FileSize));
+            return await CompletedFileAsync(id, cancellationToken);
         }
 
         // Same per-user lock as single-request uploads, so the quota check and the save cannot interleave.
@@ -200,6 +193,12 @@ public class UploadService : IUploadService
         await uploadLock.WaitAsync(cancellationToken);
         try
         {
+            // A concurrent complete may have finished while this one waited; AnyAsync reads the database, not the tracked entity.
+            if (!await _dbContext.UploadSessions.AnyAsync(s => s.Id == id, cancellationToken))
+            {
+                return await CompletedFileAsync(id, cancellationToken);
+            }
+
             var parts = await _multipart.ListPartsAsync(session.StorageKey, session.StorageUploadId, cancellationToken);
             var complete = parts.Count == PartCount(session.FileSize) &&
                 Enumerable.Range(1, parts.Count).All(n => parts.TryGetValue(n, out var size) && size == ExpectedPartSize(session.FileSize, n));
@@ -310,6 +309,18 @@ public class UploadService : IUploadService
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    // Retry after a successful complete: the file was saved with the session id as its id.
+    private async Task<Result<FileResponseDto>> CompletedFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var ownerId = CurrentOwnerId;
+        var done = ownerId == Guid.Empty
+            ? null
+            : await _dbContext.FileMetadatas.FirstOrDefaultAsync(f => f.Id == id && f.OwnerId == ownerId, cancellationToken);
+        return done == null
+            ? Fail<FileResponseDto>("Upload.NotFound", "Upload not found.")
+            : Result<FileResponseDto>.Success(new FileResponseDto(done.Id, done.FileName, done.ContentType, done.FileSize));
     }
 
     private async Task<UploadSession?> FindOwnedSessionAsync(Guid id, CancellationToken cancellationToken)
