@@ -30,6 +30,8 @@ sed -i "s/CHANGE_ME/$(openssl rand -hex 32)/" seaweedfs/security.toml
 Start PostgreSQL and SeaweedFS, then run the API locally:
 
 ```bash
+export JWT_SECRET="$(openssl rand -hex 32)" # Compose needs it even for postgres and seaweedfs
+export Jwt__Secret="$JWT_SECRET"
 docker compose up -d postgres seaweedfs
 dotnet run --project src/ArcanoCore.API
 ```
