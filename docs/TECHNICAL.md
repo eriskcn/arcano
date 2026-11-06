@@ -4,7 +4,7 @@ For developers joining the project and for design reviewers. The code is the sou
 
 Related documents, not repeated here:
 
-- Production operations (TLS, backup, restore, upgrade): [DEPLOY.md](DEPLOY.md)
+- Production operations (TLS, Cloudflare Tunnel, backup, restore, upgrade): [DEPLOY.md](DEPLOY.md)
 - Local setup: [backend/README.md](../backend/README.md), [README.md](../README.md)
 
 ## Contents
