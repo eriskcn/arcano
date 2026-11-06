@@ -20,9 +20,9 @@ DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 VOLUME=arcano_seaweedfs_data
 KEYS_VOLUME=arcano_api_keys
 
-# pg_restore --list reads the dump without touching the database
+# pg_restore -f /dev/null reads the whole dump (all data blocks) without touching the database
 "${DC[@]}" up -d postgres
-"${DC[@]}" exec -T postgres pg_restore --list < "$src/db.dump" > /dev/null
+"${DC[@]}" exec -T postgres pg_restore -f /dev/null < "$src/db.dump"
 
 "${DC[@]}" stop web api seaweedfs
 trap 'echo "restore failed with the services stopped; fix the error and run this script again" >&2' ERR
