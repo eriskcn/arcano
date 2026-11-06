@@ -328,7 +328,7 @@
       <!-- Upload -->
       <input #uploadInput type="file" multiple class="hidden" (change)="onUploadSelected($event)" />
       <button
-        *ngIf="activeNav() !== 'shared'"
+        *ngIf="activeNav() === 'my-files'"
         type="button"
         (click)="uploadInput.click()"
         [disabled]="actionBusy()"
@@ -339,7 +339,7 @@
       </button>
 
       <!-- New -->
-      <button *ngIf="activeNav() !== 'shared'" (click)="startCreateFolder()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">
+      <button *ngIf="activeNav() === 'my-files'" (click)="startCreateFolder()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">
         <span class="material-symbols-rounded text-white" style="font-size: 18px">add</span>
         <span class="hidden sm:inline">New</span>
       </button>
@@ -1027,7 +1027,7 @@
   <!-- Mobile FAB -->
   <!-- Phones only: from sm up the header Upload button is visible. -->
   <button
-    *ngIf="activeNav() !== 'shared'"
+    *ngIf="activeNav() === 'my-files'"
     type="button"
     (click)="uploadInput.click()"
     [disabled]="actionBusy()"

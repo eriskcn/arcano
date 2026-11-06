@@ -249,6 +249,8 @@ export class App implements OnInit {
   readonly storage = signal<{ usedBytes: number; limitBytes: number } | null>(null);
 
   readonly currentFolderId = computed(() => this.folderPath().at(-1)?.id ?? null);
+  // Only here do the listed items live in currentFolderId(), which cut, copy and move use as the source.
+  readonly folderView = computed(() => this.activeNav() === 'my-files' && !this.searchQuery().trim());
   readonly items = computed<FileItem[]>(() => [...this.folders(), ...this.files()]);
   readonly moveTargets = computed<{ id: string | null; name: string }[]>(() => [
     ...(this.currentFolderId() ? [{ id: null, name: 'My Files' }] : []),
@@ -617,7 +619,7 @@ export class App implements OnInit {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.shareOpen() || this.previewModalOpen() || this.pendingTrash()) {
+    if (this.shareOpen() || this.previewModalOpen() || this.pendingTrash() || this.accountOpen() || this.adminOpen()) {
       return; // the modal closes itself
     }
     if (this.contextMenu()) {
@@ -652,7 +654,7 @@ export class App implements OnInit {
   onShortcut(event: KeyboardEvent): void {
     const target = event.target;
     if (
-      this.page() !== 'app' || this.shareOpen() || this.previewModalOpen() || this.pendingTrash() || this.folderEditor() ||
+      this.page() !== 'app' || this.shareOpen() || this.previewModalOpen() || this.pendingTrash() || this.folderEditor() || this.accountOpen() || this.adminOpen() ||
       (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))
     ) {
       return;
@@ -695,10 +697,10 @@ export class App implements OnInit {
     } else if (key === 'f2' && !trash && this.selectedIds().size === 1 && this.selectedFile()) {
       this.startRenameFolder(this.selectedFile()!);
       handled = true;
-    } else if (mod && (key === 'c' || key === 'x') && !trash && this.selectedIds().size > 0) {
+    } else if (mod && (key === 'c' || key === 'x') && this.folderView() && this.selectedIds().size > 0) {
       this.actions.toClipboard(key === 'c' ? 'copy' : 'cut');
       handled = true;
-    } else if (mod && key === 'v' && this.activeNav() === 'my-files' && this.clipboard()) {
+    } else if (mod && key === 'v' && this.folderView() && this.clipboard()) {
       handled = this.actions.paste();
     } else if (mod && key === 'z' && !event.shiftKey && this.actions.canUndo) {
       this.actions.undo();
@@ -763,14 +765,14 @@ export class App implements OnInit {
   // Right-click on empty space in the list or grid; items stop propagation themselves.
   showBackgroundMenu(event: MouseEvent): void {
     event.preventDefault();
-    if (this.activeNav() === 'trash') {
+    if (this.activeNav() !== 'my-files') {
       return;
     }
     this.openMenu(event, 'Folder actions', [], [
       { label: 'New folder', icon: 'create_new_folder', run: () => this.startCreateFolder() },
       { label: 'Upload files', icon: 'upload_file', run: () => this.uploadInput()?.nativeElement.click() },
       { label: 'Paste', icon: 'content_paste', shortcut: 'Ctrl+V', divider: true,
-        disabled: !this.clipboard() || this.activeNav() !== 'my-files', run: () => void this.actions.paste() },
+        disabled: !this.clipboard() || !this.folderView(), run: () => void this.actions.paste() },
     ]);
   }
 
@@ -801,6 +803,7 @@ export class App implements OnInit {
     const oneFile = one && one.type !== 'folder' ? one : null;
     const oneFolder = one && one.type === 'folder' ? one : null;
     const unstar = selected.every(item => item.starred);
+    const folderView = this.folderView();
     const entries: (MenuEntry | false | null)[] = [
       oneFolder && { label: 'Open', icon: 'folder_open', shortcut: 'Enter', run: () => this.openFolder(oneFolder) },
       oneFile && { label: 'Preview', icon: 'visibility', run: () => this.openPreview() },
@@ -808,10 +811,10 @@ export class App implements OnInit {
       oneFolder && { label: 'Download as zip', icon: 'folder_zip', run: () => this.downloadFolder(oneFolder) },
       one && { label: 'Share', icon: 'person_add', run: () => this.openShare() },
       one && { label: 'Rename', icon: 'edit', shortcut: 'F2', divider: true, run: () => this.startRenameFolder(one) },
-      oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.actions.copyItems([oneFile], this.currentFolderId()) },
-      docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.actions.toClipboard('copy') },
-      docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.actions.toClipboard('cut') },
-      { label: 'Move to…', icon: 'drive_file_move', submenu: true, run: () => {} },
+      folderView && oneFile && { label: 'Make a copy', icon: 'file_copy', run: () => this.actions.copyItems([oneFile], this.currentFolderId()) },
+      folderView && docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.actions.toClipboard('copy') },
+      folderView && docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.actions.toClipboard('cut') },
+      folderView && { label: 'Move to…', icon: 'drive_file_move', submenu: true, run: () => {} },
       {
         label: unstar ? 'Remove from favorites' : 'Add to favorites',
         icon: unstar ? 'star' : 'star_border',
@@ -858,6 +861,9 @@ export class App implements OnInit {
   onDropFiles(event: DragEvent): void {
     event.preventDefault();
     this.dropKey.set(null);
+    if (this.activeNav() !== 'my-files') {
+      return;
+    }
     this.actions.uploadFiles(Array.from(event.dataTransfer?.files ?? []));
   }
 
@@ -949,7 +955,7 @@ export class App implements OnInit {
   }
 
   private canDrop(items: FileItem[], targetId: string | null): boolean {
-    return items.length > 0 && targetId !== this.currentFolderId() && !items.some(item => item.id === targetId);
+    return this.folderView() && items.length > 0 && targetId !== this.currentFolderId() && !items.some(item => item.id === targetId);
   }
 
   private moveItems(items: FileItem[], targetId: string | null, origin = this.currentFolderId(), record = true): void {

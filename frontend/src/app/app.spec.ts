@@ -224,6 +224,33 @@ describe('App', () => {
       expect(app.contextMenu()).toBeNull();
     });
 
+    it('offers Make a copy, Copy, Cut and Move only in the plain My Files view', () => {
+      const { fixture, app, labels } = open(sampleFiles[0]);
+      for (const setView of [() => app.activeNav.set('recent'), () => { app.activeNav.set('my-files'); app.searchQuery.set('file'); }]) {
+        setView();
+        app.showContextMenu(sampleFiles[0], new MouseEvent('contextmenu', { cancelable: true }));
+        fixture.detectChanges();
+        expect(labels().filter(l => ['Make a copy', 'Copy', 'Cut', 'Move to…'].some(label => l.startsWith(label)))).toEqual([]);
+        expect(labels()).toContain('Move to trash');
+      }
+    });
+
+    it('shows New, Upload and accepts dropped uploads only in My Files', () => {
+      const { fixture, app, http } = open(null);
+      const buttons = () => Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+        .filter(b => b.textContent!.trim().endsWith('New') ||b.textContent!.trim().endsWith('Upload') || b.getAttribute('aria-label') === 'Upload files');
+      expect(buttons().length).toBe(3);
+
+      app.contextMenu.set(null);
+      app.activeNav.set('favorites');
+      fixture.detectChanges();
+      expect(buttons().length).toBe(0);
+      app.showBackgroundMenu(new MouseEvent('contextmenu', { cancelable: true }));
+      expect(app.contextMenu()).toBeNull();
+      app.onDropFiles(dragEvent([new File(['a'], 'a.txt')]));
+      http.expectNone(`${api}/Files/upload`);
+    });
+
     it('closes on Escape without clearing the selection', () => {
       const { app } = open(sampleFiles[0]);
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -1211,6 +1238,34 @@ describe('App', () => {
       expect(press('Delete', {}, input).defaultPrevented).toBe(false);
       input.remove();
       http.verify();
+    });
+
+    it('ignores shortcuts while Settings or Admin is open', () => {
+      for (const dialog of ['accountOpen', 'adminOpen'] as const) {
+        const { app, http } = setup();
+        app.selectFile('1');
+        app[dialog].set(true);
+
+        expect(press('Delete').defaultPrevented).toBe(false);
+        press('Escape');
+        expect(app.selectedIds().size).toBe(1);
+        http.verify();
+      }
+    });
+
+    it('Ctrl+C, Ctrl+X and drag-move do nothing outside the plain My Files view', () => {
+      const { app, http } = setup();
+      for (const setView of [() => app.activeNav.set('recent'), () => { app.activeNav.set('my-files'); app.searchQuery.set('file'); }]) {
+        setView();
+        app.selectFile('3');
+        press('c', { ctrlKey: true });
+        press('x', { ctrlKey: true });
+        expect(app.clipboard()).toBeNull();
+
+        app.startDrag(dragEvent(), app.files()[2]);
+        app.dropItems(dragEvent(), 'f1');
+        http.verify();
+      }
     });
 
     it('Ctrl+A selects every item in view', () => {
