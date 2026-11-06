@@ -1417,6 +1417,14 @@ describe('App', () => {
         http.verify();
       });
 
+      it('the menu offers favorites for files only', () => {
+        const { app } = setupFolders('f1');
+        expect(menuEntry(app, folder('f1'), 'Add to favorites')).toBeUndefined();
+
+        app.selectFile('1', new MouseEvent('click', { ctrlKey: true }));
+        expect(menuEntry(app, folder('f1'), 'Add to favorites')).toBeDefined();
+      });
+
       it('a files-only selection shows no message', () => {
         const { app, http } = setupFolders('1', '2');
 

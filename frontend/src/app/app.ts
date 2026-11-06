@@ -802,7 +802,7 @@ export class App implements OnInit {
     const one = selected.length === 1 ? selected[0] : null;
     const oneFile = one && one.type !== 'folder' ? one : null;
     const oneFolder = one && one.type === 'folder' ? one : null;
-    const unstar = selected.every(item => item.starred);
+    const unstar = docs.every(item => item.starred);
     const folderView = this.folderView();
     const entries: (MenuEntry | false | null)[] = [
       oneFolder && { label: 'Open', icon: 'folder_open', shortcut: 'Enter', run: () => this.openFolder(oneFolder) },
@@ -815,10 +815,11 @@ export class App implements OnInit {
       folderView && docs.length > 0 && { label: 'Copy', icon: 'content_copy', shortcut: 'Ctrl+C', run: () => this.actions.toClipboard('copy') },
       folderView && docs.length > 0 && { label: 'Cut', icon: 'content_cut', shortcut: 'Ctrl+X', run: () => this.actions.toClipboard('cut') },
       folderView && { label: 'Move to…', icon: 'drive_file_move', submenu: true, run: () => {} },
-      {
+      // Favorites lists files only, so folders get no favorites action.
+      docs.length > 0 && {
         label: unstar ? 'Remove from favorites' : 'Add to favorites',
         icon: unstar ? 'star' : 'star_border',
-        run: () => selected.filter(item => item.starred === unstar).forEach(item => this.toggleFileStar(item.id)),
+        run: () => docs.filter(item => item.starred === unstar).forEach(item => this.toggleFileStar(item.id)),
       },
       one && { label: 'Show details', icon: 'info', divider: true, run: () => this.selectFile(one.id) },
       {
