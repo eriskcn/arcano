@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -22,6 +23,9 @@ public class FolderService : IFolderService
 
     // Bounds the work of one zip request.
     private const int MaxZipFiles = 5000;
+
+    // shortcut: in-process lock, so concurrent moves are only cycle-safe on a single API instance; use a DB lock when scaling out.
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> MoveLocks = new();
 
     public FolderService(IApplicationDbContext dbContext, ICurrentUser currentUser, IStorageService storage)
     {
@@ -105,19 +109,33 @@ public class FolderService : IFolderService
             return Result<FolderDto>.Failure(NotFoundError);
         }
 
-        var error = await ValidateLocationAsync(ownerId, name, dto.ParentId, id, cancellationToken);
-        if (error != null)
+        // One move per user at a time, so two crossing moves cannot both pass the cycle check.
+        var moveLock = folder.ParentId != dto.ParentId ? MoveLocks.GetOrAdd(ownerId, _ => new SemaphoreSlim(1, 1)) : null;
+        if (moveLock != null)
         {
-            return Result<FolderDto>.Failure(error);
+            await moveLock.WaitAsync(cancellationToken);
         }
 
-        folder.Name = name;
-        folder.ParentId = dto.ParentId;
-        folder.LastModifiedAtUtc = DateTime.UtcNow;
+        try
+        {
+            var error = await ValidateLocationAsync(ownerId, name, dto.ParentId, id, cancellationToken);
+            if (error != null)
+            {
+                return Result<FolderDto>.Failure(error);
+            }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            folder.Name = name;
+            folder.ParentId = dto.ParentId;
+            folder.LastModifiedAtUtc = DateTime.UtcNow;
 
-        return Result<FolderDto>.Success(ToDto(folder));
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            return Result<FolderDto>.Success(ToDto(folder));
+        }
+        finally
+        {
+            moveLock?.Release();
+        }
     }
 
     public async Task<Result> SetStarredAsync(Guid id, bool isStarred, CancellationToken cancellationToken = default)
@@ -183,11 +201,15 @@ public class FolderService : IFolderService
     {
         var tree = new List<Folder> { root };
         var level = new List<Guid> { root.Id };
+        var visited = new HashSet<Guid> { root.Id };
         while (level.Count > 0)
         {
-            var children = await _dbContext.Folders
+            // The visited set stops the walk if a parent loop exists in the data.
+            var children = (await _dbContext.Folders
                 .Where(f => f.OwnerId == ownerId && !f.IsDeleted && f.ParentId != null && level.Contains(f.ParentId.Value))
-                .ToListAsync(cancellationToken);
+                .ToListAsync(cancellationToken))
+                .Where(f => visited.Add(f.Id))
+                .ToList();
             tree.AddRange(children);
             level = children.Select(f => f.Id).ToList();
         }

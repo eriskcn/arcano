@@ -11,6 +11,7 @@ using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Entities;
 using ArcanoCore.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace ArcanoCore.Domain.UnitTests.Services;
@@ -80,6 +81,73 @@ public class FolderServiceTests
 
         Assert.True(result.IsFailure);
         Assert.Equal("Folder.Cycle", result.Error.Code);
+    }
+
+    [Fact]
+    public async Task DeleteAndZip_ExistingParentLoop_Terminate()
+    {
+        var userId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext, userId.ToString());
+        var a = await CreateFolderAsync(service, "A", null);
+        var b = await CreateFolderAsync(service, "B", null);
+        (await dbContext.Folders.SingleAsync(f => f.Id == a.Id)).ParentId = b.Id;
+        (await dbContext.Folders.SingleAsync(f => f.Id == b.Id)).ParentId = a.Id;
+        await dbContext.SaveChangesAsync();
+
+        // Task.Run: the in-memory provider completes queries synchronously, so a looping walk would never return a task to time out.
+        var zip = await Task.Run(() => service.WriteZipAsync(a.Id, new MemoryStream())).WaitAsync(TimeSpan.FromSeconds(5));
+        var delete = await Task.Run(() => service.DeleteFolderAsync(a.Id)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(zip.IsSuccess);
+        Assert.True(delete.IsSuccess);
+        Assert.All(await dbContext.Folders.IgnoreQueryFilters().ToListAsync(), f => Assert.True(f.IsDeleted));
+    }
+
+    [Fact]
+    public async Task UpdateFolderAsync_ConcurrentCrossingMoves_OnlyOneSucceeds()
+    {
+        var userId = Guid.NewGuid();
+        var dbName = Guid.NewGuid().ToString();
+        var gate = new SaveGate();
+        await using var firstDb = CreateDbContext(dbName, gate);
+        await using var secondDb = CreateDbContext(dbName);
+        var first = CreateService(firstDb, userId.ToString());
+        var second = CreateService(secondDb, userId.ToString());
+        var a = await CreateFolderAsync(first, "A", null);
+        var b = await CreateFolderAsync(first, "B", null);
+
+        gate.Armed = true;
+        var moveA = first.UpdateFolderAsync(a.Id, new FolderRequestDto("A", b.Id));
+        await gate.Reached.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        // The first move has passed its cycle check and is paused before saving.
+        var moveB = second.UpdateFolderAsync(b.Id, new FolderRequestDto("B", a.Id));
+        await Task.Delay(200);
+        gate.Release.SetResult();
+        var results = await Task.WhenAll(moveA, moveB).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(results[0].IsSuccess);
+        Assert.True(results[1].IsFailure);
+        Assert.Equal("Folder.Cycle", results[1].Error.Code);
+    }
+
+    private sealed class SaveGate : SaveChangesInterceptor
+    {
+        public bool Armed { get; set; }
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Armed)
+            {
+                Armed = false;
+                Reached.SetResult();
+                await Release.Task;
+            }
+
+            return result;
+        }
     }
 
     [Fact]
@@ -261,12 +329,16 @@ public class FolderServiceTests
     private static async Task<FolderDto> CreateFolderAsync(IFolderService service, string name, Guid? parentId) =>
         (await service.CreateFolderAsync(new FolderRequestDto(name, parentId))).Value;
 
-    private static ApplicationDbContext CreateDbContext()
+    private static ApplicationDbContext CreateDbContext(string? dbName = null, IInterceptor? interceptor = null)
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ApplicationDbContext(options);
+        var builder = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(dbName ?? Guid.NewGuid().ToString());
+        if (interceptor != null)
+        {
+            builder.AddInterceptors(interceptor);
+        }
+
+        return new ApplicationDbContext(builder.Options);
     }
 
     private static FolderService CreateService(ApplicationDbContext dbContext, string? userId) =>
