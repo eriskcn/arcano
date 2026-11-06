@@ -54,6 +54,7 @@ public static class DependencyInjection
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequiredLength = 8;
             options.User.RequireUniqueEmail = true;
+            options.User.AllowedUserNameCharacters = ""; // UserName is the email; empty turns the character check off
         })
         .AddRoles<IdentityRole<Guid>>()
         .AddEntityFrameworkStores<ApplicationDbContext>()

@@ -235,6 +235,7 @@ public class AuthController : ApiControllerBase
         // Disabled accounts (admin lockout) get the same response as a wrong password so it is not revealed.
         if (await _userManager.IsLockedOutAsync(user))
         {
+            _userManager.PasswordHasher.VerifyHashedPassword(new IdentityUser<Guid>(), DummyPasswordHash, request.Password); // same timing as a wrong password
             return Unauthorized(new Error("Auth.InvalidCredentials", "Invalid email or password."));
         }
 
