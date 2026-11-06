@@ -12,6 +12,7 @@ ENV_FILE="${ENV_FILE:-.env.production}" # the compose file has required variable
 [ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found (set ENV_FILE=...)" >&2; exit 1; }
 DC=(docker compose -p arcano --env-file "$ENV_FILE" -f docker-compose.prod.yml)
 KEEP="${BACKUP_KEEP:-7}"
+[[ "$KEEP" =~ ^[1-9][0-9]*$ ]] || { echo "BACKUP_KEEP must be a whole number >= 1 (got: $KEEP)" >&2; exit 1; }
 VOLUME=arcano_seaweedfs_data # <project>_<volume>; check: docker compose -p arcano -f docker-compose.prod.yml config --volumes
 KEYS_VOLUME=arcano_api_keys
 STOP_API=0

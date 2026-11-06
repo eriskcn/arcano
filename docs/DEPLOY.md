@@ -88,10 +88,8 @@ Flow: `browser -> Cloudflare -> cloudflared -> Caddy 127.0.0.1:8081 -> web 127.0
 
 Caddy (`/etc/caddy/Caddyfile`; plain HTTP on loopback only, Cloudflare provides the HTTPS):
 ```
-{
-    auto_https off
-}
-http://127.0.0.1:8081 {
+:8081 {
+    bind 127.0.0.1
     reverse_proxy 127.0.0.1:8080 {
         header_up X-Forwarded-For {header.CF-Connecting-IP}
         header_up X-Forwarded-Proto https

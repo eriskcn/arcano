@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Writes backend/seaweedfs/s3.prod.json from S3_ACCESS_KEY / S3_SECRET_KEY (env, or env file as $1).
+# Also refuses a placeholder POSTGRES_PASSWORD: postgres keeps the password from its first start.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,9 +10,10 @@ if [ $# -ge 1 ]; then
 fi
 
 key="${S3_ACCESS_KEY:-}"; secret="${S3_SECRET_KEY:-}"
-[ -n "$key" ] && [ -n "$secret" ] || { echo "S3_ACCESS_KEY and S3_SECRET_KEY must be set" >&2; exit 1; }
-case "$key$secret" in
-  *any_key*|*any_secret*|*CHANGE_ME*) echo "refusing dev/placeholder credentials" >&2; exit 1 ;;
+pg="${POSTGRES_PASSWORD:-}"
+[ -n "$key" ] && [ -n "$secret" ] && [ -n "$pg" ] || { echo "S3_ACCESS_KEY, S3_SECRET_KEY and POSTGRES_PASSWORD must be set" >&2; exit 1; }
+case "$key$secret$pg" in
+  *any_key*|*any_secret*|*postgrespassword*|*CHANGE_ME*) echo "refusing dev/placeholder credentials" >&2; exit 1 ;;
 esac
 # Values go into JSON unescaped; hex/alphanumeric keys only.
 [[ "$key$secret" =~ ^[A-Za-z0-9_+=./-]+$ ]] || { echo "credentials may only contain [A-Za-z0-9_+=./-]" >&2; exit 1; }
