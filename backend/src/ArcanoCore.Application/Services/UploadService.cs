@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ArcanoCore.Application.Common;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Domain.Common;
@@ -76,6 +77,8 @@ public class UploadService : IUploadService
         {
             return Fail<UploadStartedDto>("File.ContentTypeTooLong", "Content type cannot exceed 100 characters.");
         }
+
+        dto = dto with { ContentType = ContentTypes.OrOctetStream(dto.ContentType) };
 
         if (dto.FolderId != null &&
             !await _dbContext.Folders.AnyAsync(f => f.Id == dto.FolderId && f.OwnerId == ownerId && !f.IsDeleted, cancellationToken))
