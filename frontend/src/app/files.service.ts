@@ -2,6 +2,7 @@ import { HttpClient, HttpEventType } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable, catchError, concat, concatMap, filter, finalize, from, map, of, switchMap, tap, throwError, timer } from 'rxjs';
 import { AuthService } from './auth.service';
+import { ticketUrl } from './download';
 import { environment } from '../environments/environment';
 
 export interface FileDto {
@@ -167,8 +168,13 @@ export class FilesService {
     return this.http.post<FileDto>(`${this.baseUrl}/${encodeURIComponent(id)}/copy`, { folderId });
   }
 
+  /** For previews only (capped in size); saving to disk uses downloadUrl. */
   download(id: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${encodeURIComponent(id)}`, { responseType: 'blob' });
+  }
+
+  downloadUrl(id: string): Observable<string> {
+    return ticketUrl(this.http, `${this.baseUrl}/${encodeURIComponent(id)}`);
   }
 
   delete(id: string): Observable<void> {

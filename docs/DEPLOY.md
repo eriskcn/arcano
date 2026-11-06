@@ -70,6 +70,8 @@ location / {
 `proxy_http_version 1.1` is needed because nginx talks HTTP/1.0 to the app by default and then cannot pass on a broken download, so a failed folder zip could look complete.
 Add `listen 443 ssl;` and certificates as usual.
 
+Download links carry a 60-second ticket in `?dt=`, and your proxy's access log may record query strings. Drop it there: in nginx log `$request_method $uri $server_protocol` instead of `$request` (as `frontend/nginx.conf` does); Caddy has no access log unless you add `log`, and then add `format filter { request>uri query { delete dt } }`.
+
 HSTS: the `Strict-Transport-Security` line in both examples makes browsers use HTTPS only for a year. Add it only after HTTPS works, because browsers will refuse plain HTTP for that long.
 
 Client IP (per-IP rate limits): `frontend/nginx.conf` trusts `X-Forwarded-For` only from `set_real_ip_from 172.28.0.1`, the Docker gateway of the compose subnet, which is where a proxy on the Docker host arrives from. It uses the rightmost entry, the one your proxy appends, so the proxy must append or replace the header (both examples above do). If the proxy runs elsewhere, change that address and rebuild `web`:

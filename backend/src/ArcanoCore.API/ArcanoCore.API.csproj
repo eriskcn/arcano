@@ -20,4 +20,8 @@
     <ProjectReference Include="..\ArcanoCore.Infrastructure\ArcanoCore.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ArcanoCore.API.UnitTests" />
+  </ItemGroup>
+
 </Project>

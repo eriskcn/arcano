@@ -29,17 +29,32 @@ internal static class JwtTokens
         if (isAdmin) claims.Add(new Claim("role", AdminPolicy.Role));
 
         var jwtSettings = configuration.GetSection("Jwt");
+        var expiryMinutes = double.TryParse(jwtSettings["ExpiryInMinutes"], out var parsedMinutes) ? parsedMinutes : 60;
+        return Write(configuration, jwtSettings["Audience"] ?? "ArcanoCoreUsers", claims, DateTime.UtcNow.AddMinutes(expiryMinutes));
+    }
+
+    // Copies the user id and security stamp of the (already validated) session, so signing out everywhere also revokes tickets.
+    public static string CreateDownloadTicket(IConfiguration configuration, ClaimsPrincipal session, string path) =>
+        Write(configuration, DownloadTicket.Audience,
+            [
+                new Claim(ClaimTypes.NameIdentifier, session.FindFirstValue(ClaimTypes.NameIdentifier) ?? ""),
+                new Claim(AuthClaims.SecurityStamp, session.FindFirstValue(AuthClaims.SecurityStamp) ?? ""),
+                new Claim(DownloadTicket.PathClaim, path)
+            ],
+            DateTime.UtcNow.Add(DownloadTicket.Lifetime));
+
+    private static string Write(IConfiguration configuration, string audience, IEnumerable<Claim> claims, DateTime expires)
+    {
+        var jwtSettings = configuration.GetSection("Jwt");
         // Validated at startup in DependencyInjection.AddInfrastructure.
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Secret"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var expiryMinutes = double.TryParse(jwtSettings["ExpiryInMinutes"], out var parsedMinutes) ? parsedMinutes : 60;
-
         var token = new JwtSecurityToken(
             issuer: jwtSettings["Issuer"] ?? "ArcanoCore",
-            audience: jwtSettings["Audience"] ?? "ArcanoCoreUsers",
+            audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
+            expires: expires,
             signingCredentials: creds
         );
 

@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../environments/environment';
+import { ticketUrl } from './download';
 
 export interface FolderDto {
   id: string;
@@ -42,7 +43,7 @@ export class FoldersService {
       .pipe(map(() => undefined));
   }
 
-  download(id: string): Observable<Blob> {
-    return this.http.get(`${this.baseUrl}/${encodeURIComponent(id)}/download`, { responseType: 'blob' });
+  downloadUrl(id: string): Observable<string> {
+    return ticketUrl(this.http, `${this.baseUrl}/${encodeURIComponent(id)}/download`);
   }
 }

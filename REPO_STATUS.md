@@ -106,7 +106,7 @@ Backup now includes api keys, env copy and image record, with optional rclone of
 
 ## Known open issues
 
-Open on GitHub (2026-11-05): #37 only. Large downloads are held in browser memory before saving. It was not measured in a real browser, and it is accepted as a documented limit for `v1.0.0` (see the download section of `docs/USER_MANUAL.md`). The whole-project audit of 2026-11-04 filed #32-#43; all the others were fixed in #44-#50. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
+#37 (large downloads held in browser memory) is fixed: save-to-disk downloads use a 60-second download ticket in the URL and stream to disk; checked with curl on throwaway containers, not in a real browser. The whole-project audit of 2026-11-04 filed #32-#43; all the others were fixed in #44-#50. From the read-only review of 2026-11-02: Each was confirmed by reading the code or scripts; none was reproduced.
 
 - **Closed-tab abort is best effort:** the page sends a keepalive abort on `pagehide`, but a crash, a killed mobile browser, a lost network or an expired token still leaves the session holding quota and a slot until the 24 h sweep.
 - **Details sheet below `xl`:** it has no backdrop or focus trap, and its overlap with the bottom nav at 375 px was not measured.

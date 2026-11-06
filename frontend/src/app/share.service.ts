@@ -44,11 +44,12 @@ export class ShareService {
     return this.http.get<PublicShareInfo>(`${this.publicUrl(token)}/info`);
   }
 
+  /** For previews only (capped in size); saving to disk links to publicUrl. */
   publicDownload(token: string): Observable<Blob> {
     return this.http.get(this.publicUrl(token), { responseType: 'blob' });
   }
 
-  private publicUrl(token: string): string {
+  publicUrl(token: string): string {
     return `${environment.apiBaseUrl}/Public/${encodeURIComponent(token)}`;
   }
 }

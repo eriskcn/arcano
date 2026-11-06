@@ -80,6 +80,19 @@ describe('FilesService', () => {
     expect(result).toBe(blob);
   });
 
+  it('should fetch a download ticket and build the download URL', () => {
+    const service = TestBed.inject(FilesService);
+    const http = TestBed.inject(HttpTestingController);
+    let result: string | undefined;
+
+    service.downloadUrl(id).subscribe(url => (result = url));
+
+    const request = http.expectOne(`${environment.apiBaseUrl}/Files/${id}/ticket`);
+    expect(request.request.method).toBe('POST');
+    request.flush({ ticket: 'a.b+c' });
+    expect(result).toBe(`${environment.apiBaseUrl}/Files/${id}?dt=a.b%2Bc`);
+  });
+
   it('should upload a file as multipart form data', () => {
     const service = TestBed.inject(FilesService);
     const http = TestBed.inject(HttpTestingController);

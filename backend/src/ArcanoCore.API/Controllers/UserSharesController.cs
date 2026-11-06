@@ -5,10 +5,12 @@ using ArcanoCore.Application.Common;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
+using ArcanoCore.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Net.Http.Headers;
 
 namespace ArcanoCore.API.Controllers;
@@ -75,6 +77,7 @@ public class SharedController : ApiControllerBase
         return result.IsFailure ? ShareErrors.ToResult(this, result.Error) : Ok(result.Value);
     }
 
+    [Authorize(AuthenticationSchemes = DownloadTicket.SessionOrTicket)]
     [HttpGet("{shareId:guid}/files/{fileId:guid}/download")]
     public async Task<IActionResult> DownloadFile(Guid shareId, Guid fileId, CancellationToken cancellationToken)
     {
@@ -85,6 +88,18 @@ public class SharedController : ApiControllerBase
         return File(content, ContentTypes.OrOctetStream(contentType), fileName, enableRangeProcessing: true);
     }
 
+    // Same checks as DownloadFile, so an error shows in the app before the browser starts saving.
+    [HttpPost("{shareId:guid}/files/{fileId:guid}/download/ticket")]
+    public async Task<IActionResult> FileTicket(Guid shareId, Guid fileId, [FromServices] IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var result = await _shares.DownloadFileAsync(shareId, fileId, cancellationToken);
+        if (result.IsFailure) return ShareErrors.ToResult(this, result.Error);
+
+        await result.Value.Content.DisposeAsync();
+        return DownloadTicketResult(configuration);
+    }
+
+    [Authorize(AuthenticationSchemes = DownloadTicket.SessionOrTicket)]
     [HttpGet("{shareId:guid}/folders/{folderId:guid}/download")]
     public async Task<IActionResult> DownloadFolder(Guid shareId, Guid folderId, CancellationToken cancellationToken)
     {
@@ -105,6 +120,14 @@ public class SharedController : ApiControllerBase
         }
 
         return new EmptyResult();
+    }
+
+    // Same checks and caps as DownloadFolder.
+    [HttpPost("{shareId:guid}/folders/{folderId:guid}/download/ticket")]
+    public async Task<IActionResult> FolderTicket(Guid shareId, Guid folderId, [FromServices] IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var name = await _shares.GetFolderZipNameAsync(shareId, folderId, cancellationToken);
+        return name.IsFailure ? ShareErrors.ToResult(this, name.Error) : DownloadTicketResult(configuration);
     }
 }
 

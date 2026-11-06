@@ -9,7 +9,8 @@ import { environment } from '../environments/environment';
 import { AccountService } from './account.service';
 import { ContextMenuComponent, ContextMenuModel } from './context-menu.component';
 import { FileActionsService } from './file-actions.service';
-import { errorBody, fileErrorMessage, readBlobError } from './http-errors';
+import { errorBody, fileErrorMessage } from './http-errors';
+import { startDownload } from './download';
 import { AuthService } from './auth.service';
 import { FILES_PAGE_SIZE, FileDto, FilesService, FilesView } from './files.service';
 import { FolderDto, FoldersService } from './folders.service';
@@ -1083,16 +1084,11 @@ export class App implements OnInit {
     this.actionBusy.set(true);
     this.actionError.set('');
 
-    this.filesApi.download(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: blob => {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = file.name;
-        anchor.click();
-        // Deferred: some browsers start reading the URL after click() returns.
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    // Busy only while the ticket is fetched; the browser then saves the file by itself.
+    this.filesApi.downloadUrl(file.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: url => {
         this.actionBusy.set(false);
+        startDownload(url);
       },
       error: () => {
         this.actionBusy.set(false);
@@ -1108,20 +1104,14 @@ export class App implements OnInit {
     this.actionBusy.set(true);
     this.actionError.set('');
 
-    this.foldersApi.download(folder.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: blob => {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = `${folder.name}.zip`;
-        anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.foldersApi.downloadUrl(folder.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: url => {
         this.actionBusy.set(false);
+        startDownload(url);
       },
-      error: async (error: unknown) => {
-        const message = this.folderErrorMessage(await readBlobError(error), `Unable to download ${folder.name}. Please try again.`);
+      error: (error: unknown) => {
         this.actionBusy.set(false);
-        this.actionError.set(message);
+        this.actionError.set(this.folderErrorMessage(error, `Unable to download ${folder.name}. Please try again.`));
       },
     });
   }

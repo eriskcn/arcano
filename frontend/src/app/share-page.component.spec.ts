@@ -52,27 +52,16 @@ describe('SharePageComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('This link is invalid or has expired.');
   });
 
-  it('downloads via a temporary object URL and revokes it', () => {
-    vi.useFakeTimers();
+  it('downloads with a plain link to the public URL', () => {
     const fixture = create();
     http.expectOne(`${base}/info`).flush({ fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 10 });
     fixture.detectChanges();
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    let href = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      href = this.getAttribute('href') ?? '';
+    });
     fixture.componentInstance.download();
-    http.expectOne(base).flush(new Blob(['x']));
-    expect(click).toHaveBeenCalled();
-    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1000);
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test');
-  });
-
-  it('shows an error when the download fails', () => {
-    const fixture = create();
-    http.expectOne(`${base}/info`).flush({ fileName: 'notes.bin', contentType: 'application/octet-stream', fileSize: 10 });
-    fixture.detectChanges();
-    fixture.componentInstance.download();
-    http.expectOne(base).flush(null, { status: 500, statusText: 'Server Error' });
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Download failed. Please try again.');
+    http.expectNone(base);
+    expect(href).toBe(base);
   });
 });

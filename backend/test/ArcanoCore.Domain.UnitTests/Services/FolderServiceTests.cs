@@ -269,6 +269,25 @@ public class FolderServiceTests
         Assert.Equal("Folder.NotFound", result.Error.Code);
     }
 
+    [Fact]
+    public async Task GetZipNameAsync_AppliesTheFileCap_SoATicketIsRefusedBeforeDownload()
+    {
+        var ownerId = Guid.NewGuid();
+        await using var dbContext = CreateDbContext();
+        var service = CreateService(dbContext, ownerId.ToString());
+        var folder = await CreateFolderAsync(service, "Big", null);
+        Assert.Equal("Big.zip", (await service.GetZipNameAsync(folder.Id)).Value);
+
+        for (var i = 0; i <= 5000; i++)
+        {
+            AddFile(dbContext, ownerId, folder.Id, $"k{i}");
+        }
+        await dbContext.SaveChangesAsync();
+
+        Assert.Equal("Folder.TooLarge", (await service.GetZipNameAsync(folder.Id)).Error.Code);
+        Assert.Equal("Folder.TooLarge", (await service.WriteZipAsync(folder.Id, new MemoryStream())).Error.Code);
+    }
+
     private static FileMetadata AddFile(ApplicationDbContext dbContext, Guid ownerId, Guid folderId, string key, string name = "f.txt")
     {
         var file = new FileMetadata

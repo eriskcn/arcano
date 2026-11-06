@@ -4,9 +4,11 @@ using System.Threading.Tasks;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
+using ArcanoCore.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Net.Http.Headers;
 
 namespace ArcanoCore.API.Controllers;
@@ -56,6 +58,7 @@ public class FoldersController : ApiControllerBase
         return result.IsFailure ? ToErrorResult(result.Error) : NoContent();
     }
 
+    [Authorize(AuthenticationSchemes = DownloadTicket.SessionOrTicket)]
     [HttpGet("{id:guid}/download")]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
@@ -81,6 +84,14 @@ public class FoldersController : ApiControllerBase
         }
 
         return new EmptyResult();
+    }
+
+    // Same checks and caps as Download, so an error shows in the app before the browser starts saving.
+    [HttpPost("{id:guid}/download/ticket")]
+    public async Task<IActionResult> Ticket(Guid id, [FromServices] IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var name = await _folderService.GetZipNameAsync(id, cancellationToken);
+        return name.IsFailure ? ToErrorResult(name.Error) : DownloadTicketResult(configuration);
     }
 
     public record StarFolderRequest(bool IsStarred);

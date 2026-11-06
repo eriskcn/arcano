@@ -2,7 +2,8 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
-import { errorBody, readBlobError } from './http-errors';
+import { errorBody } from './http-errors';
+import { startDownload } from './download';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { previewKind } from './preview/preview-kind';
 import { ConfirmDialogComponent } from './shared/components/confirm-dialog.component';
@@ -186,26 +187,19 @@ export class SharedWithMeComponent {
   }
 
   downloadFile(shareId: string, fileId: string, name: string): void {
-    this.save(this.api.downloadFile(shareId, fileId), name);
+    this.save(this.api.fileDownloadUrl(shareId, fileId), name);
   }
 
   downloadFolder(shareId: string, folderId: string, name: string): void {
-    this.save(this.api.downloadFolder(shareId, folderId), `${name}.zip`);
+    this.save(this.api.folderDownloadUrl(shareId, folderId), `${name}.zip`);
   }
 
-  private save(request: Observable<Blob>, fileName: string): void {
+  private save(request: Observable<string>, fileName: string): void {
     this.error.set('');
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: blob => {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = fileName;
-        anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      },
-      error: async (error: unknown) => {
-        const tooLarge = errorBody(await readBlobError(error))?.code === 'Folder.TooLarge';
+      next: url => startDownload(url),
+      error: (error: unknown) => {
+        const tooLarge = errorBody(error)?.code === 'Folder.TooLarge';
         this.error.set(tooLarge ? 'This folder has too many files to download as a zip.' : `Unable to download ${fileName}. Please try again.`);
       },
     });

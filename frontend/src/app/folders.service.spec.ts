@@ -106,18 +106,16 @@ describe('FoldersService', () => {
     expect(completed).toBe(true);
   });
 
-  it('should download a folder as a zip blob', () => {
+  it('should fetch a zip download ticket and build the download URL', () => {
     const service = TestBed.inject(FoldersService);
     const http = TestBed.inject(HttpTestingController);
-    let result: Blob | undefined;
+    let result: string | undefined;
 
-    service.download(id).subscribe(response => (result = response));
+    service.downloadUrl(id).subscribe(url => (result = url));
 
-    const request = http.expectOne(`${environment.apiBaseUrl}/Folders/${id}/download`);
-    expect(request.request.method).toBe('GET');
-    expect(request.request.responseType).toBe('blob');
-    const blob = new Blob(['zip']);
-    request.flush(blob);
-    expect(result).toBe(blob);
+    const request = http.expectOne(`${environment.apiBaseUrl}/Folders/${id}/download/ticket`);
+    expect(request.request.method).toBe('POST');
+    request.flush({ ticket: 't' });
+    expect(result).toBe(`${environment.apiBaseUrl}/Folders/${id}/download?dt=t`);
   });
 });
