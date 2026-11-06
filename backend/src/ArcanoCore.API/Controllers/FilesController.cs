@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using ArcanoCore.Application.Common;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
@@ -65,7 +66,7 @@ public class FilesController : ApiControllerBase
         }
 
         var (content, contentType, fileName) = result.Value;
-        return File(content, contentType, fileName, enableRangeProcessing: true);
+        return File(content, ContentTypes.OrOctetStream(contentType), fileName, enableRangeProcessing: true);
     }
 
     [HttpDelete("{id:guid}")]

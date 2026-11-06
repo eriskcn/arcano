@@ -177,7 +177,9 @@ public class FileServiceTests
     [InlineData("")]
     [InlineData(" ")]
     [InlineData(null)]
-    public async Task UploadFileAsync_DefaultsToOctetStream_WhenContentTypeIsBlank(string? contentType)
+    [InlineData("pdf")]
+    [InlineData("a/b/c")]
+    public async Task UploadFileAsync_DefaultsToOctetStream_WhenContentTypeIsBlankOrUnparseable(string? contentType)
     {
         var userId = Guid.NewGuid();
         await using var dbContext = CreateListDbContext();

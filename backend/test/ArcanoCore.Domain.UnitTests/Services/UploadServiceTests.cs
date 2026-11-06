@@ -34,6 +34,17 @@ public class UploadServiceTests
         Assert.Equal("File.ContentTypeTooLong", result.Error.Code);
     }
 
+    [Theory]
+    [InlineData("pdf")]
+    [InlineData("a/b/c")]
+    public async Task StartAsync_UnparseableContentType_StoresOctetStream(string contentType)
+    {
+        var result = await CreateService(_ownerId).StartAsync(new UploadStartDto("a.bin", contentType, 10, null));
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("application/octet-stream", Assert.Single(_context.Sessions).ContentType);
+    }
+
     [Fact]
     public async Task StartAsync_QuotaExceeded_FailsWithoutCreatingSession()
     {

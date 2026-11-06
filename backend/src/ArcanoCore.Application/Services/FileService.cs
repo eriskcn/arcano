@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ArcanoCore.Application.Common;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Domain.Common;
@@ -60,6 +61,8 @@ public class FileService : IFileService
         {
             return Result<FileResponseDto>.Failure(new Error("File.ContentTypeTooLong", "Content type cannot exceed 100 characters."));
         }
+
+        dto = dto with { ContentType = ContentTypes.OrOctetStream(dto.ContentType) };
 
         var ownerId = CurrentOwnerId;
         if (ownerId == Guid.Empty)
