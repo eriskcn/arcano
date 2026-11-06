@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ArcanoCore.API.Controllers;
 using ArcanoCore.Application.Services;
+using ArcanoCore.Infrastructure;
 using ArcanoCore.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
@@ -78,6 +79,50 @@ public class AuthControllerTests
         FromIp(controller, "10.0.0.2");
 
         Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest(Email, Password)));
+    }
+
+    [Fact]
+    public async Task Register_WithApostropheEmail_Succeeds()
+    {
+        var (controller, _) = CreateControllerWithAppIdentity();
+
+        Assert.IsType<OkObjectResult>(await controller.Register(new RegisterRequest("o'neil@example.com", Password)));
+        Assert.IsType<OkObjectResult>(await controller.Login(new LoginRequest("o'neil@example.com", Password)));
+    }
+
+    // Login rejects a spaces-only password; Identity must reject it too, or Reset / ChangePassword could set one nobody can sign in with.
+    [Fact]
+    public async Task ResetPassword_WithSpacesOnlyPassword_IsRejected()
+    {
+        var (controller, userManager) = CreateControllerWithAppIdentity();
+        await controller.Register(new RegisterRequest(Email, Password));
+        var user = (await userManager.FindByEmailAsync(Email))!;
+
+        var result = await userManager.ResetPasswordAsync(user, await userManager.GeneratePasswordResetTokenAsync(user), new string(' ', 8));
+
+        Assert.Contains(result.Errors, e => e.Code == "PasswordTooShort");
+    }
+
+    // Uses the app's real Identity options (AddInfrastructure) with the in-memory user store.
+    private static (AuthController Controller, UserManager<IdentityUser<Guid>> UserManager) CreateControllerWithAppIdentity()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "test-secret-key-that-is-at-least-32-bytes-long",
+                ["Storage:ServiceUrl"] = "http://localhost:1",
+                ["Storage:AccessKey"] = "test",
+                ["Storage:SecretKey"] = "test"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection();
+        services.AddInfrastructure(configuration);
+        services.AddSingleton<IUserStore<IdentityUser<Guid>>, InMemoryUserStore>();
+        var userManager = services.BuildServiceProvider().GetRequiredService<UserManager<IdentityUser<Guid>>>();
+        var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        return (new AuthController(userManager, configuration, db, new InviteKeyService(db)), userManager);
     }
 
     private static void FromIp(ControllerBase controller, string ip)
