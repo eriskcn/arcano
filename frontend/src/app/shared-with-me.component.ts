@@ -126,6 +126,7 @@ export class SharedWithMeComponent {
   backToList(): void {
     this.share.set(null);
     this.path.set([]);
+    this.hasMore.set(false);
     this.loadShares();
   }
 

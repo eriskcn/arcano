@@ -70,6 +70,21 @@ describe('SharedWithMeComponent', () => {
     expect(cmp.shares().length).toBe(1);
   });
 
+  it('hides Load more after going back from a full page', () => {
+    const { fixture, cmp, http, text } = setup();
+    const files = Array.from({ length: 100 }, (_, i) => ({ id: `x${i}`, fileName: `f${i}`, sizeBytes: 1, contentType: 'text/plain', createdAtUtc: '' }));
+
+    cmp.openShare(folderShare as never);
+    http.expectOne(r => r.url === `${api}/Shared/s1/children`).flush({ folders: [], files });
+    fixture.detectChanges();
+    expect(text()).toContain('Load more');
+
+    cmp.backToList();
+    http.expectOne(`${api}/Shared`).flush([folderShare]);
+    fixture.detectChanges();
+    expect(text()).not.toContain('Load more');
+  });
+
   it('removes a share only after confirming', () => {
     const { fixture, cmp, http } = setup();
 

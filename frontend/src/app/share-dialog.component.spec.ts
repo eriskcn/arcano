@@ -37,6 +37,26 @@ describe('ShareDialogComponent', () => {
     http.verify();
   });
 
+  it('shows Copied after a copy, and an error when the clipboard is missing', async () => {
+    const { fixture, dialog, http } = setup();
+    const link = { id: 'l1', fileId: '1', token: 'tok', expiresAtUtc: null, createdAtUtc: '' };
+    dialog.shareLinks.set([link]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await dialog.copyShareLink(link);
+    fixture.detectChanges();
+    expect(writeText).toHaveBeenCalledWith(dialog.shareLinkUrl('tok'));
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Copied');
+
+    // Plain HTTP on a LAN IP has no navigator.clipboard.
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    await dialog.copyShareLink(link);
+    expect(dialog.copiedToken()).toBeNull();
+    expect(dialog.shareError()).toContain('Copy failed');
+    http.verify();
+  });
+
   it('shows the backend error title', () => {
     const { dialog, http } = setup();
 

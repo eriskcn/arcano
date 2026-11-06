@@ -72,7 +72,7 @@ import { UserShareDto, UserSharesService } from './user-shares.service';
               <p class="text-xs text-gray-800 truncate">{{ shareLinkUrl(link.token) }}</p>
               <p class="text-[11px] text-gray-400">{{ link.expiresAtUtc ? 'Expires ' + (link.expiresAtUtc | date: 'medium') : 'Never expires' }}</p>
             </div>
-            <button type="button" (click)="copyShareLink(link)" class="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">Copy</button>
+            <button type="button" (click)="copyShareLink(link)" class="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">{{ copiedToken() === link.token ? 'Copied' : 'Copy' }}</button>
             <button type="button" (click)="revokeShareLink(link)" class="text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer">Revoke</button>
           </li>
         </ul>
@@ -99,6 +99,7 @@ export class ShareDialogComponent {
   readonly shareExpiryDays = signal<number | null>(null);
   readonly shareBusy = signal<boolean>(false);
   readonly shareError = signal<string>('');
+  readonly copiedToken = signal<string | null>(null);
   readonly shareExpiryOptions: { label: string; days: number | null }[] = [
     { label: 'Never', days: null },
     { label: '1 day', days: 1 },
@@ -122,6 +123,7 @@ export class ShareDialogComponent {
     this.people.set([]);
     this.personEmail.set('');
     this.shareError.set('');
+    this.copiedToken.set(null);
     this.userShares.list(this.target()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: people => this.people.set(people),
       error: err => this.shareError.set(this.shareErrorMessage(err, 'Unable to load people.')),
@@ -196,8 +198,16 @@ export class ShareDialogComponent {
     });
   }
 
-  copyShareLink(link: ShareLinkDto): void {
-    navigator.clipboard.writeText(this.shareApi.linkFor(link.token)).catch(() => {});
+  // navigator.clipboard is undefined over plain HTTP; the await throws and lands in catch.
+  async copyShareLink(link: ShareLinkDto): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.shareApi.linkFor(link.token));
+      this.copiedToken.set(link.token);
+      this.shareError.set('');
+    } catch {
+      this.copiedToken.set(null);
+      this.shareError.set('Copy failed. Select the link and copy it manually.');
+    }
   }
 
   shareLinkUrl(token: string): string {
