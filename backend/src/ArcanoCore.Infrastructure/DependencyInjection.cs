@@ -1,6 +1,7 @@
 using System;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.Tasks;
 using Amazon.S3;
 using ArcanoCore.Application.Common.Interfaces;
 using ArcanoCore.Infrastructure.Data;
@@ -76,37 +77,63 @@ public static class DependencyInjection
         })
         .AddJwtBearer(options =>
         {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings["Issuer"] ?? "ArcanoCore",
-                ValidAudience = jwtSettings["Audience"] ?? "ArcanoCoreUsers",
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ClockSkew = TimeSpan.Zero
-            };
-            // Reject tokens whose security stamp no longer matches (logout / password change) or whose user is gone or disabled (a brute-force lockout does not count).
-            // Tokens without the claim (issued before this check existed) are invalid.
+            options.TokenValidationParameters = Validation(jwtSettings["Audience"] ?? "ArcanoCoreUsers");
+            options.Events = new JwtBearerEvents { OnTokenValidated = RejectRevokedAsync };
+        })
+        // Download tickets: a different audience, so neither token type is accepted by the other scheme.
+        .AddJwtBearer(DownloadTicket.Scheme, options =>
+        {
+            options.TokenValidationParameters = Validation(DownloadTicket.Audience);
             options.Events = new JwtBearerEvents
             {
-                OnTokenValidated = async context =>
+                // Only from the query; NoResult stops the handler falling back to the Authorization header.
+                OnMessageReceived = context =>
                 {
-                    var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<IdentityUser<Guid>>>();
-                    var stamp = context.Principal?.FindFirstValue(AuthClaims.SecurityStamp);
-                    var user = await userManager.FindByIdAsync(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
-                    if (!UserAccountState.IsTokenValid(user, stamp))
+                    var ticket = context.Request.Query[DownloadTicket.QueryKey].ToString();
+                    if (string.IsNullOrEmpty(ticket)) context.NoResult();
+                    else context.Token = ticket;
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    if (!DownloadTicket.IsValidFor(context.Principal!, context.Request))
                     {
-                        context.Fail("Token is no longer valid.");
+                        context.Fail("Ticket is not valid for this request.");
+                        return Task.CompletedTask;
                     }
+                    return RejectRevokedAsync(context);
                 }
             };
         });
+
+        TokenValidationParameters Validation(string audience) => new()
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"] ?? "ArcanoCore",
+            ValidAudience = audience,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ClockSkew = TimeSpan.Zero
+        };
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
 
         return services;
+    }
+
+    // Reject tokens whose security stamp no longer matches (logout / password change) or whose user is gone or disabled (a brute-force lockout does not count).
+    // Tokens without the claim (issued before this check existed) are invalid.
+    private static async Task RejectRevokedAsync(TokenValidatedContext context)
+    {
+        var userManager = context.HttpContext.RequestServices.GetRequiredService<UserManager<IdentityUser<Guid>>>();
+        var stamp = context.Principal?.FindFirstValue(AuthClaims.SecurityStamp);
+        var user = await userManager.FindByIdAsync(context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "");
+        if (!UserAccountState.IsTokenValid(user, stamp))
+        {
+            context.Fail("Token is no longer valid.");
+        }
     }
 }

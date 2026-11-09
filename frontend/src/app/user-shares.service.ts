@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { environment } from '../environments/environment';
+import { ticketUrl } from './download';
 
 export interface UserShareDto {
   id: string;
@@ -64,11 +65,20 @@ export class UserSharesService {
     });
   }
 
+  /** For previews only (capped in size); saving to disk uses fileDownloadUrl. */
   downloadFile(shareId: string, fileId: string): Observable<Blob> {
-    return this.http.get(`${this.sharedUrl}/${encodeURIComponent(shareId)}/files/${encodeURIComponent(fileId)}/download`, { responseType: 'blob' });
+    return this.http.get(this.fileUrl(shareId, fileId), { responseType: 'blob' });
   }
 
-  downloadFolder(shareId: string, folderId: string): Observable<Blob> {
-    return this.http.get(`${this.sharedUrl}/${encodeURIComponent(shareId)}/folders/${encodeURIComponent(folderId)}/download`, { responseType: 'blob' });
+  fileDownloadUrl(shareId: string, fileId: string): Observable<string> {
+    return ticketUrl(this.http, this.fileUrl(shareId, fileId));
+  }
+
+  folderDownloadUrl(shareId: string, folderId: string): Observable<string> {
+    return ticketUrl(this.http, `${this.sharedUrl}/${encodeURIComponent(shareId)}/folders/${encodeURIComponent(folderId)}/download`);
+  }
+
+  private fileUrl(shareId: string, fileId: string): string {
+    return `${this.sharedUrl}/${encodeURIComponent(shareId)}/files/${encodeURIComponent(fileId)}/download`;
   }
 }

@@ -7,18 +7,6 @@ export function errorBody(error: unknown): ErrorBody | null {
   return typeof body === 'object' && body !== null ? (body as ErrorBody) : null;
 }
 
-// Requests with responseType 'blob' deliver the JSON error as a Blob, which errorBody cannot read.
-export async function readBlobError(error: unknown): Promise<unknown> {
-  if (!(error instanceof HttpErrorResponse) || !(error.error instanceof Blob)) {
-    return error;
-  }
-  try {
-    return new HttpErrorResponse({ status: error.status, error: JSON.parse(await error.error.text()) });
-  } catch {
-    return error; // not JSON, for example a proxy's HTML error page
-  }
-}
-
 export function fileErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof HttpErrorResponse && error.status === 413) {
     return 'File is too large.';

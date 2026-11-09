@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+import { startDownload } from './download';
 import { FilePreviewComponent } from './preview/file-preview.component';
 import { ButtonComponent } from './shared/components/button.component';
 import { FileSizePipe } from './shared/pipes/file-size.pipe';
@@ -15,7 +16,6 @@ import { PublicShareInfo, ShareService } from './share.service';
     <main class="max-w-2xl mx-auto p-6 flex flex-col gap-4">
       <p *ngIf="state() === 'loading'" class="text-sm text-gray-500">Loading…</p>
       <p *ngIf="state() === 'notFound'" class="text-sm text-gray-700">This link is invalid or has expired.</p>
-      <p *ngIf="downloadError()" role="alert" class="text-sm text-red-600">{{ downloadError() }}</p>
 
       <ng-container *ngIf="info() as file">
         <div class="flex items-center justify-between gap-4">
@@ -42,7 +42,6 @@ export class SharePageComponent {
 
   readonly state = signal<'loading' | 'notFound' | 'ready'>('loading');
   readonly info = signal<PublicShareInfo | null>(null);
-  readonly downloadError = signal('');
   readonly loader = () => this.shares.publicDownload(this.token);
 
   constructor() {
@@ -58,20 +57,8 @@ export class SharePageComponent {
       });
   }
 
+  // The public URL needs no token, so the browser saves the file directly.
   download(): void {
-    const name = this.info()?.fileName ?? 'download';
-    this.downloadError.set('');
-    this.loader().subscribe({
-      next: blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        a.click();
-        // Deferred: some browsers start reading the URL after click() returns.
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      },
-      error: () => this.downloadError.set('Download failed. Please try again.'),
-    });
+    startDownload(this.shares.publicUrl(this.token));
   }
 }

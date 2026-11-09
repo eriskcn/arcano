@@ -181,7 +181,7 @@ public class UserShareService : IUserShareService
     public async Task<Result<string>> GetFolderZipNameAsync(Guid shareId, Guid folderId, CancellationToken cancellationToken = default)
     {
         var folder = await AuthorizeFolderAsync(shareId, folderId, cancellationToken);
-        return folder.IsFailure ? Result<string>.Failure(folder.Error) : Result<string>.Success(folder.Value.Name + ".zip");
+        return folder.IsFailure ? Result<string>.Failure(folder.Error) : await _folders.GetZipNameForOwnerAsync(folder.Value.OwnerId, folderId, cancellationToken);
     }
 
     public async Task<Result> WriteFolderZipAsync(Guid shareId, Guid folderId, Stream output, CancellationToken cancellationToken = default)

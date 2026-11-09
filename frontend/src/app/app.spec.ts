@@ -109,42 +109,47 @@ describe('App', () => {
       }
     });
 
-    it('Download as zip explains a folder with too many files, read from the Blob error body', async () => {
+    it('Download as zip explains a folder with too many files before any download starts', () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
-      const fail = (body: string) => {
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      click.mockClear(); // the spy is shared with earlier tests
+      const fail = (body: object | string | null) => {
         app.downloadFolder(folderItem('d1', 'Docs'));
-        http.expectOne(`${api}/Folders/d1/download`).flush(new Blob([body], { type: 'application/json' }), { status: 400, statusText: 'Bad Request' });
+        http.expectOne(`${api}/Folders/d1/download/ticket`).flush(body, { status: 400, statusText: 'Bad Request' });
       };
 
-      fail(JSON.stringify({ code: 'Folder.TooLarge', message: 'Folder holds more than 5000 files.' }));
-      await vi.waitFor(() => expect(app.actionBusy()).toBe(false));
+      fail({ code: 'Folder.TooLarge', message: 'Folder holds more than 5000 files.' });
+      expect(app.actionBusy()).toBe(false);
       expect(app.actionError()).toBe('This folder has too many files to download as a zip.');
 
-      for (const body of [JSON.stringify({ code: 'Folder.NotFound', message: 'Not found.' }), '<html>Bad Gateway</html>', 'null']) {
+      for (const body of [{ code: 'Folder.NotFound', message: 'Not found.' }, '<html>Bad Gateway</html>', null]) {
         fail(body);
-        await vi.waitFor(() => expect(app.actionBusy()).toBe(false));
+        expect(app.actionBusy()).toBe(false);
         expect(app.actionError()).toBe('Unable to download Docs. Please try again.');
       }
+      expect(click).not.toHaveBeenCalled();
     });
 
-    it('Download as zip fetches the folder archive', () => {
+    it('Download as zip gets a ticket, then lets the browser save the archive', () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
-      URL.createObjectURL = () => 'blob:zip';
-      URL.revokeObjectURL = () => {};
+      let href = '';
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        href = this.getAttribute('href') ?? '';
+      });
 
       app.downloadFolder(folderItem('d1', 'Docs'));
+      expect(app.actionBusy()).toBe(true);
 
-      const req = http.expectOne(`${api}/Folders/d1/download`);
-      expect(req.request.responseType).toBe('blob');
-      req.flush(new Blob(['zip']));
+      const req = http.expectOne(`${api}/Folders/d1/download/ticket`);
+      expect(req.request.method).toBe('POST');
+      req.flush({ ticket: 't' });
+      expect(href).toBe(`${api}/Folders/d1/download?dt=t`);
       expect(app.actionBusy()).toBe(false);
       expect(app.actionError()).toBe('');
     });
 
     it('details panel offers Download as zip for a selected folder', () => {
       const { fixture, app, http } = open(null);
-      URL.createObjectURL = () => 'blob:zip';
-      URL.revokeObjectURL = () => {};
       app.selectedId.set('d1');
       app.selectedIds.set(new Set(['d1']));
       fixture.detectChanges();
@@ -154,16 +159,16 @@ describe('App', () => {
       expect(button).toBeTruthy();
       button.click();
 
-      expect(http.expectOne(`${api}/Folders/d1/download`).request.method).toBe('GET');
+      expect(http.expectOne(`${api}/Folders/d1/download/ticket`).request.method).toBe('POST');
     });
 
-    it('Download as zip reports an error', async () => {
+    it('Download as zip reports an error', () => {
       const { app, http } = open(folderItem('d1', 'Docs'));
 
       app.downloadFolder(folderItem('d1', 'Docs'));
-      http.expectOne(`${api}/Folders/d1/download`).flush(new Blob(['x']), { status: 500, statusText: 'Server Error' });
+      http.expectOne(`${api}/Folders/d1/download/ticket`).flush('x', { status: 500, statusText: 'Server Error' });
 
-      await vi.waitFor(() => expect(app.actionError()).toBe('Unable to download Docs. Please try again.'));
+      expect(app.actionError()).toBe('Unable to download Docs. Please try again.');
     });
 
     it('deleting a folder asks first and only deletes after confirming', () => {
@@ -653,23 +658,35 @@ describe('App', () => {
     http.verify();
   });
 
-  it('should download a file through an object URL and revoke it', () => {
-    vi.useFakeTimers();
+  it('should download a file with a ticket URL instead of a blob', () => {
     const app = TestBed.createComponent(App).componentInstance;
     const http = TestBed.inject(HttpTestingController);
-    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
-    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const create = vi.spyOn(URL, 'createObjectURL');
+    let href = '';
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      href = this.getAttribute('href') ?? '';
+    });
 
     app.downloadFile(sampleFiles[0]);
-    http.expectOne(`${environment.apiBaseUrl}/Files/1`).flush(new Blob(['x']));
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/ticket`).flush({ ticket: 't' });
 
-    expect(create).toHaveBeenCalled();
-    expect(click).toHaveBeenCalled();
-    expect(revoke).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1000);
-    expect(revoke).toHaveBeenCalledWith('blob:test');
-    vi.useRealTimers();
+    expect(href).toBe(`${environment.apiBaseUrl}/Files/1?dt=t`);
+    expect(create).not.toHaveBeenCalled();
+    expect(app.actionBusy()).toBe(false);
+    http.verify();
+  });
+
+  it('should show a file download error and not start a download', () => {
+    const app = TestBed.createComponent(App).componentInstance;
+    const http = TestBed.inject(HttpTestingController);
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    click.mockClear(); // the spy is shared with earlier tests
+
+    app.downloadFile(sampleFiles[0]);
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/ticket`).flush({ code: 'File.NotFound' }, { status: 404, statusText: 'Not Found' });
+
+    expect(app.actionError()).toBe(`Unable to download ${sampleFiles[0].name}. Please try again.`);
+    expect(click).not.toHaveBeenCalled();
     http.verify();
   });
 
@@ -690,7 +707,7 @@ describe('App', () => {
     const preview = fixture.debugElement.query(By.directive(FilePreviewComponent));
     expect(preview.componentInstance.fileId()).toBe('1');
     preview.componentInstance.download.emit();
-    http.expectOne(`${environment.apiBaseUrl}/Files/1`).flush(new Blob(['x']));
+    http.expectOne(`${environment.apiBaseUrl}/Files/1/ticket`).flush({ ticket: 't' });
 
     expect(click).toHaveBeenCalled();
     http.verify();

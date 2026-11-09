@@ -144,9 +144,7 @@ Phones do not show the path. To go up one level on a phone, tap the **Up one fol
 1. Right-click the file.
 2. Select **Download**.
 
-The browser saves the file only after all of it has been fetched. There is no progress bar, so a large file can take a while.
-
-The whole file is held in the browser's memory until then. Very large files (several GB) may fail on a device with little free memory. This limit has not been measured. If a download fails, close other tabs and try again, or use a computer with more memory.
+The browser saves the file straight to disk and shows its progress in its own downloads list, so large files do not need much memory. If the file cannot be downloaded, the error shows in the app before the download starts. If a download fails in the browser, select **Download** again.
 
 ### Download a folder as a zip
 

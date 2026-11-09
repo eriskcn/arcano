@@ -54,7 +54,15 @@ describe('UserSharesService', () => {
 
     service.downloadFile('s1', 'a').subscribe();
     expect(http.expectOne(`${api}/Shared/s1/files/a/download`).request.responseType).toBe('blob');
-    service.downloadFolder('s1', 'b').subscribe();
-    http.expectOne(`${api}/Shared/s1/folders/b/download`).flush(new Blob());
+    let fileUrl = '';
+    service.fileDownloadUrl('s1', 'a').subscribe(url => (fileUrl = url));
+    const fileTicket = http.expectOne(`${api}/Shared/s1/files/a/download/ticket`);
+    expect(fileTicket.request.method).toBe('POST');
+    fileTicket.flush({ ticket: 't1' });
+    expect(fileUrl).toBe(`${api}/Shared/s1/files/a/download?dt=t1`);
+    let folderUrl = '';
+    service.folderDownloadUrl('s1', 'b').subscribe(url => (folderUrl = url));
+    http.expectOne(`${api}/Shared/s1/folders/b/download/ticket`).flush({ ticket: 't2' });
+    expect(folderUrl).toBe(`${api}/Shared/s1/folders/b/download?dt=t2`);
   });
 });

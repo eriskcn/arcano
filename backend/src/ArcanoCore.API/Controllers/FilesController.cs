@@ -5,9 +5,11 @@ using ArcanoCore.Application.Common;
 using ArcanoCore.Application.Common.Models;
 using ArcanoCore.Application.Services;
 using ArcanoCore.Domain.Common;
+using ArcanoCore.Infrastructure.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace ArcanoCore.API.Controllers;
 
@@ -56,6 +58,7 @@ public class FilesController : ApiControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize(AuthenticationSchemes = DownloadTicket.SessionOrTicket)]
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Download(Guid id, CancellationToken cancellationToken)
     {
@@ -67,6 +70,20 @@ public class FilesController : ApiControllerBase
 
         var (content, contentType, fileName) = result.Value;
         return File(content, ContentTypes.OrOctetStream(contentType), fileName, enableRangeProcessing: true);
+    }
+
+    // Same checks as Download, so an error shows in the app before the browser starts saving.
+    [HttpPost("{id:guid}/ticket")]
+    public async Task<IActionResult> Ticket(Guid id, [FromServices] IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var result = await _fileService.DownloadFileAsync(id, cancellationToken);
+        if (result.IsFailure)
+        {
+            return ToError(result.Error);
+        }
+
+        await result.Value.Content.DisposeAsync();
+        return DownloadTicketResult(configuration);
     }
 
     [HttpDelete("{id:guid}")]

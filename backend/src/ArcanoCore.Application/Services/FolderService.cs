@@ -225,8 +225,20 @@ public class FolderService : IFolderService
             return Result<string>.Failure(new Error("Folder.Unauthorized", "A valid user ID is required."));
         }
 
+        return await GetZipNameForOwnerAsync(ownerId, id, cancellationToken);
+    }
+
+    // Applies the same checks and cap as WriteZipForOwnerAsync, so a zip is refused before any download starts.
+    public async Task<Result<string>> GetZipNameForOwnerAsync(Guid ownerId, Guid id, CancellationToken cancellationToken = default)
+    {
         var folder = await FindOwnedFolderAsync(id, ownerId, cancellationToken);
-        return folder == null ? Result<string>.Failure(NotFoundError) : Result<string>.Success(folder.Name + ".zip");
+        if (folder == null)
+        {
+            return Result<string>.Failure(NotFoundError);
+        }
+
+        var contents = await LoadZipAsync(folder, ownerId, cancellationToken);
+        return contents.IsFailure ? Result<string>.Failure(contents.Error) : Result<string>.Success(folder.Name + ".zip");
     }
 
     public Task<Result> WriteZipAsync(Guid id, Stream output, CancellationToken cancellationToken = default)
@@ -249,17 +261,12 @@ public class FolderService : IFolderService
             return Result.Failure(NotFoundError);
         }
 
-        var tree = await CollectTreeAsync(root, ownerId, cancellationToken);
-        var ids = tree.Select(f => f.Id).ToList();
-        var files = await _dbContext.FileMetadatas
-            .AsNoTracking()
-            .Where(f => f.OwnerId == ownerId && !f.IsDeleted && f.FolderId != null && ids.Contains(f.FolderId.Value))
-            .OrderBy(f => f.FileName)
-            .ToListAsync(cancellationToken);
-        if (files.Count > MaxZipFiles)
+        var contents = await LoadZipAsync(root, ownerId, cancellationToken);
+        if (contents.IsFailure)
         {
-            return Result.Failure(new Error("Folder.TooLarge", $"Folder holds more than {MaxZipFiles} files."));
+            return Result.Failure(contents.Error);
         }
+        var (tree, files) = contents.Value;
 
         // Relative directory path per folder, with sibling names made unique.
         var paths = new Dictionary<Guid, string> { [root.Id] = "" };
@@ -288,6 +295,21 @@ public class FolderService : IFolderService
         // Not `await using`: a failed copy must not write the central directory, so the partial archive is rejected.
         await zip.DisposeAsync();
         return Result.Success();
+    }
+
+    // The folder tree and its live files, or Folder.TooLarge.
+    private async Task<Result<(List<Folder> Tree, List<FileMetadata> Files)>> LoadZipAsync(Folder root, Guid ownerId, CancellationToken cancellationToken)
+    {
+        var tree = await CollectTreeAsync(root, ownerId, cancellationToken);
+        var ids = tree.Select(f => f.Id).ToList();
+        var files = await _dbContext.FileMetadatas
+            .AsNoTracking()
+            .Where(f => f.OwnerId == ownerId && !f.IsDeleted && f.FolderId != null && ids.Contains(f.FolderId.Value))
+            .OrderBy(f => f.FileName)
+            .ToListAsync(cancellationToken);
+        return files.Count > MaxZipFiles
+            ? Result<(List<Folder>, List<FileMetadata>)>.Failure(new Error("Folder.TooLarge", $"Folder holds more than {MaxZipFiles} files."))
+            : Result<(List<Folder>, List<FileMetadata>)>.Success((tree, files));
     }
 
     // Drops path separators, control characters and dot-only names so an entry cannot escape the archive.

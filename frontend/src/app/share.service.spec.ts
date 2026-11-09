@@ -56,5 +56,6 @@ describe('ShareService', () => {
     const req = http.expectOne(`${environment.apiBaseUrl}/Public/tok`);
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob());
+    expect(service.publicUrl('a/b')).toBe(`${environment.apiBaseUrl}/Public/a%2Fb`);
   });
 });
