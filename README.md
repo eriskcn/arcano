@@ -74,4 +74,4 @@ For a fuller assessment and prioritized follow-up work, see [REPO_STATUS.md](REP
 
 ## License
 
-[GNU General Public License v2.0 only](LICENSE) (`GPL-2.0-only`), the same license as the Linux kernel.
+[GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`). GPL-3.0 is compatible with the Apache-2.0 libraries used (AWS SDK, rxjs); GPL-2.0-only is not.
