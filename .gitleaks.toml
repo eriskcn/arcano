@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake secrets used only by unit tests"
+paths = ['''backend/test/.*''']
