@@ -15,5 +15,7 @@ public interface IApplicationDbContext
     DbSet<InviteKey> InviteKeys { get; }
     // Default so contexts that do not touch sharing need not declare it.
     DbSet<UserShare> UserShares => throw new System.NotSupportedException();
+    // Re-reads a tracked entity from the database. Default does nothing, for contexts without tracking.
+    Task ReloadAsync(object entity, CancellationToken cancellationToken) => Task.CompletedTask;
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

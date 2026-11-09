@@ -70,7 +70,7 @@ location / {
 `proxy_http_version 1.1` is needed because nginx talks HTTP/1.0 to the app by default and then cannot pass on a broken download, so a failed folder zip could look complete.
 Add `listen 443 ssl;` and certificates as usual.
 
-Download links carry a 60-second ticket in `?dt=`, and your proxy's access log may record query strings. Drop it there: in nginx log `$request_method $uri $server_protocol` instead of `$request` (as `frontend/nginx.conf` does); Caddy has no access log unless you add `log`, and then add `format filter { request>uri query { delete dt } }`.
+Download links carry a 60-second ticket in `?dt=`, and your proxy's access log may record query strings. Drop it there: in nginx log `$request_method $uri $server_protocol` instead of `$request` (as `frontend/nginx.conf` does); Caddy has no access log unless you add `log`, and then add `format filter { request>uri query { delete dt } }`. nginx's error log cannot drop it: when the API is unreachable it records the full request line, `?dt=` included. The ticket works for 60 seconds and for that one path only, so it matters only to someone who reads your container logs within that minute.
 
 HSTS: the `Strict-Transport-Security` line in both examples makes browsers use HTTPS only for a year. Add it only after HTTPS works, because browsers will refuse plain HTTP for that long.
 

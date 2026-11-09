@@ -116,6 +116,31 @@ public class PgGroupModeTests(PgFixture pg) : IClassFixture<PgFixture>
     }
 
     [RequiresPgFact]
+    public async Task DeleteUser_WhenTheUserRowChangesDuringThePurge_StillDeletesTheUser()
+    {
+        var (_, _, users, db) = Build();
+        Assert.True((await users.CreateAsync(new IdentityUser<Guid> { UserName = "late@example.com", Email = "late@example.com" }, Password)).Succeeded);
+        var member = (await users.FindByEmailAsync("late@example.com"))!;
+        var admin = new AdminController(users, db, new StorageQuotaService(db, 1000), new ChangesUserAfterPurge(new AccountService(db, new MemoryStorage(), new NoMultipart()), pg, member.Id), new InviteKeyService(db), new FakeUser(Guid.NewGuid()));
+
+        Assert.IsType<NoContentResult>(await admin.DeleteUser(member.Id, default));
+
+        await using var check = pg.NewContext();
+        Assert.False(await check.Users.AnyAsync(u => u.Id == member.Id));
+    }
+
+    // Stands in for a login or an admin action that touches the user row while the purge runs.
+    private sealed class ChangesUserAfterPurge(IAccountService inner, PgFixture pg, Guid userId) : IAccountService
+    {
+        public async Task DeleteUserDataAsync(Guid ownerId, CancellationToken cancellationToken = default)
+        {
+            await inner.DeleteUserDataAsync(ownerId, cancellationToken);
+            await using var other = pg.NewContext();
+            await other.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(s => s.SetProperty(u => u.ConcurrencyStamp, Guid.NewGuid().ToString()), cancellationToken);
+        }
+    }
+
+    [RequiresPgFact]
     public async Task Migration_BackfillsProfilesForExistingUsers_AsNonAdmin()
     {
         var admin = Environment.GetEnvironmentVariable("ARCANO_IT_PG")!;

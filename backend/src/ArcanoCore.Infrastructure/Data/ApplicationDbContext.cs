@@ -31,6 +31,8 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
         base.OnModelCreating(modelBuilder);
     }
 
+    public Task ReloadAsync(object entity, CancellationToken cancellationToken) => Entry(entity).ReloadAsync(cancellationToken);
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         foreach (var entry in ChangeTracker.Entries<IAuditableEntity>())
