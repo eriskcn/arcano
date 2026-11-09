@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# shellcheck disable=SC1090 # the env file is chosen at run time
 if [ $# -ge 1 ]; then
   [ -f "$1" ] || { echo "env file not found: $1" >&2; exit 1; }
   set -a; . "$1"; set +a
