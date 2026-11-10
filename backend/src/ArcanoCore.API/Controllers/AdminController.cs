@@ -144,7 +144,7 @@ public class AdminController : ApiControllerBase
 
         // Data first (same order as AccountController.Delete): owner foreign keys are Restrict.
         await _accountService.DeleteUserDataAsync(user.Id, cancellationToken);
-        // Reload: the purge can take a while, and any update to the user row meanwhile (lockout count, disable) would make DeleteAsync fail on the stale concurrency stamp after the data is already gone.
+        // Reload: the purge can take a while, and any update to the user row meanwhile (disable, sign out everywhere, password change) would make DeleteAsync fail on the stale concurrency stamp after the data is already gone.
         await _dbContext.ReloadAsync(user, cancellationToken);
         var result = await _userManager.DeleteAsync(user);
         if (!result.Succeeded)
